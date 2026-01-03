@@ -99,9 +99,7 @@ export const useAccelStore = create<AccelState>()(
     },
 
     refresh: () => {
-      set((state) => {
-        // Force re-render
-      });
+      set(() => ({}));
     },
   }))
 );

@@ -19,7 +19,7 @@ function App() {
           </div>
           <div className="title">
             <strong>Accel.xlsx</strong>
-            <span>Excel Replacement - Humanity's Last Hope</span>
+            <span>Professional Spreadsheet Application</span>
           </div>
         </div>
         <div className="title-bar__right">

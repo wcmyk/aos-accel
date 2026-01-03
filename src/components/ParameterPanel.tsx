@@ -22,7 +22,7 @@ export const ParameterPanel: React.FC = () => {
   if (parameters.length === 0) {
     return (
       <div className="parameter-panel empty">
-        <p>No parameters defined.</p>
+        <p className="hint-title">No parameters yet</p>
         <p className="hint">Select a cell and mark it as a parameter to create interactive sliders.</p>
       </div>
     );

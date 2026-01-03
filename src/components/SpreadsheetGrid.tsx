@@ -9,8 +9,6 @@ import { CellValue } from '../engine/types';
 
 const ROWS = 100;
 const COLS = 26;
-const CELL_WIDTH = 100;
-const CELL_HEIGHT = 30;
 
 export const SpreadsheetGrid: React.FC = () => {
   const { setCell, getCell, getCellObject, selectCell, selectedCell } = useAccelStore();
@@ -110,10 +108,6 @@ export const SpreadsheetGrid: React.FC = () => {
                       key={col}
                       className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''}`}
                       onClick={() => handleCellClick(row, col)}
-                      style={{
-                        width: CELL_WIDTH,
-                        height: CELL_HEIGHT,
-                      }}
                     >
                       {!isEditing && (
                         <div className="cell-content">

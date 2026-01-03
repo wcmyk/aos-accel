@@ -1,9 +1,9 @@
 /**
  * Spreadsheet Grid Component
- * Excel-like grid interface
+ * Excel-like grid interface with full keyboard support
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { CellValue } from '../engine/types';
 
@@ -11,37 +11,142 @@ const ROWS = 100;
 const COLS = 26;
 
 export const SpreadsheetGrid: React.FC = () => {
-  const { setCell, getCell, getCellObject, selectCell, selectedCell } = useAccelStore();
+  const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell } = useAccelStore();
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // Focus grid on mount for keyboard navigation
+  useEffect(() => {
+    if (gridRef.current) {
+      gridRef.current.focus();
+    }
+  }, []);
 
   const handleCellClick = useCallback((row: number, col: number) => {
     selectCell(row, col);
+    setEditingCell(null);
+    setEditValue('');
+  }, [selectCell]);
+
+  const startEditing = useCallback((row: number, col: number, initialValue: string = '') => {
     setEditingCell({ row, col });
-
     const cellObj = getCellObject(row, col);
-    setEditValue(cellObj?.formula || String(cellObj?.value ?? ''));
-
+    const value = initialValue || cellObj?.formula || String(cellObj?.value ?? '');
+    setEditValue(value);
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [selectCell, getCellObject]);
+  }, [getCellObject]);
+
+  const handleCellDoubleClick = useCallback((row: number, col: number) => {
+    selectCell(row, col);
+    startEditing(row, col);
+  }, [selectCell, startEditing]);
 
   const handleCellSubmit = useCallback(() => {
     if (editingCell) {
       setCell(editingCell.row, editingCell.col, editValue);
       setEditingCell(null);
       setEditValue('');
+      gridRef.current?.focus();
     }
   }, [editingCell, editValue, setCell]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleFormulaKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       handleCellSubmit();
+      if (selectedCell && selectedCell.row < ROWS) {
+        selectCell(selectedCell.row + 1, selectedCell.col);
+      }
     } else if (e.key === 'Escape') {
+      e.preventDefault();
       setEditingCell(null);
       setEditValue('');
+      gridRef.current?.focus();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      handleCellSubmit();
+      if (selectedCell) {
+        const nextCol = e.shiftKey
+          ? (selectedCell.col > 1 ? selectedCell.col - 1 : COLS)
+          : (selectedCell.col < COLS ? selectedCell.col + 1 : 1);
+        selectCell(selectedCell.row, nextCol);
+      }
     }
-  }, [handleCellSubmit]);
+  }, [handleCellSubmit, selectedCell, selectCell]);
+
+  // Grid keyboard navigation
+  const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!selectedCell || editingCell) return;
+
+    const { row, col } = selectedCell;
+
+    // Copy/Paste/Cut shortcuts
+    if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+      e.preventDefault();
+      copyCell(row, col);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      e.preventDefault();
+      pasteCell(row, col);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+      e.preventDefault();
+      cutCell(row, col);
+      return;
+    }
+
+    // Arrow key navigation
+    if (e.key === 'ArrowUp' && row > 1) {
+      e.preventDefault();
+      selectCell(row - 1, col);
+    } else if (e.key === 'ArrowDown' && row < ROWS) {
+      e.preventDefault();
+      selectCell(row + 1, col);
+    } else if (e.key === 'ArrowLeft' && col > 1) {
+      e.preventDefault();
+      selectCell(row, col - 1);
+    } else if (e.key === 'ArrowRight' && col < COLS) {
+      e.preventDefault();
+      selectCell(row, col + 1);
+    }
+    // Enter key - start editing or move down
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey && row > 1) {
+        selectCell(row - 1, col);
+      } else if (!e.shiftKey && row < ROWS) {
+        selectCell(row + 1, col);
+      }
+    }
+    // Tab key - move right/left
+    else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey && col > 1) {
+        selectCell(row, col - 1);
+      } else if (!e.shiftKey && col < COLS) {
+        selectCell(row, col + 1);
+      }
+    }
+    // F2 key - start editing
+    else if (e.key === 'F2') {
+      e.preventDefault();
+      startEditing(row, col);
+    }
+    // Delete key - clear cell
+    else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      setCell(row, col, '');
+    }
+    // Any other key - start typing
+    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      startEditing(row, col, e.key);
+    }
+  }, [selectedCell, editingCell, selectCell, copyCell, pasteCell, cutCell, setCell, startEditing]);
 
   const colToLetter = (col: number): string => {
     let letter = '';
@@ -63,7 +168,12 @@ export const SpreadsheetGrid: React.FC = () => {
   };
 
   return (
-    <div className="spreadsheet-container">
+    <div
+      className="spreadsheet-container"
+      ref={gridRef}
+      tabIndex={0}
+      onKeyDown={handleGridKeyDown}
+    >
       <div className="formula-bar">
         <div className="cell-reference">
           {selectedCell && `${colToLetter(selectedCell.col)}${selectedCell.row}`}
@@ -72,10 +182,15 @@ export const SpreadsheetGrid: React.FC = () => {
           ref={inputRef}
           type="text"
           className="formula-input"
-          value={editValue}
+          value={editingCell ? editValue : (selectedCell ? (getCellObject(selectedCell.row, selectedCell.col)?.formula || String(getCellObject(selectedCell.row, selectedCell.col)?.value ?? '')) : '')}
           onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleFormulaKeyDown}
           onBlur={handleCellSubmit}
+          onFocus={() => {
+            if (selectedCell && !editingCell) {
+              startEditing(selectedCell.row, selectedCell.col);
+            }
+          }}
           placeholder="Enter formula or value"
         />
       </div>
@@ -108,6 +223,7 @@ export const SpreadsheetGrid: React.FC = () => {
                       key={col}
                       className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''}`}
                       onClick={() => handleCellClick(row, col)}
+                      onDoubleClick={() => handleCellDoubleClick(row, col)}
                     >
                       {!isEditing && (
                         <div className="cell-content">

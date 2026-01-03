@@ -14,10 +14,40 @@ interface ClipboardCell {
   isCut: boolean;
 }
 
+/**
+ * Calculate the fill value based on the source value and step
+ * Handles numbers, text with numbers, and formulas
+ */
+function calculateFillValue(sourceValue: CellValue, step: number, sourceFormula?: string): string | number {
+  // If there's a formula, return it as-is (Excel would adjust references, but we'll keep it simple)
+  if (sourceFormula) {
+    return sourceFormula;
+  }
+
+  // If it's a number, increment it
+  if (typeof sourceValue === 'number') {
+    return sourceValue + step;
+  }
+
+  // If it's a string, check if it ends with a number
+  if (typeof sourceValue === 'string') {
+    const match = sourceValue.match(/^(.*?)(\d+)$/);
+    if (match) {
+      const prefix = match[1];
+      const num = parseInt(match[2], 10);
+      return `${prefix}${num + step}`;
+    }
+  }
+
+  // Otherwise, just return the source value (repeat it)
+  return sourceValue as string | number;
+}
+
 interface AccelState {
   engine: AccelEngine;
   selectedCell: { row: number; col: number } | null;
   clipboard: ClipboardCell | null;
+  fillRange: { row: number; col: number } | null;
 
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
@@ -30,8 +60,16 @@ interface AccelState {
   cutCell: (row: number, col: number) => void;
   pasteCell: (row: number, col: number) => void;
 
+  // AutoFill operations
+  setFillRange: (row: number, col: number) => void;
+  clearFillRange: () => void;
+  executeFill: () => void;
+
   // Formatting
   formatCell: (row: number, col: number, format: any) => void;
+
+  // Sorting
+  sortColumn: (col: number, ascending: boolean) => void;
 
   // Parameters
   setParameter: (row: number, col: number, min: number, max: number, step: number) => void;
@@ -51,6 +89,7 @@ export const useAccelStore = create<AccelState>()(
     engine: new AccelEngine(),
     selectedCell: null,
     clipboard: null,
+    fillRange: null,
 
     setCell: (row, col, value) => {
       const { engine } = get();
@@ -125,11 +164,77 @@ export const useAccelStore = create<AccelState>()(
       });
     },
 
+    setFillRange: (row, col) => {
+      set((state) => {
+        state.fillRange = { row, col };
+      });
+    },
+
+    clearFillRange: () => {
+      set((state) => {
+        state.fillRange = null;
+      });
+    },
+
+    executeFill: () => {
+      const { selectedCell, fillRange, engine } = get();
+      if (!selectedCell || !fillRange) return;
+
+      const startRow = selectedCell.row;
+      const startCol = selectedCell.col;
+      const endRow = fillRange.row;
+      const endCol = fillRange.col;
+
+      // Get the source cell value
+      const sourceCell = engine.getCellObject(startRow, startCol);
+      const sourceValue = sourceCell?.value ?? '';
+
+      // Determine fill direction
+      const isVertical = startCol === endCol;
+      const isHorizontal = startRow === endRow;
+
+      if (isVertical) {
+        // Fill vertically
+        const direction = endRow > startRow ? 1 : -1;
+        const steps = Math.abs(endRow - startRow);
+
+        for (let i = 1; i <= steps; i++) {
+          const targetRow = startRow + i * direction;
+          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula);
+          engine.setCell(targetRow, startCol, fillValue);
+        }
+      } else if (isHorizontal) {
+        // Fill horizontally
+        const direction = endCol > startCol ? 1 : -1;
+        const steps = Math.abs(endCol - startCol);
+
+        for (let i = 1; i <= steps; i++) {
+          const targetCol = startCol + i * direction;
+          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula);
+          engine.setCell(startRow, targetCol, fillValue);
+        }
+      }
+
+      set((state) => {
+        state.engine = engine;
+        state.fillRange = null;
+      });
+    },
+
     formatCell: (row, col, format) => {
-      // Placeholder for cell formatting
-      // Will be implemented with actual formatting logic
-      console.log('Format cell', row, col, format);
-      set(() => ({}));
+      const { engine } = get();
+      engine.formatCell(row, col, format);
+      set((state) => {
+        state.engine = engine;
+      });
+    },
+
+    sortColumn: (col, ascending) => {
+      const { engine } = get();
+      engine.sortColumn(col, ascending);
+      set((state) => {
+        state.engine = engine;
+      });
     },
 
     setParameter: (row, col, min, max, step) => {

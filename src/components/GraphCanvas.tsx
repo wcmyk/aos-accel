@@ -16,6 +16,34 @@ export const GraphCanvas: React.FC = () => {
     yMin: -10,
     yMax: 10,
   });
+  const [canvasSize, setCanvasSize] = useState({ width: 900, height: 540 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !canvas.parentElement) return;
+
+    const resize = () => {
+      const parentRect = canvas.parentElement!.getBoundingClientRect();
+      const width = parentRect.width;
+      const height = Math.max(420, Math.min(720, width * 0.6));
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      setCanvasSize({ width: canvas.width, height: canvas.height });
+    };
+
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas.parentElement);
+    window.addEventListener('resize', resize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
 
   const mapToScreen = (
     value: number,
@@ -127,7 +155,7 @@ export const GraphCanvas: React.FC = () => {
 
       ctx.stroke();
     }
-  }, [engine, viewport, getGraphs, drawAxes, mapToScreen]);
+  }, [engine, viewport, getGraphs, drawAxes, mapToScreen, canvasSize]);
 
   const handleZoom = (delta: number) => {
     setViewport((prev) => {
@@ -158,20 +186,27 @@ export const GraphCanvas: React.FC = () => {
   return (
     <div className="graph-container">
       <div className="graph-controls">
-        <button onClick={() => handleZoom(1)}>Zoom In</button>
-        <button onClick={() => handleZoom(-1)}>Zoom Out</button>
-        <button onClick={handleReset}>Reset</button>
+        <div className="control-stack">
+          <p className="graph-label">Viewport</p>
+          <div className="chip">X: [{viewport.xMin.toFixed(1)}, {viewport.xMax.toFixed(1)}]</div>
+          <div className="chip">Y: [{viewport.yMin.toFixed(1)}, {viewport.yMax.toFixed(1)}]</div>
+        </div>
+        <div className="control-actions">
+          <button className="btn" onClick={() => handleZoom(1)}>Zoom In</button>
+          <button className="btn ghost" onClick={() => handleZoom(-1)}>Zoom Out</button>
+          <button className="btn ghost" onClick={handleReset}>Reset</button>
+        </div>
       </div>
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={600}
-        className="graph-canvas"
-        onWheel={(e) => {
-          e.preventDefault();
-          handleZoom(e.deltaY);
-        }}
-      />
+      <div className="graph-canvas-shell">
+        <canvas
+          ref={canvasRef}
+          className="graph-canvas"
+          onWheel={(e) => {
+            e.preventDefault();
+            handleZoom(e.deltaY);
+          }}
+        />
+      </div>
     </div>
   );
 };

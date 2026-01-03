@@ -3,12 +3,14 @@
  * Excel-like grid interface with full keyboard support
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { CellValue } from '../engine/types';
 
 const ROWS = 1000;
 const COLS = 52; // A-AZ (52 columns)
+const ROW_HEIGHT = 24;
+const OVERSCAN = 8;
 
 export const SpreadsheetGrid: React.FC = () => {
   const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell, fillRange, setFillRange, clearFillRange, executeFill } = useAccelStore();
@@ -17,12 +19,34 @@ export const SpreadsheetGrid: React.FC = () => {
   const [isDraggingFill, setIsDraggingFill] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const gridWrapperRef = useRef<HTMLDivElement>(null);
+  const [scrollPosition, setScrollPosition] = useState({ top: 0, left: 0 });
+  const [viewportHeight, setViewportHeight] = useState(0);
 
   // Focus grid on mount for keyboard navigation
   useEffect(() => {
     if (gridRef.current) {
       gridRef.current.focus();
     }
+  }, []);
+
+  useEffect(() => {
+    if (!gridWrapperRef.current) return;
+
+    const measure = () => {
+      if (gridWrapperRef.current) {
+        setViewportHeight(gridWrapperRef.current.clientHeight);
+        setScrollPosition({
+          top: gridWrapperRef.current.scrollTop,
+          left: gridWrapperRef.current.scrollLeft,
+        });
+      }
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(gridWrapperRef.current);
+    return () => observer.disconnect();
   }, []);
 
   const handleCellClick = useCallback((row: number, col: number) => {
@@ -181,6 +205,11 @@ export const SpreadsheetGrid: React.FC = () => {
     }
   }, [selectedCell, editingCell, selectCell, copyCell, pasteCell, cutCell, setCell, startEditing]);
 
+  const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    setScrollPosition({ top: target.scrollTop, left: target.scrollLeft });
+  }, []);
+
   const colToLetter = (col: number): string => {
     let letter = '';
     let c = col;
@@ -199,6 +228,16 @@ export const SpreadsheetGrid: React.FC = () => {
     }
     return String(value);
   };
+
+  const totalGridHeight = ROWS * ROW_HEIGHT;
+  const estimatedVisibleRowCount = viewportHeight > 0
+    ? Math.ceil(viewportHeight / ROW_HEIGHT)
+    : ROWS;
+  const startRow = Math.max(1, Math.floor(scrollPosition.top / ROW_HEIGHT) + 1 - OVERSCAN);
+  const endRow = Math.min(ROWS, startRow + estimatedVisibleRowCount + OVERSCAN * 2 - 1);
+  const topSpacerHeight = (startRow - 1) * ROW_HEIGHT;
+  const bottomSpacerHeight = Math.max(totalGridHeight - endRow * ROW_HEIGHT, 0);
+  const visibleRows = useMemo(() => Array.from({ length: endRow - startRow + 1 }, (_, i) => startRow + i), [startRow, endRow]);
 
   return (
     <div
@@ -228,7 +267,11 @@ export const SpreadsheetGrid: React.FC = () => {
         />
       </div>
 
-      <div className="grid-wrapper">
+      <div
+        className="grid-wrapper"
+        ref={gridWrapperRef}
+        onScroll={handleGridScroll}
+      >
         <table className="spreadsheet-grid">
           <thead>
             <tr>
@@ -241,7 +284,13 @@ export const SpreadsheetGrid: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: ROWS }, (_, i) => i + 1).map((row) => (
+            {topSpacerHeight > 0 && (
+              <tr className="spacer-row" style={{ height: topSpacerHeight }}>
+                <td colSpan={COLS + 1} />
+              </tr>
+            )}
+
+            {visibleRows.map((row) => (
               <tr key={row}>
                 <td className="row-header">{row}</td>
                 {Array.from({ length: COLS }, (_, i) => i + 1).map((col) => {
@@ -289,6 +338,12 @@ export const SpreadsheetGrid: React.FC = () => {
                 })}
               </tr>
             ))}
+
+            {bottomSpacerHeight > 0 && (
+              <tr className="spacer-row" style={{ height: bottomSpacerHeight }}>
+                <td colSpan={COLS + 1} />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

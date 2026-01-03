@@ -440,6 +440,30 @@ body {
   text-overflow: ellipsis;
 }
 
+/* AutoFill handle - small square in bottom-right of selected cell */
+.fill-handle {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #217346;
+  border: 1px solid white;
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.fill-handle:hover {
+  background: #1a5c37;
+}
+
+/* Cells in the fill range during drag */
+.cell.fill-range {
+  background: rgba(33, 115, 70, 0.1);
+  outline: 1px dashed #217346;
+  outline-offset: -1px;
+}
+
 .graph-container {
   display: flex;
   flex-direction: column;

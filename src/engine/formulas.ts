@@ -384,12 +384,213 @@ export const FORMULAS: Record<string, FormulaFunction> = {
 
     return rate;
   },
+
+  // ===== CONDITIONAL AGGREGATION =====
+  SUMIF: (range, criteria, sumRange?) => {
+    const rangeVals = flattenArgs([range]);
+    const sumVals = sumRange ? flattenArgs([sumRange]) : rangeVals;
+    let sum = 0;
+    for (let i = 0; i < rangeVals.length; i++) {
+      if (meetsCriteria(rangeVals[i], criteria)) {
+        sum += toNumber(sumVals[i] ?? 0);
+      }
+    }
+    return sum;
+  },
+
+  COUNTIF: (range, criteria) => {
+    const vals = flattenArgs([range]);
+    return vals.filter(v => meetsCriteria(v, criteria)).length;
+  },
+
+  AVERAGEIF: (range, criteria, avgRange?) => {
+    const rangeVals = flattenArgs([range]);
+    const avgVals = avgRange ? flattenArgs([avgRange]) : rangeVals;
+    let sum = 0, count = 0;
+    for (let i = 0; i < rangeVals.length; i++) {
+      if (meetsCriteria(rangeVals[i], criteria)) {
+        sum += toNumber(avgVals[i] ?? 0);
+        count++;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  },
+
+  SUMIFS: (sumRange, ...pairs) => {
+    const sumVals = flattenArgs([sumRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    let sum = 0;
+    for (let i = 0; i < sumVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        sum += toNumber(sumVals[i]);
+      }
+    }
+    return sum;
+  },
+
+  COUNTIFS: (...pairs) => {
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    if (criteriaList.length === 0) return 0;
+    const length = criteriaList[0].range.length;
+    let count = 0;
+    for (let i = 0; i < length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) count++;
+    }
+    return count;
+  },
+
+  AVERAGEIFS: (avgRange, ...pairs) => {
+    const avgVals = flattenArgs([avgRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    let sum = 0, count = 0;
+    for (let i = 0; i < avgVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        sum += toNumber(avgVals[i]);
+        count++;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  },
+
+  MAXIFS: (maxRange, ...pairs) => {
+    const maxVals = flattenArgs([maxRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    const matching: number[] = [];
+    for (let i = 0; i < maxVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        matching.push(toNumber(maxVals[i]));
+      }
+    }
+    return matching.length > 0 ? Math.max(...matching) : 0;
+  },
+
+  MINIFS: (minRange, ...pairs) => {
+    const minVals = flattenArgs([minRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    const matching: number[] = [];
+    for (let i = 0; i < minVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        matching.push(toNumber(minVals[i]));
+      }
+    }
+    return matching.length > 0 ? Math.min(...matching) : 0;
+  },
+
+  // ===== MORE MATH =====
+  PRODUCT: (...args) => flattenArgs(args).map(toNumber).reduce((a, b) => a * b, 1),
+  SUMPRODUCT: (...arrays) => {
+    const arrs = arrays.map(a => flattenArgs([a]).map(toNumber));
+    const length = Math.min(...arrs.map(a => a.length));
+    let sum = 0;
+    for (let i = 0; i < length; i++) {
+      let product = 1;
+      for (const arr of arrs) product *= arr[i];
+      sum += product;
+    }
+    return sum;
+  },
+  SUMSQ: (...args) => flattenArgs(args).map(toNumber).reduce((sum, v) => sum + v * v, 0),
+  QUOTIENT: (num, denom) => Math.trunc(toNumber(num) / toNumber(denom)),
+  INT: (number) => Math.floor(toNumber(number)),
+  GCD: (...args) => {
+    const gcd2 = (a: number, b: number): number => b === 0 ? a : gcd2(b, a % b);
+    return flattenArgs(args).map(toNumber).reduce(gcd2);
+  },
+  LCM: (...args) => {
+    const gcd2 = (a: number, b: number): number => b === 0 ? a : gcd2(b, a % b);
+    const lcm2 = (a: number, b: number) => (a * b) / gcd2(a, b);
+    return flattenArgs(args).map(toNumber).reduce(lcm2);
+  },
+  COMBIN: (n, k) => {
+    const num = toNumber(n), choose = toNumber(k);
+    if (choose > num || choose < 0) return 0;
+    let result = 1;
+    for (let i = 0; i < choose; i++) {
+      result *= (num - i) / (i + 1);
+    }
+    return Math.round(result);
+  },
+
+  // ===== MORE STAT =====
+  LARGE: (arr, k) => flattenArgs([arr]).map(toNumber).sort((a, b) => b - a)[toNumber(k) - 1] ?? null,
+  SMALL: (arr, k) => flattenArgs([arr]).map(toNumber).sort((a, b) => a - b)[toNumber(k) - 1] ?? null,
+  PERCENTILE: (arr, k) => {
+    const v = flattenArgs([arr]).map(toNumber).sort((a, b) => a - b);
+    const i = toNumber(k) * (v.length - 1);
+    const l = Math.floor(i), u = Math.ceil(i), w = i - l;
+    return v[l] * (1 - w) + v[u] * w;
+  },
+  QUARTILE: (arr, quart) => {
+    const q = toNumber(quart);
+    if (q === 0) return FORMULAS.MIN(arr);
+    if (q === 4) return FORMULAS.MAX(arr);
+    return FORMULAS.PERCENTILE(arr, q / 4);
+  },
+  RANK: (number, ref, order = 0) => {
+    const num = toNumber(number);
+    const vals = flattenArgs([ref]).map(toNumber);
+    const sorted = toNumber(order) === 0 ? vals.sort((a, b) => b - a) : vals.sort((a, b) => a - b);
+    return sorted.indexOf(num) + 1;
+  },
+
+  // ===== MORE TEXT =====
+  TEXTJOIN: (delim, ignoreEmpty, ...texts) => {
+    const vals = flattenArgs(texts);
+    const filtered = toBoolean(ignoreEmpty) ? vals.filter(v => v !== null && v !== '') : vals;
+    return filtered.map(String).join(String(delim));
+  },
+  REPT: (text, times) => String(text).repeat(toNumber(times)),
+  EXACT: (a, b) => String(a) === String(b),
+  CHAR: (n) => String.fromCharCode(toNumber(n)),
+  CODE: (text) => String(text).charCodeAt(0),
+
+  // ===== DATE/TIME =====
+  DAYS: (end, start) => Math.floor((toNumber(end) - toNumber(start)) / 86400000),
+  WEEKDAY: (date, type = 1) => {
+    const d = new Date(toNumber(date)).getDay();
+    const t = toNumber(type);
+    if (t === 1) return d + 1;
+    if (t === 2) return d === 0 ? 7 : d;
+    return d === 0 ? 6 : d - 1;
+  },
+
+  // ===== LOGICAL =====
+  XOR: (...args) => flattenArgs(args).filter(toBoolean).length % 2 === 1,
+  IFERROR: (val, ifErr) => (typeof val === 'string' && val.startsWith('#ERROR')) ? ifErr : val,
+  IFNA: (val, ifNA) => (val === null || val === undefined) ? ifNA : val,
+
+  // ===== INFORMATION =====
+  ISBLANK: (v) => v === null || v === '',
+  ISERROR: (v) => typeof v === 'string' && v.startsWith('#ERROR'),
+  ISTEXT: (v) => typeof v === 'string',
+  ISNUMBER: (v) => typeof v === 'number',
+  ISLOGICAL: (v) => typeof v === 'boolean',
+  ISEVEN: (v) => toNumber(v) % 2 === 0,
+  ISODD: (v) => toNumber(v) % 2 !== 0,
 };
 
-// Helper functions
+// ===== HELPER FUNCTIONS =====
+
+/**
+ * Flatten nested arrays into a single array of values
+ */
 function flattenArgs(args: CellValue[]): CellValue[] {
   const result: CellValue[] = [];
-
   for (const arg of args) {
     if (Array.isArray(arg)) {
       result.push(...flattenArgs(arg));
@@ -397,10 +598,12 @@ function flattenArgs(args: CellValue[]): CellValue[] {
       result.push(arg);
     }
   }
-
   return result;
 }
 
+/**
+ * Convert a value to a number
+ */
 function toNumber(value: CellValue): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 1 : 0;
@@ -408,16 +611,52 @@ function toNumber(value: CellValue): number {
     const num = parseFloat(value);
     return isNaN(num) ? 0 : num;
   }
-  if (value === null) return 0;
-  if (Array.isArray(value)) return value.length > 0 ? toNumber(value[0]) : 0;
   return 0;
 }
 
+/**
+ * Convert a value to a boolean
+ */
 function toBoolean(value: CellValue): boolean {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value !== 0;
   if (typeof value === 'string') return value.toLowerCase() === 'true' || value !== '';
-  if (value === null) return false;
-  if (Array.isArray(value)) return value.length > 0;
   return false;
+}
+
+/**
+ * Check if a value meets criteria (for SUMIF, COUNTIF, etc.)
+ * Supports operators: >, >=, <, <=, =, <>, and wildcards (* ?)
+ */
+function meetsCriteria(value: CellValue, criteria: CellValue): boolean {
+  if (typeof criteria === 'string') {
+    const criteriaStr = String(criteria);
+
+    // Check for comparison operators
+    const match = criteriaStr.match(/^([<>=!]+)(.*)$/);
+    if (match) {
+      const op = match[1];
+      const compareValue = match[2];
+      const numValue = toNumber(value);
+      const numCompare = toNumber(compareValue);
+
+      switch (op) {
+        case '>': return numValue > numCompare;
+        case '>=': return numValue >= numCompare;
+        case '<': return numValue < numCompare;
+        case '<=': return numValue <= numCompare;
+        case '=': return value === compareValue || numValue === numCompare;
+        case '<>':
+        case '!=': return value !== compareValue && numValue !== numCompare;
+      }
+    }
+
+    // Check for wildcard matching
+    if (criteriaStr.includes('*') || criteriaStr.includes('?')) {
+      const regex = new RegExp('^' + criteriaStr.replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i');
+      return regex.test(String(value));
+    }
+  }
+
+  return value === criteria;
 }

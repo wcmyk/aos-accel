@@ -7,13 +7,14 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { CellValue } from '../engine/types';
 
-const ROWS = 100;
-const COLS = 26;
+const ROWS = 1000;
+const COLS = 52; // A-AZ (52 columns)
 
 export const SpreadsheetGrid: React.FC = () => {
-  const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell } = useAccelStore();
+  const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell, fillRange, setFillRange, clearFillRange, executeFill } = useAccelStore();
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [isDraggingFill, setIsDraggingFill] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -75,6 +76,38 @@ export const SpreadsheetGrid: React.FC = () => {
       }
     }
   }, [handleCellSubmit, selectedCell, selectCell]);
+
+  // AutoFill drag handlers
+  const handleFillHandleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFill(true);
+  }, []);
+
+  const handleCellMouseEnter = useCallback((row: number, col: number) => {
+    if (isDraggingFill && selectedCell) {
+      // Only allow filling in the same row or column as the source
+      if (row === selectedCell.row || col === selectedCell.col) {
+        setFillRange(row, col);
+      }
+    }
+  }, [isDraggingFill, selectedCell, setFillRange]);
+
+  const handleMouseUp = useCallback(() => {
+    if (isDraggingFill) {
+      executeFill();
+      setIsDraggingFill(false);
+      clearFillRange();
+    }
+  }, [isDraggingFill, executeFill, clearFillRange]);
+
+  // Add global mouse up listener
+  useEffect(() => {
+    if (isDraggingFill) {
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => document.removeEventListener('mouseup', handleMouseUp);
+    }
+  }, [isDraggingFill, handleMouseUp]);
 
   // Grid keyboard navigation
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -217,18 +250,39 @@ export const SpreadsheetGrid: React.FC = () => {
                   const isSelected = selectedCell?.row === row && selectedCell?.col === col;
                   const isEditing = editingCell?.row === row && editingCell?.col === col;
                   const isParameter = cellObj?.isParameter;
+                  const isInFillRange = fillRange && selectedCell && (
+                    (selectedCell.row === row && col >= Math.min(selectedCell.col, fillRange.col) && col <= Math.max(selectedCell.col, fillRange.col)) ||
+                    (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
+                  );
+
+                  const cellFormat = cellObj?.format;
+                  const cellStyle: React.CSSProperties = {
+                    ...(cellFormat?.bold && { fontWeight: 'bold' }),
+                    ...(cellFormat?.italic && { fontStyle: 'italic' }),
+                    ...(cellFormat?.underline && { textDecoration: 'underline' }),
+                    ...(cellFormat?.fontColor && { color: cellFormat.fontColor }),
+                    ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
+                  };
 
                   return (
                     <td
                       key={col}
-                      className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''}`}
+                      className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''}`}
                       onClick={() => handleCellClick(row, col)}
                       onDoubleClick={() => handleCellDoubleClick(row, col)}
+                      onMouseEnter={() => handleCellMouseEnter(row, col)}
+                      style={cellFormat?.backgroundColor ? { backgroundColor: cellFormat.backgroundColor } : undefined}
                     >
                       {!isEditing && (
-                        <div className="cell-content">
+                        <div className="cell-content" style={cellStyle}>
                           {formatCellValue(value)}
                         </div>
+                      )}
+                      {isSelected && !isEditing && (
+                        <div
+                          className="fill-handle"
+                          onMouseDown={handleFillHandleMouseDown}
+                        />
                       )}
                     </td>
                   );

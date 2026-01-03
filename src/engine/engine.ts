@@ -147,6 +147,31 @@ export class AccelEngine {
   }
 
   /**
+   * Apply formatting to a cell
+   */
+  formatCell(row: number, col: number, format: Partial<import('./types').CellFormat>, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+    const cellKey = this.cellKey(row, col);
+
+    let cell = worksheet.cells.get(cellKey);
+    if (!cell) {
+      cell = {
+        address: { row, col },
+        value: null,
+        dependencies: new Set(),
+        dependents: new Set(),
+      };
+      worksheet.cells.set(cellKey, cell);
+    }
+
+    // Merge format properties
+    cell.format = {
+      ...cell.format,
+      ...format,
+    };
+  }
+
+  /**
    * Set cell as parameter with slider config
    */
   setParameter(row: number, col: number, min: number, max: number, step: number, sheetName?: string): void {
@@ -330,6 +355,77 @@ export class AccelEngine {
     }
 
     return result;
+  }
+
+  /**
+   * Sort a column and rearrange adjacent columns to maintain row integrity
+   */
+  sortColumn(col: number, ascending: boolean = true, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+
+    // Find the data range (rows with values in the sorted column)
+    const rowsWithData: Array<{ row: number; cells: Map<number, Cell> }> = [];
+
+    for (const [key, cell] of worksheet.cells) {
+      const [cellCol, cellRow] = key.split(',').map(Number);
+
+      // Find existing row or create new one
+      let rowData = rowsWithData.find(r => r.row === cellRow);
+      if (!rowData) {
+        rowData = { row: cellRow, cells: new Map() };
+        rowsWithData.push(rowData);
+      }
+      rowData.cells.set(cellCol, cell);
+    }
+
+    // Filter to only rows that have a value in the sort column
+    const dataRows = rowsWithData.filter(r => r.cells.has(col));
+
+    // Sort rows by the value in the sort column
+    dataRows.sort((a, b) => {
+      const aVal = a.cells.get(col)?.value ?? null;
+      const bVal = b.cells.get(col)?.value ?? null;
+
+      // Handle null/undefined values
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return ascending ? 1 : -1;
+      if (bVal === null) return ascending ? -1 : 1;
+
+      // Compare values
+      let comparison = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal;
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal));
+      }
+
+      return ascending ? comparison : -comparison;
+    });
+
+    // Clear the old cells in the sorted range
+    const sortedRows = dataRows.map(r => r.row);
+    const allCols = new Set<number>();
+    dataRows.forEach(r => r.cells.forEach((_, c) => allCols.add(c)));
+
+    for (const row of sortedRows) {
+      for (const c of allCols) {
+        const key = this.cellKey(row, c);
+        worksheet.cells.delete(key);
+      }
+    }
+
+    // Write the sorted data back
+    dataRows.forEach((rowData, index) => {
+      const newRow = sortedRows[index];
+      rowData.cells.forEach((cell, cellCol) => {
+        const newKey = this.cellKey(newRow, cellCol);
+        const newCell = {
+          ...cell,
+          address: { row: newRow, col: cellCol },
+        };
+        worksheet.cells.set(newKey, newCell);
+      });
+    });
   }
 
   /**

@@ -7,15 +7,37 @@ import React, { useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
+import { IconButton } from './Icons';
 
 type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Automation' | 'Graphing' | 'Review' | 'View';
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn } = useAccelStore();
 
   const renderHomeTab = () => (
     <>
+      <div className="ribbon-group">
+        <p className="ribbon-title">Clipboard</p>
+        <div className="ribbon-controls">
+          <IconButton
+            icon="Copy"
+            tooltip="Copy (Ctrl+C)"
+            onClick={() => selectedCell && copyCell(selectedCell.row, selectedCell.col)}
+          />
+          <IconButton
+            icon="Cut"
+            tooltip="Cut (Ctrl+X)"
+            onClick={() => selectedCell && cutCell(selectedCell.row, selectedCell.col)}
+          />
+          <IconButton
+            icon="Paste"
+            tooltip="Paste (Ctrl+V)"
+            onClick={() => selectedCell && pasteCell(selectedCell.row, selectedCell.col)}
+          />
+        </div>
+      </div>
+
       <div className="ribbon-group">
         <p className="ribbon-title">Font</p>
         <div className="ribbon-controls">
@@ -38,18 +60,57 @@ export const Ribbon: React.FC = () => {
             <option>24</option>
           </select>
           <div className="button-group">
-            <button className="ribbon-btn" title="Bold" onClick={() => console.log('Bold')}>
+            <button
+              className="ribbon-btn"
+              title="Bold"
+              onClick={() => {
+                if (selectedCell) {
+                  const cell = getCellObject(selectedCell.row, selectedCell.col);
+                  formatCell(selectedCell.row, selectedCell.col, { bold: !cell?.format?.bold });
+                }
+              }}
+            >
               <strong>B</strong>
             </button>
-            <button className="ribbon-btn" title="Italic" onClick={() => console.log('Italic')}>
+            <button
+              className="ribbon-btn"
+              title="Italic"
+              onClick={() => {
+                if (selectedCell) {
+                  const cell = getCellObject(selectedCell.row, selectedCell.col);
+                  formatCell(selectedCell.row, selectedCell.col, { italic: !cell?.format?.italic });
+                }
+              }}
+            >
               <em>I</em>
             </button>
-            <button className="ribbon-btn" title="Underline" onClick={() => console.log('Underline')}>
+            <button
+              className="ribbon-btn"
+              title="Underline"
+              onClick={() => {
+                if (selectedCell) {
+                  const cell = getCellObject(selectedCell.row, selectedCell.col);
+                  formatCell(selectedCell.row, selectedCell.col, { underline: !cell?.format?.underline });
+                }
+              }}
+            >
               <u>U</u>
             </button>
           </div>
-          <input type="color" className="ribbon-color" title="Font Color" defaultValue="#000000" />
-          <input type="color" className="ribbon-color" title="Fill Color" defaultValue="#FFFFFF" />
+          <input
+            type="color"
+            className="ribbon-color"
+            title="Font Color"
+            defaultValue="#000000"
+            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { fontColor: e.target.value })}
+          />
+          <input
+            type="color"
+            className="ribbon-color"
+            title="Fill Color"
+            defaultValue="#FFFFFF"
+            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { backgroundColor: e.target.value })}
+          />
         </div>
       </div>
 
@@ -108,7 +169,18 @@ export const Ribbon: React.FC = () => {
           <button className="btn">AutoSum</button>
           <button className="btn">Fill</button>
           <button className="btn">Clear</button>
-          <button className="btn">Sort & Filter</button>
+          <div className="button-group">
+            <IconButton
+              icon="SortAsc"
+              tooltip="Sort Ascending (A to Z)"
+              onClick={() => selectedCell && sortColumn(selectedCell.col, true)}
+            />
+            <IconButton
+              icon="SortDesc"
+              tooltip="Sort Descending (Z to A)"
+              onClick={() => selectedCell && sortColumn(selectedCell.col, false)}
+            />
+          </div>
           <button className="btn">Find & Select</button>
         </div>
       </div>

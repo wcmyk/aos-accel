@@ -52,8 +52,11 @@ export interface ParameterConfig {
 export interface CellFormat {
   decimals?: number;
   numberFormat?: string;
-  color?: string;
   bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontColor?: string;
+  backgroundColor?: string;
 }
 
 export interface GraphDefinition {

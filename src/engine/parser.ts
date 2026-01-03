@@ -3,7 +3,7 @@
  * This AST is used by BOTH spreadsheet cells AND graphs
  */
 
-import { ASTNode, CellAddress } from './types';
+import { ASTNode } from './types';
 
 export class FormulaParser {
   private input: string = '';

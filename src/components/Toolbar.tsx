@@ -51,30 +51,32 @@ export const Toolbar: React.FC = () => {
   return (
     <div className="toolbar">
       <div className="toolbar-section">
-        <h4>Graph</h4>
-        <button onClick={() => setShowGraphDialog(true)}>Add Graph</button>
+        <button className="btn" onClick={() => setShowGraphDialog(true)}>Add Graph</button>
         <div className="graph-list">
           {graphs.map((graph) => (
             <div key={graph.id} className="graph-item">
-              <span style={{ color: graph.color }}>●</span>
+              <span className="dot" style={{ color: graph.color }}>●</span>
               <span className="graph-formula">{graph.formula}</span>
-              <button onClick={() => removeGraph(graph.id)}>×</button>
+              <button className="icon-btn" onClick={() => removeGraph(graph.id)}>×</button>
             </div>
           ))}
         </div>
       </div>
 
       <div className="toolbar-section">
-        <h4>Parameters</h4>
-        <button onClick={() => setShowParamDialog(true)} disabled={!selectedCell}>
-          Make Parameter
+        <button className="btn ghost" onClick={() => setShowParamDialog(true)} disabled={!selectedCell}>
+          Make Parameter from Selection
         </button>
       </div>
 
       {showGraphDialog && (
         <div className="dialog">
           <div className="dialog-content">
-            <h3>Add Graph</h3>
+            <div>
+              <p className="eyebrow">Add Graph</p>
+              <h3>Bind a formula to the graph</h3>
+              <p className="dialog-subtitle">Reference grid cells directly to keep graphs and cells in sync.</p>
+            </div>
             <label>
               Formula (e.g., A1 * x + B1):
               <input
@@ -85,8 +87,8 @@ export const Toolbar: React.FC = () => {
               />
             </label>
             <div className="dialog-buttons">
-              <button onClick={handleAddGraph}>Add</button>
-              <button onClick={() => setShowGraphDialog(false)}>Cancel</button>
+              <button className="btn" onClick={handleAddGraph}>Add</button>
+              <button className="btn ghost" onClick={() => setShowGraphDialog(false)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -95,7 +97,11 @@ export const Toolbar: React.FC = () => {
       {showParamDialog && (
         <div className="dialog">
           <div className="dialog-content">
-            <h3>Create Parameter</h3>
+            <div>
+              <p className="eyebrow">Parameter</p>
+              <h3>Create a slider from the selected cell</h3>
+              <p className="dialog-subtitle">Min, max, and step will drive graph recalculation instantly.</p>
+            </div>
             <label>
               Min:
               <input
@@ -122,8 +128,8 @@ export const Toolbar: React.FC = () => {
               />
             </label>
             <div className="dialog-buttons">
-              <button onClick={handleAddParameter}>Create</button>
-              <button onClick={() => setShowParamDialog(false)}>Cancel</button>
+              <button className="btn" onClick={handleAddParameter}>Create</button>
+              <button className="btn ghost" onClick={() => setShowParamDialog(false)}>Cancel</button>
             </div>
           </div>
         </div>

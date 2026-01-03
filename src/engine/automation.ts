@@ -15,6 +15,7 @@ export type AutomationStep =
 
 export interface AutomationScript {
   name: string;
+  description?: string;
   steps: AutomationStep[];
 }
 
@@ -115,12 +116,14 @@ export class AutomationRunner {
 export const EXAMPLE_SCRIPTS: AutomationScript[] = [
   {
     name: 'Parameter Sweep',
+    description: 'Walk a parameter across a range to watch the graph respond.',
     steps: [
       { type: 'sweep', row: 1, col: 1, from: 0, to: 10, step: 0.5, delay: 100 },
     ],
   },
   {
     name: 'Monte Carlo Simulation',
+    description: 'Feed random values into two cells repeatedly.',
     steps: [
       {
         type: 'loop',
@@ -135,6 +138,7 @@ export const EXAMPLE_SCRIPTS: AutomationScript[] = [
   },
   {
     name: 'Animated Graph',
+    description: 'Drive a sine-style input to animate a curve.',
     steps: [
       {
         type: 'loop',

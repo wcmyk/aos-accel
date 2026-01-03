@@ -3,8 +3,9 @@
  * Excel-like grid interface
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { CellValue } from '../engine/types';
 
 const ROWS = 100;
 const COLS = 26;
@@ -55,7 +56,7 @@ export const SpreadsheetGrid: React.FC = () => {
     return letter;
   };
 
-  const formatCellValue = (value: any): string => {
+  const formatCellValue = (value: CellValue): string => {
     if (value === null || value === undefined) return '';
     if (typeof value === 'number') {
       return value.toLocaleString(undefined, { maximumFractionDigits: 10 });

@@ -3,7 +3,7 @@
  * Tracks dependencies between cells for efficient recalculation
  */
 
-import { ASTNode, Cell, CellAddress } from './types';
+import { ASTNode, Cell } from './types';
 
 export class DependencyGraph {
   private cells: Map<string, Cell>;

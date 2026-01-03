@@ -3,7 +3,7 @@
  * Executes AST nodes for both spreadsheet formulas AND graph functions
  */
 
-import { ASTNode, CellValue, Cell, Worksheet } from './types';
+import { ASTNode, CellValue, Worksheet } from './types';
 import { FORMULAS } from './formulas';
 
 export class Evaluator {
@@ -133,7 +133,7 @@ export class Evaluator {
       }
 
       default:
-        throw new Error(`Unknown node type: ${(node as any).type}`);
+        throw new Error(`Unknown node type: ${(node as unknown as { type: string }).type}`);
     }
   }
 

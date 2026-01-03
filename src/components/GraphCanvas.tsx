@@ -17,53 +17,21 @@ export const GraphCanvas: React.FC = () => {
     yMax: 10,
   });
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw axes
-    drawAxes(ctx, canvas.width, canvas.height, viewport);
-
-    // Render graphs
-    const worksheet = engine.getWorksheet();
-    const renderer = new GraphRenderer(worksheet);
-    const graphsData = renderer.renderAll(1000);
-
-    for (const graphData of graphsData) {
-      if (!graphData.visible || graphData.points.length === 0) continue;
-
-      ctx.strokeStyle = graphData.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      let first = true;
-      for (const point of graphData.points) {
-        const screenX = mapToScreen(point.x, viewport.xMin, viewport.xMax, 0, canvas.width);
-        const screenY = mapToScreen(point.y, viewport.yMin, viewport.yMax, canvas.height, 0);
-
-        if (first) {
-          ctx.moveTo(screenX, screenY);
-          first = false;
-        } else {
-          ctx.lineTo(screenX, screenY);
-        }
-      }
-
-      ctx.stroke();
-    }
-  }, [engine, viewport, getGraphs]);
+  const mapToScreen = (
+    value: number,
+    min: number,
+    max: number,
+    screenMin: number,
+    screenMax: number
+  ): number => {
+    return screenMin + ((value - min) / (max - min)) * (screenMax - screenMin);
+  };
 
   const drawAxes = (
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
-    vp: typeof viewport
+    vp: { xMin: number; xMax: number; yMin: number; yMax: number }
   ) => {
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
@@ -119,15 +87,47 @@ export const GraphCanvas: React.FC = () => {
     ctx.fillText(`Y: [${vp.yMin.toFixed(1)}, ${vp.yMax.toFixed(1)}]`, 10, 20);
   };
 
-  const mapToScreen = (
-    value: number,
-    min: number,
-    max: number,
-    screenMin: number,
-    screenMax: number
-  ): number => {
-    return screenMin + ((value - min) / (max - min)) * (screenMax - screenMin);
-  };
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw axes
+    drawAxes(ctx, canvas.width, canvas.height, viewport);
+
+    // Render graphs
+    const worksheet = engine.getWorksheet();
+    const renderer = new GraphRenderer(worksheet);
+    const graphsData = renderer.renderAll(1000);
+
+    for (const graphData of graphsData) {
+      if (!graphData.visible || graphData.points.length === 0) continue;
+
+      ctx.strokeStyle = graphData.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      let first = true;
+      for (const point of graphData.points) {
+        const screenX = mapToScreen(point.x, viewport.xMin, viewport.xMax, 0, canvas.width);
+        const screenY = mapToScreen(point.y, viewport.yMin, viewport.yMax, canvas.height, 0);
+
+        if (first) {
+          ctx.moveTo(screenX, screenY);
+          first = false;
+        } else {
+          ctx.lineTo(screenX, screenY);
+        }
+      }
+
+      ctx.stroke();
+    }
+  }, [engine, viewport, getGraphs, drawAxes, mapToScreen]);
 
   const handleZoom = (delta: number) => {
     setViewport((prev) => {

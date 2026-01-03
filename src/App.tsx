@@ -4,9 +4,7 @@
  */
 
 import { SpreadsheetGrid } from './components/SpreadsheetGrid';
-import { GraphCanvas } from './components/GraphCanvas';
 import { ParameterPanel } from './components/ParameterPanel';
-import { Toolbar } from './components/Toolbar';
 import { AutomationPanel } from './components/AutomationPanel';
 import './App.css';
 
@@ -43,8 +41,8 @@ function App() {
 
       <div className="ribbon">
         <div className="ribbon-group">
-          <p className="ribbon-title">Graph</p>
-          <Toolbar />
+          <p className="ribbon-title">Parameters</p>
+          <ParameterPanel />
         </div>
         <div className="ribbon-group">
           <p className="ribbon-title">Automation</p>
@@ -52,17 +50,21 @@ function App() {
         </div>
       </div>
 
-      <div className="workspace">
+      <div className="workspace workspace--sheet-first">
         <div className="sheet-panel">
           <SpreadsheetGrid />
         </div>
         <div className="insight-panel">
           <div className="card">
             <div className="card__header">
-              <p className="label">Chart</p>
-              <span className="dim-note">Driven by grid cells</span>
+              <p className="label">Workbook Notes</p>
+              <span className="dim-note">Keep track of scenarios, pivots, and formulas.</span>
             </div>
-            <GraphCanvas />
+            <ul className="note-list">
+              <li>Use <code>=SUM(A1:A10)</code> and 50+ built-in formulas.</li>
+              <li>Create sliders from cells to drive what-if analyses.</li>
+              <li>Run automation scripts to sweep parameters.</li>
+            </ul>
           </div>
           <div className="card">
             <div className="card__header">

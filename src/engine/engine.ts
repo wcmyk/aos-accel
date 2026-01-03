@@ -57,11 +57,7 @@ export class AccelEngine {
     this.setParameter(1, 2, -5, 5, 0.25, worksheet.name); // B1 slope
     this.setParameter(1, 3, -10, 10, 0.5, worksheet.name); // C1 intercept parameter
 
-    // Add a default graph bound to the parameters
-    const demoGraphId = 'graph_demo';
-    if (!worksheet.graphs.has(demoGraphId)) {
-      this.addGraph(demoGraphId, 'B1 * x + C1', 'function', worksheet.name);
-    }
+    // Keep graphing disabled for now (Desmos-style visuals paused)
   }
 
   getWorksheet(name?: string): Worksheet {

@@ -145,6 +145,10 @@ body {
   padding: 14px 16px;
 }
 
+.workspace--sheet-first {
+  grid-template-columns: 3fr 1fr;
+}
+
 .sheet-panel {
   background: #fff;
   border: 1px solid #e4d78a;
@@ -182,6 +186,16 @@ body {
 .dim-note {
   color: #7a7a7a;
   font-size: 12px;
+}
+
+.note-list {
+  list-style: square;
+  padding-left: 18px;
+  color: #4a4a4a;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
 }
 
 .status-bar {

@@ -385,39 +385,3 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return rate;
   },
 };
-
-// Helper functions
-function flattenArgs(args: CellValue[]): CellValue[] {
-  const result: CellValue[] = [];
-
-  for (const arg of args) {
-    if (Array.isArray(arg)) {
-      result.push(...flattenArgs(arg));
-    } else {
-      result.push(arg);
-    }
-  }
-
-  return result;
-}
-
-function toNumber(value: CellValue): number {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'boolean') return value ? 1 : 0;
-  if (typeof value === 'string') {
-    const num = parseFloat(value);
-    return isNaN(num) ? 0 : num;
-  }
-  if (value === null) return 0;
-  if (Array.isArray(value)) return value.length > 0 ? toNumber(value[0]) : 0;
-  return 0;
-}
-
-function toBoolean(value: CellValue): boolean {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value !== 0;
-  if (typeof value === 'string') return value.toLowerCase() === 'true' || value !== '';
-  if (value === null) return false;
-  if (Array.isArray(value)) return value.length > 0;
-  return false;
-}

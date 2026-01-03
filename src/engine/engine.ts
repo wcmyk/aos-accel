@@ -3,7 +3,7 @@
  * The unified engine that powers BOTH spreadsheet and graphing
  */
 
-import { Cell, CellAddress, CellValue, Worksheet, Workbook, GraphDefinition } from './types';
+import { Cell, CellValue, Worksheet, Workbook, GraphDefinition } from './types';
 import { FormulaParser } from './parser';
 import { Evaluator } from './evaluator';
 import { DependencyGraph } from './dependency-graph';
@@ -271,7 +271,7 @@ export class AccelEngine {
     }
   }
 
-  private updateGraphs(cellKey: string, worksheet: Worksheet): void {
+  private updateGraphs(_cellKey: string, _worksheet: Worksheet): void {
     // Graphs update automatically because they evaluate AST on-demand
     // No action needed here, but we could trigger UI updates
   }

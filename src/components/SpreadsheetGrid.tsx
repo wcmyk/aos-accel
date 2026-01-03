@@ -7,8 +7,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { CellValue } from '../engine/types';
 
-const ROWS = 100;
-const COLS = 26;
+const ROWS = 1000;
+const COLS = 52; // A-AZ (52 columns)
 
 export const SpreadsheetGrid: React.FC = () => {
   const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell } = useAccelStore();

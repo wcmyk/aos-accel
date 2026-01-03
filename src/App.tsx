@@ -12,75 +12,73 @@ import './App.css';
 
 function App() {
   return (
-    <div className="app-shell">
-      <header className="hero">
-        <div className="hero__brand">
-          <div className="hero__icon">🧮</div>
-          <div>
-            <p className="eyebrow">Accel</p>
-            <h1>Unified Spreadsheet + Graphing Workspace</h1>
-            <p className="hero__subtitle">
-              Microsoft-grade clarity with live formulas, tunable parameters, and graphing powered by a single calculation engine.
-            </p>
+    <div className="excel-shell">
+      <div className="title-bar">
+        <div className="title-bar__left">
+          <div className="traffic-lights">
+            <span className="light red" />
+            <span className="light yellow" />
+            <span className="light green" />
+          </div>
+          <div className="title">
+            <strong>Accel.xlsx</strong>
+            <span>Unified Spreadsheet + Graphing</span>
           </div>
         </div>
-        <div className="hero__meta">
-          <div className="badge">Live Recalc</div>
-          <div className="badge">Excel-Style Grid</div>
-          <div className="badge">Shared AST Graphs</div>
+        <div className="title-bar__right">
+          <span className="status-dot" />
+          AutoSave Off
         </div>
-      </header>
+      </div>
 
-      <main className="workspace">
-        <section className="workspace__row">
-          <div className="panel panel--primary">
-            <div className="panel__header">
-              <div>
-                <h2>Workbook</h2>
-                <p>Enter values or formulas (e.g. <code>=SUM(A1:A5)</code>) and drive graphs directly.</p>
-              </div>
-              <div className="panel__actions">
-                <a className="btn ghost" href="#graph-controls">Add graph</a>
-                <a className="btn ghost" href="#parameters">Create parameter</a>
-              </div>
-            </div>
-            <SpreadsheetGrid />
-          </div>
+      <div className="ribbon-tabs">
+        <button className="tab active">Home</button>
+        <button className="tab">Insert</button>
+        <button className="tab">Page Layout</button>
+        <button className="tab">Formulas</button>
+        <button className="tab">Data</button>
+        <button className="tab">Review</button>
+        <button className="tab">View</button>
+      </div>
 
-          <div className="panel panel--graph" id="graph-controls">
-            <div className="panel__header">
-              <div>
-                <h2>Graphing</h2>
-                <p>Same formulas, instantly visualized. Zoom or reset with one tap.</p>
-              </div>
-              <Toolbar />
+      <div className="ribbon">
+        <div className="ribbon-group">
+          <p className="ribbon-title">Graph</p>
+          <Toolbar />
+        </div>
+        <div className="ribbon-group">
+          <p className="ribbon-title">Automation</p>
+          <AutomationPanel />
+        </div>
+      </div>
+
+      <div className="workspace">
+        <div className="sheet-panel">
+          <SpreadsheetGrid />
+        </div>
+        <div className="insight-panel">
+          <div className="card">
+            <div className="card__header">
+              <p className="label">Chart</p>
+              <span className="dim-note">Driven by grid cells</span>
             </div>
             <GraphCanvas />
           </div>
-        </section>
-
-        <section className="workspace__row workspace__row--secondary" id="parameters">
-          <div className="panel">
-            <div className="panel__header">
-              <div>
-                <h3>Parameters</h3>
-                <p>Turn any numeric cell into a slider to simulate and tune.</p>
-              </div>
+          <div className="card">
+            <div className="card__header">
+              <p className="label">Parameters</p>
+              <span className="dim-note">Live sliders</span>
             </div>
             <ParameterPanel />
           </div>
+        </div>
+      </div>
 
-          <div className="panel">
-            <div className="panel__header">
-              <div>
-                <h3>Automation</h3>
-                <p>Run prebuilt sweeps and simulations against the same grid + graphs.</p>
-              </div>
-            </div>
-            <AutomationPanel />
-          </div>
-        </section>
-      </main>
+      <footer className="status-bar">
+        <span>Ready</span>
+        <span>Pastel Theme</span>
+        <span>Shared AST Graphs</span>
+      </footer>
     </div>
   );
 }

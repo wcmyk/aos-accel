@@ -1,11 +1,10 @@
 /**
  * Main Accel Application
- * Unified spreadsheet + graphing environment
+ * Full-featured Excel replacement
  */
 
 import { SpreadsheetGrid } from './components/SpreadsheetGrid';
-import { ParameterPanel } from './components/ParameterPanel';
-import { AutomationPanel } from './components/AutomationPanel';
+import { Ribbon } from './components/Ribbon';
 import './App.css';
 
 function App() {
@@ -20,7 +19,7 @@ function App() {
           </div>
           <div className="title">
             <strong>Accel.xlsx</strong>
-            <span>Unified Spreadsheet + Graphing</span>
+            <span>Excel Replacement - Humanity's Last Hope</span>
           </div>
         </div>
         <div className="title-bar__right">
@@ -29,50 +28,16 @@ function App() {
         </div>
       </div>
 
-      <div className="ribbon-tabs">
-        <button className="tab active">Home</button>
-        <button className="tab">Insert</button>
-        <button className="tab">Page Layout</button>
-        <button className="tab">Formulas</button>
-        <button className="tab">Data</button>
-        <button className="tab">Review</button>
-        <button className="tab">View</button>
-      </div>
+      <Ribbon />
 
-      <div className="ribbon">
-        <div className="ribbon-group">
-          <p className="ribbon-title">Parameters</p>
-          <ParameterPanel />
-        </div>
-        <div className="ribbon-group">
-          <p className="ribbon-title">Automation</p>
-          <AutomationPanel />
-        </div>
-      </div>
-
-      <div className="workspace workspace--sheet-first">
-        <div className="sheet-panel">
-          <SpreadsheetGrid />
-        </div>
-        <div className="insight-panel">
-          <div className="card">
-            <div className="card__header">
-              <p className="label">Workbook Notes</p>
-              <span className="dim-note">Keep track of scenarios, pivots, and formulas.</span>
-            </div>
-            <ul className="note-list">
-              <li>Use <code>=SUM(A1:A10)</code> and 50+ built-in formulas.</li>
-              <li>Create sliders from cells to drive what-if analyses.</li>
-              <li>Run automation scripts to sweep parameters.</li>
-            </ul>
-          </div>
-        </div>
+      <div className="workspace-fullwidth">
+        <SpreadsheetGrid />
       </div>
 
       <footer className="status-bar">
         <span>Ready</span>
-        <span>Pastel Theme</span>
-        <span>Shared AST Graphs</span>
+        <span>Sheet1</span>
+        <span>Average: - | Count: - | Sum: -</span>
       </footer>
     </div>
   );

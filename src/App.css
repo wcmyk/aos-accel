@@ -390,12 +390,13 @@ body {
 .spreadsheet-grid {
   border-collapse: collapse;
   width: 100%;
+  table-layout: fixed;
 }
 
 .spreadsheet-grid th,
 .spreadsheet-grid td {
   border: 1px solid #d9d9d9;
-  width: 92px;
+  width: 120px;
   height: 24px;
   text-align: left;
   padding: 0.15rem 0.35rem;

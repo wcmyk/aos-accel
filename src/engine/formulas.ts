@@ -315,7 +315,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     if (r === 0) return -(p + f) / n;
 
     const pvif = Math.pow(1 + r, n);
-    let pmt = (r * (f + pvif * p)) / ((t === 1 ? 1 + r : 1) * (1 - pvif));
+    const pmt = (r * (f + pvif * p)) / ((t === 1 ? 1 + r : 1) * (1 - pvif));
 
     return -pmt;
   },

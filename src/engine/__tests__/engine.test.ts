@@ -120,8 +120,8 @@ describe('AccelEngine', () => {
 
     it('should bind graphs to cell values', () => {
       const engine = new AccelEngine();
-      engine.setCell(1, 1, 2); // slope
-      engine.setCell(2, 1, 3); // intercept
+      engine.setCell(1, 1, 2); // A1 = slope
+      engine.setCell(1, 2, 3); // B1 = intercept (row 1, col 2)
       engine.addGraph('graph1', 'A1 * x + B1');
 
       expect(engine.evaluateGraph('graph1', 0)).toBe(3);
@@ -186,10 +186,10 @@ describe('AccelEngine', () => {
       const engine = new AccelEngine();
 
       // Setup spreadsheet data (Excel part)
-      engine.setParameter(1, 1, 0, 10, 0.5); // amplitude
-      engine.setParameter(2, 1, 0, 6.28, 0.1); // frequency
+      engine.setParameter(1, 1, 0, 10, 0.5); // A1 = amplitude
+      engine.setParameter(1, 2, 0, 6.28, 0.1); // B1 = frequency (row 1, col 2)
       engine.setCell(1, 1, 2);
-      engine.setCell(2, 1, 1);
+      engine.setCell(1, 2, 1);
 
       // Create graph using cell references (Desmos part)
       engine.addGraph('sine', 'A1 * SIN(B1 * x)');
@@ -209,9 +209,9 @@ describe('AccelEngine', () => {
     it('should handle complex formulas in graphs', () => {
       const engine = new AccelEngine();
 
-      engine.setCell(1, 1, 3);
-      engine.setCell(2, 1, 2);
-      engine.setCell(3, 1, 1);
+      engine.setCell(1, 1, 3); // A1 = a
+      engine.setCell(1, 2, 2); // B1 = b (row 1, col 2)
+      engine.setCell(1, 3, 1); // C1 = c (row 1, col 3)
 
       // Quadratic: ax^2 + bx + c
       engine.addGraph('quadratic', 'A1 * POWER(x, 2) + B1 * x + C1');

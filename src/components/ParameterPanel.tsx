@@ -5,12 +5,13 @@
 
 import React from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { Cell } from '../engine/types';
 
 export const ParameterPanel: React.FC = () => {
   const { engine, updateParameter, refresh } = useAccelStore();
 
   const worksheet = engine.getWorksheet();
-  const parameters: Array<{ key: string; cell: any }> = [];
+  const parameters: Array<{ key: string; cell: Cell }> = [];
 
   worksheet.cells.forEach((cell, key) => {
     if (cell.isParameter && cell.parameterConfig) {

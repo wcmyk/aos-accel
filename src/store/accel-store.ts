@@ -30,6 +30,9 @@ interface AccelState {
   cutCell: (row: number, col: number) => void;
   pasteCell: (row: number, col: number) => void;
 
+  // Formatting
+  formatCell: (row: number, col: number, format: any) => void;
+
   // Parameters
   setParameter: (row: number, col: number, min: number, max: number, step: number) => void;
   updateParameter: (row: number, col: number, value: number) => void;
@@ -120,6 +123,13 @@ export const useAccelStore = create<AccelState>()(
           state.clipboard = null;
         }
       });
+    },
+
+    formatCell: (row, col, format) => {
+      // Placeholder for cell formatting
+      // Will be implemented with actual formatting logic
+      console.log('Format cell', row, col, format);
+      set(() => ({}));
     },
 
     setParameter: (row, col, min, max, step) => {

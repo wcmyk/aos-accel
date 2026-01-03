@@ -5,12 +5,87 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAccelStore } from '../store/accel-store';
-import { CellValue } from '../engine/types';
+import { CellValue, CellFormat } from '../engine/types';
 
 const ROWS = 1000;
 const COLS = 52; // A-AZ (52 columns)
 const ROW_HEIGHT = 24;
 const OVERSCAN = 8;
+
+interface GridCellProps {
+  row: number;
+  col: number;
+  displayValue: string;
+  cellFormat?: CellFormat;
+  isSelected: boolean;
+  isEditing: boolean;
+  isParameter?: boolean;
+  isInFillRange: boolean;
+  onClick: (row: number, col: number) => void;
+  onDoubleClick: (row: number, col: number) => void;
+  onMouseEnter: (row: number, col: number) => void;
+  onFillHandleMouseDown: (event: React.MouseEvent) => void;
+}
+
+const GridCell: React.FC<GridCellProps> = React.memo(({
+  row,
+  col,
+  displayValue,
+  cellFormat,
+  isSelected,
+  isEditing,
+  isParameter,
+  isInFillRange,
+  onClick,
+  onDoubleClick,
+  onMouseEnter,
+  onFillHandleMouseDown,
+}) => {
+  const handleClick = useCallback(() => onClick(row, col), [onClick, row, col]);
+  const handleDoubleClick = useCallback(() => onDoubleClick(row, col), [onDoubleClick, row, col]);
+  const handleMouseEnter = useCallback(() => onMouseEnter(row, col), [onMouseEnter, row, col]);
+
+  const cellStyle: React.CSSProperties = useMemo(() => ({
+    ...(cellFormat?.bold && { fontWeight: 'bold' }),
+    ...(cellFormat?.italic && { fontStyle: 'italic' }),
+    ...(cellFormat?.underline && { textDecoration: 'underline' }),
+    ...(cellFormat?.fontColor && { color: cellFormat.fontColor }),
+    ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
+  }), [cellFormat]);
+
+  return (
+    <td
+      className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''}`}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onMouseEnter={handleMouseEnter}
+      style={cellFormat?.backgroundColor ? { backgroundColor: cellFormat.backgroundColor } : undefined}
+    >
+      {!isEditing && (
+        <div className="cell-content" style={cellStyle}>
+          {displayValue}
+        </div>
+      )}
+      {isSelected && !isEditing && (
+        <div
+          className="fill-handle"
+          onMouseDown={onFillHandleMouseDown}
+        />
+      )}
+    </td>
+  );
+}, (prev, next) => (
+  prev.displayValue === next.displayValue &&
+  prev.isSelected === next.isSelected &&
+  prev.isEditing === next.isEditing &&
+  prev.isParameter === next.isParameter &&
+  prev.isInFillRange === next.isInFillRange &&
+  prev.cellFormat?.bold === next.cellFormat?.bold &&
+  prev.cellFormat?.italic === next.cellFormat?.italic &&
+  prev.cellFormat?.underline === next.cellFormat?.underline &&
+  prev.cellFormat?.fontColor === next.cellFormat?.fontColor &&
+  prev.cellFormat?.backgroundColor === next.cellFormat?.backgroundColor
+));
 
 export const SpreadsheetGrid: React.FC = () => {
   const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell, fillRange, setFillRange, clearFillRange, executeFill } = useAccelStore();
@@ -20,6 +95,8 @@ export const SpreadsheetGrid: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const gridWrapperRef = useRef<HTMLDivElement>(null);
+  const pendingFillTarget = useRef<{ row: number; col: number } | null>(null);
+  const fillRangeRaf = useRef<number | null>(null);
   const [scrollPosition, setScrollPosition] = useState({ top: 0, left: 0 });
   const [viewportHeight, setViewportHeight] = useState(0);
 
@@ -28,6 +105,14 @@ export const SpreadsheetGrid: React.FC = () => {
     if (gridRef.current) {
       gridRef.current.focus();
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (fillRangeRaf.current !== null) {
+        cancelAnimationFrame(fillRangeRaf.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -105,6 +190,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const handleFillHandleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    pendingFillTarget.current = null;
     setIsDraggingFill(true);
   }, []);
 
@@ -112,7 +198,18 @@ export const SpreadsheetGrid: React.FC = () => {
     if (isDraggingFill && selectedCell) {
       // Only allow filling in the same row or column as the source
       if (row === selectedCell.row || col === selectedCell.col) {
-        setFillRange(row, col);
+        const targetChanged = !pendingFillTarget.current || pendingFillTarget.current.row !== row || pendingFillTarget.current.col !== col;
+        if (targetChanged) {
+          pendingFillTarget.current = { row, col };
+          if (fillRangeRaf.current === null) {
+            fillRangeRaf.current = requestAnimationFrame(() => {
+              if (pendingFillTarget.current) {
+                setFillRange(pendingFillTarget.current.row, pendingFillTarget.current.col);
+              }
+              fillRangeRaf.current = null;
+            });
+          }
+        }
       }
     }
   }, [isDraggingFill, selectedCell, setFillRange]);
@@ -122,6 +219,11 @@ export const SpreadsheetGrid: React.FC = () => {
       executeFill();
       setIsDraggingFill(false);
       clearFillRange();
+      pendingFillTarget.current = null;
+      if (fillRangeRaf.current !== null) {
+        cancelAnimationFrame(fillRangeRaf.current);
+        fillRangeRaf.current = null;
+      }
     }
   }, [isDraggingFill, executeFill, clearFillRange]);
 
@@ -305,35 +407,23 @@ export const SpreadsheetGrid: React.FC = () => {
                   );
 
                   const cellFormat = cellObj?.format;
-                  const cellStyle: React.CSSProperties = {
-                    ...(cellFormat?.bold && { fontWeight: 'bold' }),
-                    ...(cellFormat?.italic && { fontStyle: 'italic' }),
-                    ...(cellFormat?.underline && { textDecoration: 'underline' }),
-                    ...(cellFormat?.fontColor && { color: cellFormat.fontColor }),
-                    ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
-                  };
 
                   return (
-                    <td
+                    <GridCell
                       key={col}
-                      className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''}`}
-                      onClick={() => handleCellClick(row, col)}
-                      onDoubleClick={() => handleCellDoubleClick(row, col)}
-                      onMouseEnter={() => handleCellMouseEnter(row, col)}
-                      style={cellFormat?.backgroundColor ? { backgroundColor: cellFormat.backgroundColor } : undefined}
-                    >
-                      {!isEditing && (
-                        <div className="cell-content" style={cellStyle}>
-                          {formatCellValue(value)}
-                        </div>
-                      )}
-                      {isSelected && !isEditing && (
-                        <div
-                          className="fill-handle"
-                          onMouseDown={handleFillHandleMouseDown}
-                        />
-                      )}
-                    </td>
+                      row={row}
+                      col={col}
+                      displayValue={formatCellValue(value)}
+                      cellFormat={cellFormat}
+                      isSelected={Boolean(isSelected)}
+                      isEditing={Boolean(isEditing)}
+                      isParameter={isParameter}
+                      isInFillRange={Boolean(isInFillRange)}
+                      onClick={handleCellClick}
+                      onDoubleClick={handleCellDoubleClick}
+                      onMouseEnter={handleCellMouseEnter}
+                      onFillHandleMouseDown={handleFillHandleMouseDown}
+                    />
                   );
                 })}
               </tr>

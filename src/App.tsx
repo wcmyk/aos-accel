@@ -66,13 +66,6 @@ function App() {
               <li>Run automation scripts to sweep parameters.</li>
             </ul>
           </div>
-          <div className="card">
-            <div className="card__header">
-              <p className="label">Parameters</p>
-              <span className="dim-note">Live sliders</span>
-            </div>
-            <ParameterPanel />
-          </div>
         </div>
       </div>
 

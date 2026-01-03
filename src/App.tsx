@@ -3,7 +3,6 @@
  * Unified spreadsheet + graphing environment
  */
 
-import React from 'react';
 import { SpreadsheetGrid } from './components/SpreadsheetGrid';
 import { GraphCanvas } from './components/GraphCanvas';
 import { ParameterPanel } from './components/ParameterPanel';

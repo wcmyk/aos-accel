@@ -10,14 +10,14 @@ type FormulaFunction = (...args: CellValue[]) => CellValue;
 export const FORMULAS: Record<string, FormulaFunction> = {
   // ===== MATH FUNCTIONS =====
   SUM: (...args) => {
-    const values = flattenArgs(args);
-    return values.reduce((sum, val) => sum + toNumber(val), 0);
+    const values = flattenArgs(args).map(toNumber);
+    return values.reduce((sum, val) => sum + val, 0);
   },
 
   AVERAGE: (...args) => {
-    const values = flattenArgs(args);
+    const values = flattenArgs(args).map(toNumber);
     if (values.length === 0) return 0;
-    return values.reduce((sum, val) => sum + toNumber(val), 0) / values.length;
+    return values.reduce((sum, val) => sum + val, 0) / values.length;
   },
 
   MIN: (...args) => {
@@ -213,7 +213,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return str;
   },
 
-  TEXT: (value, format?) => {
+  TEXT: (value, _format?) => {
     // Basic text formatting
     return String(value);
   },
@@ -245,7 +245,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   SECOND: (dateValue) => new Date(toNumber(dateValue)).getSeconds(),
 
   // ===== LOOKUP/REFERENCE FUNCTIONS =====
-  VLOOKUP: (lookupValue, tableArray, colIndexNum, rangeLookup = true) => {
+  VLOOKUP: (lookupValue, tableArray, colIndexNum, _rangeLookup = true) => {
     // Simplified implementation
     if (!Array.isArray(tableArray)) return null;
 
@@ -261,7 +261,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return null;
   },
 
-  HLOOKUP: (lookupValue, tableArray, rowIndexNum, rangeLookup = true) => {
+  HLOOKUP: (lookupValue, tableArray, rowIndexNum, _rangeLookup = true) => {
     if (!Array.isArray(tableArray)) return null;
 
     const rows = tableArray as CellValue[][];
@@ -297,7 +297,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return null;
   },
 
-  MATCH: (lookupValue, lookupArray, matchType = 1) => {
+  MATCH: (lookupValue, lookupArray, _matchType = 1) => {
     if (!Array.isArray(lookupArray)) return null;
 
     const index = lookupArray.indexOf(lookupValue);
@@ -356,7 +356,8 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   },
 
   IRR: (values, guess = 0.1) => {
-    const vals = flattenArgs(values).map(toNumber);
+    const normalizedValues = Array.isArray(values) ? values : [values];
+    const vals = flattenArgs(normalizedValues).map(toNumber);
 
     // Newton-Raphson method
     let rate = toNumber(guess);

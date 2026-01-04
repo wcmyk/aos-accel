@@ -412,3 +412,29 @@ export function erfInv(x: number): number {
 
   return sign * Math.sqrt(Math.sqrt(b * b - Math.log(1 - x * x) / a) - b);
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// STATISTICAL HELPERS FOR VECTORS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * Compute mean of a vector
+ */
+export function mean(v: Vector): number {
+  return v.data.reduce((sum, x) => sum + x, 0) / v.length;
+}
+
+/**
+ * Compute variance of a vector (sample variance)
+ */
+export function variance(v: Vector): number {
+  const m = mean(v);
+  return v.data.reduce((sum, x) => sum + (x - m) ** 2, 0) / (v.length - 1);
+}
+
+/**
+ * Compute standard deviation of a vector
+ */
+export function standardDeviation(v: Vector): number {
+  return Math.sqrt(variance(v));
+}

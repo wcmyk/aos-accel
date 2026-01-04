@@ -22,10 +22,10 @@ interface GridCellProps {
   isEditing: boolean;
   isParameter?: boolean;
   isInFillRange: boolean;
-  onClick: (row: number, col: number) => void;
-  onDoubleClick: (row: number, col: number) => void;
-  onMouseEnter: (row: number, col: number) => void;
-  onFillHandleMouseDown: (event: React.MouseEvent) => void;
+  onClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
+  onDoubleClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
+  onMouseEnter: (e: React.MouseEvent<HTMLTableCellElement>) => void;
+  onFillHandleMouseDown: (e: React.MouseEvent) => void;
 }
 
 const GridCell: React.FC<GridCellProps> = React.memo(({
@@ -42,10 +42,6 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
   onMouseEnter,
   onFillHandleMouseDown,
 }) => {
-  const handleClick = useCallback(() => onClick(row, col), [onClick, row, col]);
-  const handleDoubleClick = useCallback(() => onDoubleClick(row, col), [onDoubleClick, row, col]);
-  const handleMouseEnter = useCallback(() => onMouseEnter(row, col), [onMouseEnter, row, col]);
-
   const cellStyle: React.CSSProperties = useMemo(() => ({
     ...(cellFormat?.bold && { fontWeight: 'bold' }),
     ...(cellFormat?.italic && { fontStyle: 'italic' }),
@@ -56,10 +52,12 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
 
   return (
     <td
+      data-row={row}
+      data-col={col}
       className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''}`}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onMouseEnter={handleMouseEnter}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onMouseEnter={onMouseEnter}
       style={cellFormat?.backgroundColor ? { backgroundColor: cellFormat.backgroundColor } : undefined}
     >
       {!isEditing && (
@@ -76,6 +74,8 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
     </td>
   );
 }, (prev, next) => (
+  prev.row === next.row &&
+  prev.col === next.col &&
   prev.displayValue === next.displayValue &&
   prev.isSelected === next.isSelected &&
   prev.isEditing === next.isEditing &&
@@ -85,7 +85,11 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
   prev.cellFormat?.italic === next.cellFormat?.italic &&
   prev.cellFormat?.underline === next.cellFormat?.underline &&
   prev.cellFormat?.fontColor === next.cellFormat?.fontColor &&
-  prev.cellFormat?.backgroundColor === next.cellFormat?.backgroundColor
+  prev.cellFormat?.backgroundColor === next.cellFormat?.backgroundColor &&
+  prev.onClick === next.onClick &&
+  prev.onDoubleClick === next.onDoubleClick &&
+  prev.onMouseEnter === next.onMouseEnter &&
+  prev.onFillHandleMouseDown === next.onFillHandleMouseDown
 ));
 
 export const SpreadsheetGrid: React.FC = () => {
@@ -138,10 +142,14 @@ export const SpreadsheetGrid: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  const handleCellClick = useCallback((row: number, col: number) => {
-    selectCell(row, col);
-    setEditingCell(null);
-    setEditValue('');
+  const handleCellClick = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
+    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
+    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
+    if (row && col) {
+      selectCell(row, col);
+      setEditingCell(null);
+      setEditValue('');
+    }
   }, [selectCell]);
 
   const startEditing = useCallback((row: number, col: number, initialValue: string = '') => {
@@ -152,9 +160,13 @@ export const SpreadsheetGrid: React.FC = () => {
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [getCellObject]);
 
-  const handleCellDoubleClick = useCallback((row: number, col: number) => {
-    selectCell(row, col);
-    startEditing(row, col);
+  const handleCellDoubleClick = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
+    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
+    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
+    if (row && col) {
+      selectCell(row, col);
+      startEditing(row, col);
+    }
   }, [selectCell, startEditing]);
 
   const handleCellSubmit = useCallback(() => {
@@ -198,21 +210,25 @@ export const SpreadsheetGrid: React.FC = () => {
     setIsDraggingFill(true);
   }, []);
 
-  const handleCellMouseEnter = useCallback((row: number, col: number) => {
-    if (isDraggingFill && selectedCell) {
-      // Only allow filling in the same row or column as the source
-      if (row === selectedCell.row || col === selectedCell.col) {
-        const targetChanged = !pendingFillTarget.current || pendingFillTarget.current.row !== row || pendingFillTarget.current.col !== col;
-        if (targetChanged) {
-          pendingFillTarget.current = { row, col };
-          if (fillRangeRaf.current === null) {
-            fillRangeRaf.current = requestAnimationFrame(() => {
-              if (pendingFillTarget.current) {
-                setFillRange(pendingFillTarget.current.row, pendingFillTarget.current.col);
-              }
-              fillRangeRaf.current = null;
-            });
-          }
+  const handleCellMouseEnter = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
+    if (!isDraggingFill || !selectedCell) return;
+
+    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
+    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
+    if (!row || !col) return;
+
+    // Only allow filling in the same row or column as the source
+    if (row === selectedCell.row || col === selectedCell.col) {
+      const targetChanged = !pendingFillTarget.current || pendingFillTarget.current.row !== row || pendingFillTarget.current.col !== col;
+      if (targetChanged) {
+        pendingFillTarget.current = { row, col };
+        if (fillRangeRaf.current === null) {
+          fillRangeRaf.current = requestAnimationFrame(() => {
+            if (pendingFillTarget.current) {
+              setFillRange(pendingFillTarget.current.row, pendingFillTarget.current.col);
+            }
+            fillRangeRaf.current = null;
+          });
         }
       }
     }
@@ -355,6 +371,62 @@ export const SpreadsheetGrid: React.FC = () => {
   );
   const columns = useMemo(() => Array.from({ length: COLS }, (_, i) => i + 1), []);
 
+  // Memoize selected cell data for formula bar to avoid duplicate getCellObject calls
+  const selectedCellData = useMemo(() => {
+    if (!selectedCell) return null;
+    const cellObj = getCellObject(selectedCell.row, selectedCell.col);
+    return {
+      formula: cellObj?.formula,
+      value: cellObj?.value ?? '',
+    };
+  }, [selectedCell, getCellObject]);
+
+  const formulaBarValue = useMemo(() => {
+    if (editingCell) return editValue;
+    if (!selectedCellData) return '';
+    return selectedCellData.formula || String(selectedCellData.value);
+  }, [editingCell, editValue, selectedCellData]);
+
+  // Pre-compute all visible cell data to avoid repeated getCellObject/getCell calls in render loop
+  const visibleCellData = useMemo(() => {
+    const cellData = new Map<string, {
+      cellObj: ReturnType<typeof getCellObject>;
+      value: CellValue;
+      displayValue: string;
+      isParameter: boolean;
+      isSelected: boolean;
+      isEditing: boolean;
+      isInFillRange: boolean;
+    }>();
+
+    for (const row of visibleRows) {
+      for (const col of columns) {
+        const key = `${row}-${col}`;
+        const cellObj = getCellObject(row, col);
+        const value = getCell(row, col);
+        const isSelected = selectedCell?.row === row && selectedCell?.col === col;
+        const isEditing = editingCell?.row === row && editingCell?.col === col;
+        const isParameter = cellObj?.isParameter || false;
+        const isInFillRange = fillRange && selectedCell ? (
+          (selectedCell.row === row && col >= Math.min(selectedCell.col, fillRange.col) && col <= Math.max(selectedCell.col, fillRange.col)) ||
+          (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
+        ) : false;
+
+        cellData.set(key, {
+          cellObj,
+          value,
+          displayValue: formatCellValue(value),
+          isParameter,
+          isSelected,
+          isEditing,
+          isInFillRange,
+        });
+      }
+    }
+
+    return cellData;
+  }, [visibleRows, columns, getCellObject, getCell, selectedCell, editingCell, fillRange]);
+
   return (
     <div
       className="spreadsheet-container"
@@ -370,7 +442,7 @@ export const SpreadsheetGrid: React.FC = () => {
           ref={inputRef}
           type="text"
           className="formula-input"
-          value={editingCell ? editValue : (selectedCell ? (getCellObject(selectedCell.row, selectedCell.col)?.formula || String(getCellObject(selectedCell.row, selectedCell.col)?.value ?? '')) : '')}
+          value={formulaBarValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleFormulaKeyDown}
           onBlur={handleCellSubmit}
@@ -410,29 +482,22 @@ export const SpreadsheetGrid: React.FC = () => {
               <tr key={row}>
                 <td className="row-header">{row}</td>
                 {columns.map((col) => {
-                  const cellObj = getCellObject(row, col);
-                  const value = getCell(row, col);
-                  const isSelected = selectedCell?.row === row && selectedCell?.col === col;
-                  const isEditing = editingCell?.row === row && editingCell?.col === col;
-                  const isParameter = cellObj?.isParameter;
-                  const isInFillRange = fillRange && selectedCell && (
-                    (selectedCell.row === row && col >= Math.min(selectedCell.col, fillRange.col) && col <= Math.max(selectedCell.col, fillRange.col)) ||
-                    (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
-                  );
+                  const key = `${row}-${col}`;
+                  const cellData = visibleCellData.get(key);
 
-                  const cellFormat = cellObj?.format;
+                  if (!cellData) return null;
 
                   return (
                     <GridCell
                       key={col}
                       row={row}
                       col={col}
-                      displayValue={formatCellValue(value)}
-                      cellFormat={cellFormat}
-                      isSelected={Boolean(isSelected)}
-                      isEditing={Boolean(isEditing)}
-                      isParameter={isParameter}
-                      isInFillRange={Boolean(isInFillRange)}
+                      displayValue={cellData.displayValue}
+                      cellFormat={cellData.cellObj?.format}
+                      isSelected={cellData.isSelected}
+                      isEditing={cellData.isEditing}
+                      isParameter={cellData.isParameter}
+                      isInFillRange={cellData.isInFillRange}
                       onClick={handleCellClick}
                       onDoubleClick={handleCellDoubleClick}
                       onMouseEnter={handleCellMouseEnter}

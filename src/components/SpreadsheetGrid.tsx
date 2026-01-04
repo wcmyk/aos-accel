@@ -3,7 +3,7 @@
  * Excel-like grid interface with full keyboard support
  */
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { CellValue, CellFormat } from '../engine/types';
 
@@ -11,6 +11,7 @@ const ROWS = 1000;
 const COLS = 52; // A-AZ (52 columns)
 const ROW_HEIGHT = 24;
 const OVERSCAN = 8;
+const DEFAULT_VIEWPORT_HEIGHT = 600;
 
 interface GridCellProps {
   row: number;
@@ -98,7 +99,8 @@ export const SpreadsheetGrid: React.FC = () => {
   const pendingFillTarget = useRef<{ row: number; col: number } | null>(null);
   const fillRangeRaf = useRef<number | null>(null);
   const [scrollPosition, setScrollPosition] = useState({ top: 0, left: 0 });
-  const [viewportHeight, setViewportHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
+  const scrollRaf = useRef<number | null>(null);
 
   // Focus grid on mount for keyboard navigation
   useEffect(() => {
@@ -112,20 +114,22 @@ export const SpreadsheetGrid: React.FC = () => {
       if (fillRangeRaf.current !== null) {
         cancelAnimationFrame(fillRangeRaf.current);
       }
+      if (scrollRaf.current !== null) {
+        cancelAnimationFrame(scrollRaf.current);
+      }
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!gridWrapperRef.current) return;
 
     const measure = () => {
-      if (gridWrapperRef.current) {
-        setViewportHeight(gridWrapperRef.current.clientHeight);
-        setScrollPosition({
-          top: gridWrapperRef.current.scrollTop,
-          left: gridWrapperRef.current.scrollLeft,
-        });
-      }
+      if (!gridWrapperRef.current) return;
+      setViewportHeight(gridWrapperRef.current.clientHeight || DEFAULT_VIEWPORT_HEIGHT);
+      setScrollPosition({
+        top: gridWrapperRef.current.scrollTop,
+        left: gridWrapperRef.current.scrollLeft,
+      });
     };
 
     measure();
@@ -309,7 +313,13 @@ export const SpreadsheetGrid: React.FC = () => {
 
   const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
-    setScrollPosition({ top: target.scrollTop, left: target.scrollLeft });
+    if (scrollRaf.current !== null) {
+      cancelAnimationFrame(scrollRaf.current);
+    }
+    scrollRaf.current = requestAnimationFrame(() => {
+      setScrollPosition({ top: target.scrollTop, left: target.scrollLeft });
+      scrollRaf.current = null;
+    });
   }, []);
 
   const colToLetter = (col: number): string => {
@@ -339,7 +349,11 @@ export const SpreadsheetGrid: React.FC = () => {
   const endRow = Math.min(ROWS, startRow + estimatedVisibleRowCount + OVERSCAN * 2 - 1);
   const topSpacerHeight = (startRow - 1) * ROW_HEIGHT;
   const bottomSpacerHeight = Math.max(totalGridHeight - endRow * ROW_HEIGHT, 0);
-  const visibleRows = useMemo(() => Array.from({ length: endRow - startRow + 1 }, (_, i) => startRow + i), [startRow, endRow]);
+  const visibleRows = useMemo(
+    () => Array.from({ length: endRow - startRow + 1 }, (_, i) => startRow + i),
+    [startRow, endRow]
+  );
+  const columns = useMemo(() => Array.from({ length: COLS }, (_, i) => i + 1), []);
 
   return (
     <div
@@ -378,7 +392,7 @@ export const SpreadsheetGrid: React.FC = () => {
           <thead>
             <tr>
               <th className="row-header"></th>
-              {Array.from({ length: COLS }, (_, i) => i + 1).map((col) => (
+              {columns.map((col) => (
                 <th key={col} className="col-header">
                   {colToLetter(col)}
                 </th>
@@ -395,7 +409,7 @@ export const SpreadsheetGrid: React.FC = () => {
             {visibleRows.map((row) => (
               <tr key={row}>
                 <td className="row-header">{row}</td>
-                {Array.from({ length: COLS }, (_, i) => i + 1).map((col) => {
+                {columns.map((col) => {
                   const cellObj = getCellObject(row, col);
                   const value = getCell(row, col);
                   const isSelected = selectedCell?.row === row && selectedCell?.col === col;

@@ -35,29 +35,8 @@ export class AccelEngine {
   }
 
   private seedDemoWorkbook(): void {
-    const worksheet = this.getWorksheet();
-
-    // Seed a small table of values
-    const rows = [
-      [1, 1],
-      [2, 2],
-      [3, 3],
-      [4, 4],
-      [5, 5],
-    ];
-
-    rows.forEach((rowValues, rowIndex) => {
-      rowValues.forEach((value, colIndex) => {
-        this.setCell(rowIndex + 1, colIndex + 1, value, worksheet.name);
-      });
-    });
-
-    // Create tunable slope/intercept parameters
-    this.setCell(1, 3, 1, worksheet.name); // C1 intercept
-    this.setParameter(1, 2, -5, 5, 0.25, worksheet.name); // B1 slope
-    this.setParameter(1, 3, -10, 10, 0.5, worksheet.name); // C1 intercept parameter
-
-    // Keep graphing disabled for now (Desmos-style visuals paused)
+    // Demo data removed - start with empty spreadsheet
+    // Users can add their own data
   }
 
   getWorksheet(name?: string): Worksheet {

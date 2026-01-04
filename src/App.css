@@ -17,7 +17,12 @@
   --cell-border: #e0e0e0;
   --cell-selected: #217346;
   --ribbon-bg: #f0f0f0;
+  --button-bg: #ffffff;
+  --button-border: #d0d0d0;
   --button-hover: #e5e5e5;
+  --button-active: #d9d9d9;
+  --input-bg: #ffffff;
+  --input-border: #d0d0d0;
 }
 
 /* Pastel Yellow Theme */
@@ -33,7 +38,12 @@
   --cell-border: #f5edd5;
   --cell-selected: #d4a017;
   --ribbon-bg: #fff9db;
+  --button-bg: #fff9db;
+  --button-border: #e8d8a0;
   --button-hover: #fff4c4;
+  --button-active: #ead9a5;
+  --input-bg: #fffef7;
+  --input-border: #e8d8a0;
 }
 
 /* Pastel Blue Theme */
@@ -49,7 +59,12 @@
   --cell-border: #d5eef5;
   --cell-selected: #2196f3;
   --ribbon-bg: #dbeef5;
+  --button-bg: #dbeef5;
+  --button-border: #a0d5e8;
   --button-hover: #c5e5f2;
+  --button-active: #b0dce8;
+  --input-bg: #f5fbfd;
+  --input-border: #a0d5e8;
 }
 
 /* Pastel Brown Theme */
@@ -65,7 +80,12 @@
   --cell-border: #ede7df;
   --cell-selected: #8b6f47;
   --ribbon-bg: #ece4dc;
+  --button-bg: #ece4dc;
+  --button-border: #d0c0a8;
   --button-hover: #e0d5ca;
+  --button-active: #d5c5b0;
+  --input-bg: #fdfcfb;
+  --input-border: #d0c0a8;
 }
 
 /* Pastel Red Theme */
@@ -81,7 +101,12 @@
   --cell-border: #ffd5d5;
   --cell-selected: #e53935;
   --ribbon-bg: #ffd5d5;
+  --button-bg: #ffd5d5;
+  --button-border: #f0a0a0;
   --button-hover: #ffc5c5;
+  --button-active: #f0b0b0;
+  --input-bg: #fff5f5;
+  --input-border: #f0a0a0;
 }
 
 /* Pastel Pink Theme */
@@ -97,7 +122,12 @@
   --cell-border: #ffd5ed;
   --cell-selected: #e91e63;
   --ribbon-bg: #ffd5ed;
+  --button-bg: #ffd5ed;
+  --button-border: #f0a0c8;
   --button-hover: #ffc5e5;
+  --button-active: #f0b0d8;
+  --input-bg: #fff5fb;
+  --input-border: #f0a0c8;
 }
 
 /* Pastel Green Theme */
@@ -113,7 +143,12 @@
   --cell-border: #d5f5d5;
   --cell-selected: #4caf50;
   --ribbon-bg: #d5f5d5;
+  --button-bg: #d5f5d5;
+  --button-border: #a0e0a0;
   --button-hover: #c5f2c5;
+  --button-active: #b0e8b0;
+  --input-bg: #f5fdf5;
+  --input-border: #a0e0a0;
 }
 
 /* Pastel Purple Theme */
@@ -129,7 +164,12 @@
   --cell-border: #e5d5f5;
   --cell-selected: #9c27b0;
   --ribbon-bg: #e5d5f5;
+  --button-bg: #e5d5f5;
+  --button-border: #c8a8e0;
   --button-hover: #d8c5f2;
+  --button-active: #d0b8e8;
+  --input-bg: #f8f5fd;
+  --input-border: #c8a8e0;
 }
 
 body {
@@ -213,8 +253,8 @@ body {
 .ribbon-tabs {
   display: flex;
   align-items: center;
-  background: #f7f7f7;
-  border-bottom: 1px solid #d9d9d9;
+  background: var(--bg-gradient-start);
+  border-bottom: 1px solid var(--border-color);
   padding: 0 8px;
   gap: 4px;
 }
@@ -224,16 +264,23 @@ body {
   border: none;
   padding: 10px 12px;
   font-weight: 600;
-  color: #4a4a4a;
+  color: var(--text-primary);
   cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.tab:hover {
+  background: var(--button-hover);
+  border-radius: 6px 6px 0 0;
 }
 
 .tab.active {
-  background: #fff5c2;
-  border: 1px solid #e4d78a;
-  border-bottom-color: #fff;
+  background: var(--button-bg);
+  border: 1px solid var(--button-border);
+  border-bottom-color: var(--ribbon-bg);
   border-radius: 6px 6px 0 0;
   margin-top: 2px;
+  color: var(--text-primary);
 }
 
 .ribbon {
@@ -278,8 +325,8 @@ body {
 }
 
 .sheet-panel {
-  background: #fff;
-  border: 1px solid #d0d0d0;
+  background: var(--cell-bg);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
   overflow: hidden;
@@ -292,8 +339,8 @@ body {
 }
 
 .card {
-  background: #fffef5;
-  border: 1px solid #e4d78a;
+  background: var(--bg-secondary);
+  border: 1px solid var(--button-border);
   border-radius: 8px;
   padding: 12px;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05);
@@ -355,8 +402,8 @@ body {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: #fff;
-  border: 1px solid #e4d78a;
+  background: var(--cell-bg);
+  border: 1px solid var(--button-border);
   border-radius: 6px;
 }
 
@@ -378,19 +425,28 @@ body {
 }
 
 .btn {
-  background: linear-gradient(180deg, #fff7c2 0%, #f7e38a 100%);
-  color: #2f2f2f;
-  border: 1px solid #e4d78a;
+  background: var(--button-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--button-border);
   border-radius: 6px;
   padding: 8px 12px;
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+  transition: background 120ms ease;
+}
+
+.btn:hover {
+  background: var(--button-hover);
+}
+
+.btn:active {
+  background: var(--button-active);
 }
 
 .btn.ghost {
-  background: #fff;
-  color: #2f2f2f;
+  background: var(--button-bg);
+  color: var(--text-primary);
 }
 
 .btn.danger {
@@ -415,9 +471,9 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 8px 10px;
-  border: 1px solid #e4d78a;
+  border: 1px solid var(--button-border);
   border-radius: 6px;
-  background: #fffef9;
+  background: var(--bg-secondary);
 }
 
 .script-name {
@@ -440,14 +496,14 @@ body {
 }
 
 .dialog-content {
-  background: #fffdf4;
+  background: var(--bg-secondary);
   padding: 18px;
   border-radius: 10px;
   width: min(520px, 100%);
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border: 1px solid #e4d78a;
+  border: 1px solid var(--button-border);
 }
 
 .dialog-subtitle {
@@ -465,8 +521,10 @@ body {
 .dialog input {
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--input-border);
   font-size: 14px;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .dialog-buttons {
@@ -488,26 +546,29 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 10px 12px;
-  border-bottom: 1px solid #d9d9d9;
-  background: linear-gradient(180deg, #fdfdfd 0%, #f5f5f5 100%);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--ribbon-bg);
 }
 
 .cell-reference {
   padding: 6px 10px;
-  background: white;
-  border: 1px solid #d9d9d9;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   min-width: 70px;
   font-weight: bold;
+  color: var(--text-primary);
 }
 
 .formula-input {
   flex: 1;
   padding: 8px 10px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-family: 'Consolas', 'SFMono-Regular', ui-monospace;
   font-size: 0.95rem;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .grid-wrapper {
@@ -523,7 +584,7 @@ body {
 
 .spreadsheet-grid th,
 .spreadsheet-grid td {
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--cell-border);
   width: 120px;
   height: 24px;
   text-align: left;
@@ -533,12 +594,13 @@ body {
 
 .spreadsheet-grid .row-header,
 .spreadsheet-grid .col-header {
-  background: #f3f3f3;
-  color: #3f3f3f;
+  background: var(--bg-gradient-start);
+  color: var(--text-primary);
   font-weight: 700;
   position: sticky;
   top: 0;
   z-index: 2;
+  border: 1px solid var(--border-color);
 }
 
 .spreadsheet-grid .row-header {
@@ -626,11 +688,12 @@ body {
 }
 
 .chip {
-  background: #fff7c2;
+  background: var(--button-bg);
   padding: 6px 10px;
   border-radius: 12px;
-  border: 1px solid #e4d78a;
+  border: 1px solid var(--button-border);
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .control-actions {
@@ -639,9 +702,9 @@ body {
 }
 
 .graph-canvas-shell {
-  background: #fff;
+  background: var(--cell-bg);
   border-radius: 8px;
-  border: 1px solid #e4d78a;
+  border: 1px solid var(--button-border);
   overflow: hidden;
 }
 
@@ -659,11 +722,11 @@ body {
 
 .parameter-panel.empty {
   padding: 14px;
-  background: #fffef9;
-  border: 1px dashed #e4d78a;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--button-border);
   border-radius: 8px;
   text-align: center;
-  color: #4f5d75;
+  color: var(--text-secondary);
 }
 
 .parameter-panel .hint-title {
@@ -677,9 +740,9 @@ body {
 
 .parameter-item {
   padding: 12px;
-  background: linear-gradient(135deg, #fffef5 0%, #fff9d6 100%);
+  background: var(--button-bg);
   border-radius: 8px;
-  border: 1px solid #e4d78a;
+  border: 1px solid var(--button-border);
 }
 
 .parameter-header {
@@ -728,20 +791,22 @@ body {
 .button-group {
   display: flex;
   gap: 0;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--button-border);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .ribbon-btn {
-  background: #f5f5f5;
+  background: var(--button-bg);
   border: none;
-  border-right: 1px solid #d0d0d0;
+  border-right: 1px solid var(--button-border);
   padding: 6px 10px;
   cursor: pointer;
   font-size: 14px;
   min-width: 32px;
   text-align: center;
+  color: var(--text-primary);
+  transition: background 120ms ease;
 }
 
 .ribbon-btn:last-child {
@@ -749,25 +814,26 @@ body {
 }
 
 .ribbon-btn:hover {
-  background: #e0e0e0;
+  background: var(--button-hover);
 }
 
 .ribbon-btn:active {
-  background: #d0d0d0;
+  background: var(--button-active);
 }
 
 .ribbon-input {
   padding: 6px 8px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 13px;
-  background: #fff;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .ribbon-color {
   width: 32px;
   height: 32px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--button-border);
   border-radius: 4px;
   cursor: pointer;
 }

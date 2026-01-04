@@ -50,7 +50,6 @@ interface AccelState {
   selectedCell: { row: number; col: number } | null;
   clipboard: ClipboardCell | null;
   fillRange: { row: number; col: number } | null;
-  theme: Theme;
 
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
@@ -92,9 +91,6 @@ interface AccelState {
   // Export
   exportCSV: () => void;
 
-  // Theme
-  setTheme: (theme: Theme) => void;
-
   // Force re-render
   refresh: () => void;
 }
@@ -105,7 +101,6 @@ export const useAccelStore = create<AccelState>()(
     selectedCell: null,
     clipboard: null,
     fillRange: null,
-    theme: 'default' as Theme,
 
     setCell: (row, col, value) => {
       const { engine } = get();
@@ -338,17 +333,6 @@ export const useAccelStore = create<AccelState>()(
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    },
-
-    setTheme: (theme) => {
-      // Apply theme to document immediately to avoid lag
-      requestAnimationFrame(() => {
-        document.documentElement.setAttribute('data-theme', theme);
-      });
-
-      set((state) => {
-        state.theme = theme;
-      });
     },
 
     refresh: () => {

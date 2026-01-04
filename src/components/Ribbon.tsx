@@ -479,7 +479,7 @@ export const Ribbon: React.FC = () => {
           <select
             className="ribbon-input"
             value={localTheme}
-            onChange={(e) => handleThemeChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleThemeChange(e.target.value as Theme)}
             style={{ width: '180px' }}
           >
             <option value="default">Default</option>

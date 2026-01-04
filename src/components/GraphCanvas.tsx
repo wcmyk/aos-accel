@@ -7,7 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { GraphRenderer } from '../engine/graph-renderer';
 
-export const GraphCanvas: React.FC = () => {
+export const GraphCanvas: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { engine, getGraphs } = useAccelStore();
   const [viewport, setViewport] = useState({
@@ -174,4 +174,4 @@ export const GraphCanvas: React.FC = () => {
       />
     </div>
   );
-};
+});

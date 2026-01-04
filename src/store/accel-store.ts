@@ -8,6 +8,8 @@ import { immer } from 'zustand/middleware/immer';
 import { AccelEngine } from '../engine/engine';
 import { CellValue, Cell, GraphDefinition } from '../engine/types';
 
+export type Theme = 'default' | 'pastel-yellow' | 'pastel-blue' | 'pastel-brown' | 'pastel-red' | 'pastel-pink' | 'pastel-green' | 'pastel-purple';
+
 interface ClipboardCell {
   value: number | string | boolean | null;
   formula?: string;
@@ -48,6 +50,7 @@ interface AccelState {
   selectedCell: { row: number; col: number } | null;
   clipboard: ClipboardCell | null;
   fillRange: { row: number; col: number } | null;
+  theme: Theme;
 
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
@@ -89,6 +92,9 @@ interface AccelState {
   // Export
   exportCSV: () => void;
 
+  // Theme
+  setTheme: (theme: Theme) => void;
+
   // Force re-render
   refresh: () => void;
 }
@@ -99,6 +105,7 @@ export const useAccelStore = create<AccelState>()(
     selectedCell: null,
     clipboard: null,
     fillRange: null,
+    theme: 'default' as Theme,
 
     setCell: (row, col, value) => {
       const { engine } = get();
@@ -331,6 +338,14 @@ export const useAccelStore = create<AccelState>()(
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    },
+
+    setTheme: (theme) => {
+      set((state) => {
+        state.theme = theme;
+      });
+      // Apply theme to document
+      document.documentElement.setAttribute('data-theme', theme);
     },
 
     refresh: () => {

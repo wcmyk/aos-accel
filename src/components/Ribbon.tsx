@@ -13,7 +13,7 @@ type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Automa
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, theme, setTheme } = useAccelStore();
 
   const renderHomeTab = () => (
     <>
@@ -421,6 +421,27 @@ export const Ribbon: React.FC = () => {
 
   const renderViewTab = () => (
     <>
+      <div className="ribbon-group">
+        <p className="ribbon-title">Theme</p>
+        <div className="ribbon-controls">
+          <select
+            className="ribbon-input"
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as any)}
+            style={{ width: '180px' }}
+          >
+            <option value="default">Default</option>
+            <option value="pastel-yellow">Pastel Yellow</option>
+            <option value="pastel-blue">Pastel Blue</option>
+            <option value="pastel-brown">Pastel Brown</option>
+            <option value="pastel-red">Pastel Red</option>
+            <option value="pastel-pink">Pastel Pink</option>
+            <option value="pastel-green">Pastel Green</option>
+            <option value="pastel-purple">Pastel Purple</option>
+          </select>
+        </div>
+      </div>
+
       <div className="ribbon-group">
         <p className="ribbon-title">Workbook Views</p>
         <div className="ribbon-controls">

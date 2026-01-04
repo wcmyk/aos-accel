@@ -13,7 +13,7 @@ type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Automa
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV } = useAccelStore();
 
   const renderHomeTab = () => (
     <>
@@ -190,6 +190,36 @@ export const Ribbon: React.FC = () => {
   const renderInsertTab = () => (
     <>
       <div className="ribbon-group">
+        <p className="ribbon-title">Rows & Columns</p>
+        <div className="ribbon-controls">
+          <button
+            className="btn"
+            onClick={() => selectedCell && insertRow(selectedCell.row)}
+          >
+            Insert Row
+          </button>
+          <button
+            className="btn"
+            onClick={() => selectedCell && deleteRow(selectedCell.row)}
+          >
+            Delete Row
+          </button>
+          <button
+            className="btn"
+            onClick={() => selectedCell && insertColumn(selectedCell.col)}
+          >
+            Insert Column
+          </button>
+          <button
+            className="btn"
+            onClick={() => selectedCell && deleteColumn(selectedCell.col)}
+          >
+            Delete Column
+          </button>
+        </div>
+      </div>
+
+      <div className="ribbon-group">
         <p className="ribbon-title">Tables</p>
         <div className="ribbon-controls">
           <button className="btn">PivotTable</button>
@@ -270,11 +300,12 @@ export const Ribbon: React.FC = () => {
   const renderDataTab = () => (
     <>
       <div className="ribbon-group">
-        <p className="ribbon-title">Get & Transform Data</p>
+        <p className="ribbon-title">Import & Export</p>
         <div className="ribbon-controls">
           <button className="btn">From Text/CSV</button>
           <button className="btn">From Web</button>
           <button className="btn">From Table/Range</button>
+          <button className="btn" onClick={exportCSV}>Export to CSV</button>
         </div>
       </div>
 

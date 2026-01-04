@@ -73,24 +73,23 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
       )}
     </td>
   );
-}, (prev, next) => (
-  prev.row === next.row &&
-  prev.col === next.col &&
-  prev.displayValue === next.displayValue &&
-  prev.isSelected === next.isSelected &&
-  prev.isEditing === next.isEditing &&
-  prev.isParameter === next.isParameter &&
-  prev.isInFillRange === next.isInFillRange &&
-  prev.cellFormat?.bold === next.cellFormat?.bold &&
-  prev.cellFormat?.italic === next.cellFormat?.italic &&
-  prev.cellFormat?.underline === next.cellFormat?.underline &&
-  prev.cellFormat?.fontColor === next.cellFormat?.fontColor &&
-  prev.cellFormat?.backgroundColor === next.cellFormat?.backgroundColor &&
-  prev.onClick === next.onClick &&
-  prev.onDoubleClick === next.onDoubleClick &&
-  prev.onMouseEnter === next.onMouseEnter &&
-  prev.onFillHandleMouseDown === next.onFillHandleMouseDown
-));
+}, (prev, next) => {
+  // Skip event handler comparison - they're stable via useCallback
+  return (
+    prev.row === next.row &&
+    prev.col === next.col &&
+    prev.displayValue === next.displayValue &&
+    prev.isSelected === next.isSelected &&
+    prev.isEditing === next.isEditing &&
+    prev.isParameter === next.isParameter &&
+    prev.isInFillRange === next.isInFillRange &&
+    prev.cellFormat?.bold === next.cellFormat?.bold &&
+    prev.cellFormat?.italic === next.cellFormat?.italic &&
+    prev.cellFormat?.underline === next.cellFormat?.underline &&
+    prev.cellFormat?.fontColor === next.cellFormat?.fontColor &&
+    prev.cellFormat?.backgroundColor === next.cellFormat?.backgroundColor
+  );
+});
 
 export const SpreadsheetGrid: React.FC = () => {
   const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell, fillRange, setFillRange, clearFillRange, executeFill } = useAccelStore();
@@ -349,13 +348,20 @@ export const SpreadsheetGrid: React.FC = () => {
     return letter;
   };
 
-  const formatCellValue = (value: CellValue): string => {
+  const formatCellValue = useCallback((value: CellValue): string => {
     if (value === null || value === undefined) return '';
     if (typeof value === 'number') {
-      return value.toLocaleString(undefined, { maximumFractionDigits: 10 });
+      // Fast number formatting - toLocaleString is VERY slow
+      // Only use it for numbers that need special formatting
+      if (Number.isInteger(value) && Math.abs(value) < 1000000) {
+        return String(value);
+      }
+      // For decimals, use toFixed for better performance
+      const str = value.toFixed(10);
+      return str.replace(/\.?0+$/, ''); // Remove trailing zeros
     }
     return String(value);
-  };
+  }, []);
 
   const totalGridHeight = ROWS * ROW_HEIGHT;
   const estimatedVisibleRowCount = viewportHeight > 0
@@ -387,16 +393,13 @@ export const SpreadsheetGrid: React.FC = () => {
     return selectedCellData.formula || String(selectedCellData.value);
   }, [editingCell, editValue, selectedCellData]);
 
-  // Pre-compute all visible cell data to avoid repeated getCellObject/getCell calls in render loop
-  const visibleCellData = useMemo(() => {
+  // Pre-compute visible cell content data (doesn't change with selection)
+  const visibleCellContent = useMemo(() => {
     const cellData = new Map<string, {
       cellObj: ReturnType<typeof getCellObject>;
       value: CellValue;
       displayValue: string;
       isParameter: boolean;
-      isSelected: boolean;
-      isEditing: boolean;
-      isInFillRange: boolean;
     }>();
 
     for (const row of visibleRows) {
@@ -404,28 +407,39 @@ export const SpreadsheetGrid: React.FC = () => {
         const key = `${row}-${col}`;
         const cellObj = getCellObject(row, col);
         const value = getCell(row, col);
-        const isSelected = selectedCell?.row === row && selectedCell?.col === col;
-        const isEditing = editingCell?.row === row && editingCell?.col === col;
-        const isParameter = cellObj?.isParameter || false;
-        const isInFillRange = fillRange && selectedCell ? (
-          (selectedCell.row === row && col >= Math.min(selectedCell.col, fillRange.col) && col <= Math.max(selectedCell.col, fillRange.col)) ||
-          (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
-        ) : false;
 
         cellData.set(key, {
           cellObj,
           value,
           displayValue: formatCellValue(value),
-          isParameter,
-          isSelected,
-          isEditing,
-          isInFillRange,
+          isParameter: cellObj?.isParameter || false,
         });
       }
     }
 
     return cellData;
-  }, [visibleRows, columns, getCellObject, getCell, selectedCell, editingCell, fillRange]);
+  }, [visibleRows, columns]);
+
+  // Memoize cell states to avoid recomputing for every cell on every render
+  const cellStates = useMemo(() => {
+    const states = new Map<string, { isSelected: boolean; isEditing: boolean; isInFillRange: boolean }>();
+
+    for (const row of visibleRows) {
+      for (const col of columns) {
+        const key = `${row}-${col}`;
+        const isSelected = selectedCell?.row === row && selectedCell?.col === col;
+        const isEditing = editingCell?.row === row && editingCell?.col === col;
+        const isInFillRange = fillRange && selectedCell ? (
+          (selectedCell.row === row && col >= Math.min(selectedCell.col, fillRange.col) && col <= Math.max(selectedCell.col, fillRange.col)) ||
+          (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
+        ) : false;
+
+        states.set(key, { isSelected, isEditing, isInFillRange });
+      }
+    }
+
+    return states;
+  }, [visibleRows, columns, selectedCell, editingCell, fillRange]);
 
   return (
     <div
@@ -483,21 +497,22 @@ export const SpreadsheetGrid: React.FC = () => {
                 <td className="row-header">{row}</td>
                 {columns.map((col) => {
                   const key = `${row}-${col}`;
-                  const cellData = visibleCellData.get(key);
+                  const cellContent = visibleCellContent.get(key);
+                  const cellState = cellStates.get(key);
 
-                  if (!cellData) return null;
+                  if (!cellContent || !cellState) return null;
 
                   return (
                     <GridCell
                       key={col}
                       row={row}
                       col={col}
-                      displayValue={cellData.displayValue}
-                      cellFormat={cellData.cellObj?.format}
-                      isSelected={cellData.isSelected}
-                      isEditing={cellData.isEditing}
-                      isParameter={cellData.isParameter}
-                      isInFillRange={cellData.isInFillRange}
+                      displayValue={cellContent.displayValue}
+                      cellFormat={cellContent.cellObj?.format}
+                      isSelected={cellState.isSelected}
+                      isEditing={cellState.isEditing}
+                      isParameter={cellContent.isParameter}
+                      isInFillRange={cellState.isInFillRange}
                       onClick={handleCellClick}
                       onDoubleClick={handleCellDoubleClick}
                       onMouseEnter={handleCellMouseEnter}

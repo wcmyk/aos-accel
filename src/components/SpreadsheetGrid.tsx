@@ -12,7 +12,7 @@ const ROWS = 1000;
 const COLS = 52; // A-AZ (52 columns)
 const ROW_HEIGHT = 24;
 const COL_WIDTH = 100; // Width of each column in pixels
-const OVERSCAN = 1; // Reduced to minimum for performance
+const OVERSCAN = 2; // Increased slightly for smoother scrolling without lag
 const DEFAULT_VIEWPORT_HEIGHT = 600;
 const DEFAULT_VIEWPORT_WIDTH = 1200;
 

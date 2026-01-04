@@ -22,6 +22,7 @@ export const Ribbon: React.FC = () => {
     if (typeof document === 'undefined') return;
 
     const root = document.documentElement;
+    const body = document.body;
     const themeToApply = nextTheme || 'default';
     const currentTheme = (root.getAttribute('data-theme') as Theme | null) || 'default';
 
@@ -30,20 +31,33 @@ export const Ribbon: React.FC = () => {
       return;
     }
 
-    if (themeToApply === 'default') {
-      root.removeAttribute('data-theme');
-    } else {
-      root.setAttribute('data-theme', themeToApply);
-    }
+    // PERFORMANCE FIX: Disable all transitions during theme change
+    body.classList.add('theme-transitioning');
 
-    // Persist for future sessions
-    try {
-      window.localStorage.setItem('accel-theme', themeToApply);
-    } catch {
-      // Ignore storage failures (private mode, etc.)
-    }
+    // Use requestAnimationFrame to batch DOM updates and prevent blocking
+    requestAnimationFrame(() => {
+      if (themeToApply === 'default') {
+        root.removeAttribute('data-theme');
+      } else {
+        root.setAttribute('data-theme', themeToApply);
+      }
 
-    setLocalTheme(themeToApply);
+      // Persist for future sessions
+      try {
+        window.localStorage.setItem('accel-theme', themeToApply);
+      } catch {
+        // Ignore storage failures (private mode, etc.)
+      }
+
+      setLocalTheme(themeToApply);
+
+      // Re-enable transitions after theme has been applied and painted
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          body.classList.remove('theme-transitioning');
+        }, 50);
+      });
+    });
   }, []);
 
   const handleThemeChange = useCallback((newTheme: Theme) => {

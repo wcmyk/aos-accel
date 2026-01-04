@@ -23,6 +23,12 @@ export const Ribbon: React.FC = () => {
 
     const root = document.documentElement;
     const themeToApply = nextTheme || 'default';
+    const currentTheme = (root.getAttribute('data-theme') as Theme | null) || 'default';
+
+    if (currentTheme === themeToApply) {
+      setLocalTheme(themeToApply);
+      return;
+    }
 
     if (themeToApply === 'default') {
       root.removeAttribute('data-theme');
@@ -47,7 +53,16 @@ export const Ribbon: React.FC = () => {
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const storedTheme = (typeof window !== 'undefined' && window.localStorage.getItem('accel-theme')) as Theme | null;
+
+    const safeStoredTheme = (): Theme | null => {
+      try {
+        return (typeof window !== 'undefined' && window.localStorage.getItem('accel-theme')) as Theme | null;
+      } catch {
+        return null;
+      }
+    };
+
+    const storedTheme = safeStoredTheme();
     const domTheme = document.documentElement.getAttribute('data-theme') as Theme | null;
     applyTheme(storedTheme || domTheme || 'default');
   }, [applyTheme]);

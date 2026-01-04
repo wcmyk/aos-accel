@@ -3,8 +3,8 @@
  * Tabbed interface for all spreadsheet operations
  */
 
-import React, { useState, useCallback } from 'react';
-import { useAccelStore } from '../store/accel-store';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Theme, useAccelStore } from '../store/accel-store';
 import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
 import { IconButton } from './Icons';
@@ -16,16 +16,41 @@ export const Ribbon: React.FC = () => {
   const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV } = useAccelStore();
 
   // Theme is managed locally to avoid triggering re-renders across the entire app
-  const [localTheme, setLocalTheme] = useState<string>(() => {
-    return document.documentElement.getAttribute('data-theme') || 'default';
-  });
+  const [localTheme, setLocalTheme] = useState<Theme>('default');
 
-  const handleThemeChange = useCallback((newTheme: string) => {
-    // Apply theme to DOM immediately
-    document.documentElement.setAttribute('data-theme', newTheme);
-    // Update local state for the select value
-    setLocalTheme(newTheme);
+  const applyTheme = useCallback((nextTheme: Theme) => {
+    if (typeof document === 'undefined') return;
+
+    const root = document.documentElement;
+    const themeToApply = nextTheme || 'default';
+
+    if (themeToApply === 'default') {
+      root.removeAttribute('data-theme');
+    } else {
+      root.setAttribute('data-theme', themeToApply);
+    }
+
+    // Persist for future sessions
+    try {
+      window.localStorage.setItem('accel-theme', themeToApply);
+    } catch {
+      // Ignore storage failures (private mode, etc.)
+    }
+
+    setLocalTheme(themeToApply);
   }, []);
+
+  const handleThemeChange = useCallback((newTheme: Theme) => {
+    if (newTheme === localTheme) return;
+    applyTheme(newTheme);
+  }, [applyTheme, localTheme]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const storedTheme = (typeof window !== 'undefined' && window.localStorage.getItem('accel-theme')) as Theme | null;
+    const domTheme = document.documentElement.getAttribute('data-theme') as Theme | null;
+    applyTheme(storedTheme || domTheme || 'default');
+  }, [applyTheme]);
 
   const renderHomeTab = () => (
     <>

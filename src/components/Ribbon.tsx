@@ -3,7 +3,7 @@
  * Tabbed interface for all spreadsheet operations
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
@@ -13,7 +13,19 @@ type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Automa
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, theme, setTheme } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV } = useAccelStore();
+
+  // Theme is managed locally to avoid triggering re-renders across the entire app
+  const [localTheme, setLocalTheme] = useState<string>(() => {
+    return document.documentElement.getAttribute('data-theme') || 'default';
+  });
+
+  const handleThemeChange = useCallback((newTheme: string) => {
+    // Apply theme to DOM immediately
+    document.documentElement.setAttribute('data-theme', newTheme);
+    // Update local state for the select value
+    setLocalTheme(newTheme);
+  }, []);
 
   const renderHomeTab = () => (
     <>
@@ -426,8 +438,8 @@ export const Ribbon: React.FC = () => {
         <div className="ribbon-controls">
           <select
             className="ribbon-input"
-            value={theme}
-            onChange={(e) => setTheme(e.target.value as any)}
+            value={localTheme}
+            onChange={(e) => handleThemeChange(e.target.value)}
             style={{ width: '180px' }}
           >
             <option value="default">Default</option>

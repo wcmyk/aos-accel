@@ -103,7 +103,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const gridWrapperRef = useRef<HTMLDivElement>(null);
   const pendingFillTarget = useRef<{ row: number; col: number } | null>(null);
   const fillRangeRaf = useRef<number | null>(null);
-  const [scrollPosition, setScrollPosition] = useState({ top: 0, left: 0 });
+  const [virtualWindow, setVirtualWindow] = useState({ startRow: 1, startCol: 1 });
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [viewportWidth, setViewportWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const scrollRaf = useRef<number | null>(null);
@@ -133,9 +133,15 @@ export const SpreadsheetGrid: React.FC = () => {
       if (!gridWrapperRef.current) return;
       setViewportHeight(gridWrapperRef.current.clientHeight || DEFAULT_VIEWPORT_HEIGHT);
       setViewportWidth(gridWrapperRef.current.clientWidth || DEFAULT_VIEWPORT_WIDTH);
-      setScrollPosition({
-        top: gridWrapperRef.current.scrollTop,
-        left: gridWrapperRef.current.scrollLeft,
+      const scrollTop = gridWrapperRef.current.scrollTop;
+      const scrollLeft = gridWrapperRef.current.scrollLeft;
+      const nextStartRow = Math.max(1, Math.floor(scrollTop / ROW_HEIGHT) + 1 - OVERSCAN);
+      const nextStartCol = Math.max(1, Math.floor(scrollLeft / COL_WIDTH) + 1 - OVERSCAN);
+      setVirtualWindow((prev) => {
+        if (prev.startRow === nextStartRow && prev.startCol === nextStartCol) {
+          return prev;
+        }
+        return { startRow: nextStartRow, startCol: nextStartCol };
       });
     };
 
@@ -336,12 +342,19 @@ export const SpreadsheetGrid: React.FC = () => {
       cancelAnimationFrame(scrollRaf.current);
     }
     scrollRaf.current = requestAnimationFrame(() => {
-      setScrollPosition({ top: target.scrollTop, left: target.scrollLeft });
+      const nextStartRow = Math.max(1, Math.floor(target.scrollTop / ROW_HEIGHT) + 1 - OVERSCAN);
+      const nextStartCol = Math.max(1, Math.floor(target.scrollLeft / COL_WIDTH) + 1 - OVERSCAN);
+      setVirtualWindow((prev) => {
+        if (prev.startRow === nextStartRow && prev.startCol === nextStartCol) {
+          return prev;
+        }
+        return { startRow: nextStartRow, startCol: nextStartCol };
+      });
       scrollRaf.current = null;
     });
   }, []);
 
-  const colToLetter = (col: number): string => {
+  const colToLetter = useCallback((col: number): string => {
     let letter = '';
     let c = col;
     while (c > 0) {
@@ -350,7 +363,12 @@ export const SpreadsheetGrid: React.FC = () => {
       c = Math.floor((c - 1) / 26);
     }
     return letter;
-  };
+  }, []);
+
+  const columnLabels = useMemo(
+    () => Array.from({ length: COLS }, (_, idx) => colToLetter(idx + 1)),
+    [colToLetter]
+  );
 
   const formatCellValue = useCallback((value: CellValue): string => {
     if (value === null || value === undefined) return '';
@@ -373,7 +391,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const estimatedVisibleRowCount = viewportHeight > 0
     ? Math.ceil(viewportHeight / ROW_HEIGHT)
     : ROWS;
-  const startRow = Math.max(1, Math.floor(scrollPosition.top / ROW_HEIGHT) + 1 - OVERSCAN);
+  const startRow = Math.max(1, Math.min(ROWS, virtualWindow.startRow));
   const endRow = Math.min(ROWS, startRow + estimatedVisibleRowCount + OVERSCAN * 2 - 1);
   const topSpacerHeight = (startRow - 1) * ROW_HEIGHT;
   const bottomSpacerHeight = Math.max(totalGridHeight - endRow * ROW_HEIGHT, 0);
@@ -381,7 +399,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const estimatedVisibleColCount = viewportWidth > 0
     ? Math.ceil(viewportWidth / COL_WIDTH)
     : COLS;
-  const startCol = Math.max(1, Math.floor(scrollPosition.left / COL_WIDTH) + 1 - OVERSCAN);
+  const startCol = Math.max(1, Math.min(COLS, virtualWindow.startCol));
   const endCol = Math.min(COLS, startCol + estimatedVisibleColCount + OVERSCAN * 2 - 1);
   const leftSpacerWidth = (startCol - 1) * COL_WIDTH;
   const rightSpacerWidth = Math.max(totalGridWidth - endCol * COL_WIDTH, 0);
@@ -477,7 +495,7 @@ export const SpreadsheetGrid: React.FC = () => {
               )}
               {visibleColumns.map((col) => (
                 <th key={col} className="col-header">
-                  {colToLetter(col)}
+                  {columnLabels[col - 1] || colToLetter(col)}
                 </th>
               ))}
               {rightSpacerWidth > 0 && (

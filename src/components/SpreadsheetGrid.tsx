@@ -5,6 +5,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { useShallow } from 'zustand/react/shallow';
 import { CellValue, CellFormat } from '../engine/types';
 
 const ROWS = 1000;
@@ -94,7 +95,33 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
 });
 
 export const SpreadsheetGrid: React.FC = () => {
-  const { setCell, getCell, getCellObject, selectCell, selectedCell, copyCell, pasteCell, cutCell, fillRange, setFillRange, clearFillRange, executeFill } = useAccelStore();
+  const {
+    setCell,
+    getCell,
+    getCellObject,
+    selectCell,
+    selectedCell,
+    copyCell,
+    pasteCell,
+    cutCell,
+    fillRange,
+    setFillRange,
+    clearFillRange,
+    executeFill,
+  } = useAccelStore(useShallow((state) => ({
+    setCell: state.setCell,
+    getCell: state.getCell,
+    getCellObject: state.getCellObject,
+    selectCell: state.selectCell,
+    selectedCell: state.selectedCell,
+    copyCell: state.copyCell,
+    pasteCell: state.pasteCell,
+    cutCell: state.cutCell,
+    fillRange: state.fillRange,
+    setFillRange: state.setFillRange,
+    clearFillRange: state.clearFillRange,
+    executeFill: state.executeFill,
+  })));
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isDraggingFill, setIsDraggingFill] = useState(false);

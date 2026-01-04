@@ -18,17 +18,62 @@ export interface GraphData {
   visible: boolean;
 }
 
+interface CacheEntry {
+  points: Point[];
+  cellVersions: Map<string, number>;
+}
+
 export class GraphRenderer {
   private worksheet: Worksheet;
+  private cache: Map<string, CacheEntry> = new Map();
+  private cellVersions: Map<string, number> = new Map();
 
   constructor(worksheet: Worksheet) {
     this.worksheet = worksheet;
   }
 
   /**
+   * Invalidate cache for specific cells
+   */
+  invalidateCache(cellKeys: string[]): void {
+    for (const key of cellKeys) {
+      const currentVersion = this.cellVersions.get(key) || 0;
+      this.cellVersions.set(key, currentVersion + 1);
+    }
+  }
+
+  /**
+   * Check if cached data is still valid
+   */
+  private isCacheValid(graph: GraphDefinition, cacheKey: string): boolean {
+    const cached = this.cache.get(cacheKey);
+    if (!cached) return false;
+
+    // Check if any cell dependencies have changed
+    for (const cellKey of graph.cellBindings) {
+      const cachedVersion = cached.cellVersions.get(cellKey) || 0;
+      const currentVersion = this.cellVersions.get(cellKey) || 0;
+      if (cachedVersion !== currentVersion) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * Render a function graph: y = f(x)
+   * OPTIMIZED: Caches results if cell dependencies haven't changed
    */
   renderFunction(graph: GraphDefinition, resolution: number = 1000): Point[] {
+    const cacheKey = `${graph.id}-${resolution}-${graph.domain?.min}-${graph.domain?.max}`;
+
+    // Check cache
+    if (this.isCacheValid(graph, cacheKey)) {
+      return this.cache.get(cacheKey)!.points;
+    }
+
+    // Cache miss - compute points
     const points: Point[] = [];
     const { min, max } = graph.domain || { min: -10, max: 10 };
     const step = (max - min) / resolution;
@@ -58,7 +103,16 @@ export class GraphRenderer {
       }
     }
 
-    return points.filter((p) => p !== null);
+    const filteredPoints = points.filter((p) => p !== null);
+
+    // Store in cache
+    const cellVersions = new Map<string, number>();
+    for (const cellKey of graph.cellBindings) {
+      cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
+    }
+    this.cache.set(cacheKey, { points: filteredPoints, cellVersions });
+
+    return filteredPoints;
   }
 
   /**

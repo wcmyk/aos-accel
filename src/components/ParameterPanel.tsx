@@ -3,11 +3,11 @@
  * Interactive sliders for parameters
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { Cell } from '../engine/types';
 
-export const ParameterPanel: React.FC = () => {
+export const ParameterPanel: React.FC = React.memo(() => {
   const { engine, updateParameter, refresh } = useAccelStore();
 
   const worksheet = engine.getWorksheet();
@@ -48,30 +48,77 @@ export const ParameterPanel: React.FC = () => {
         const cellRef = `${colToLetter(cell.address.col)}${cell.address.row}`;
 
         return (
-          <div key={key} className="parameter-item">
-            <div className="parameter-header">
-              <span className="parameter-name">{cellRef}</span>
-              <span className="parameter-value">{value.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min={config.min}
-              max={config.max}
-              step={config.step}
-              value={value}
-              onChange={(e) => {
-                updateParameter(cell.address.row, cell.address.col, parseFloat(e.target.value));
-                refresh();
-              }}
-              className="parameter-slider"
-            />
-            <div className="parameter-range">
-              <span>{config.min}</span>
-              <span>{config.max}</span>
-            </div>
-          </div>
+          <ParameterSlider
+            key={key}
+            cellRef={cellRef}
+            cell={cell}
+            config={config}
+            value={value}
+            updateParameter={updateParameter}
+            refresh={refresh}
+          />
         );
       })}
     </div>
   );
-};
+});
+
+// Optimized slider component with local state
+const ParameterSlider: React.FC<{
+  cellRef: string;
+  cell: Cell;
+  config: { min: number; max: number; step: number };
+  value: number;
+  updateParameter: (row: number, col: number, value: number) => void;
+  refresh: () => void;
+}> = React.memo(({ cellRef, cell, config, value, updateParameter, refresh }) => {
+  const [localValue, setLocalValue] = useState(value);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Update local value immediately for smooth slider
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalValue(parseFloat(e.target.value));
+  };
+
+  // Only update engine when user releases slider (debounced)
+  const handleMouseUp = () => {
+    if (isDragging && localValue !== value) {
+      updateParameter(cell.address.row, cell.address.col, localValue);
+      refresh();
+    }
+    setIsDragging(false);
+  };
+
+  // Sync local value when prop changes (from automation or other sources)
+  React.useEffect(() => {
+    if (!isDragging) {
+      setLocalValue(value);
+    }
+  }, [value, isDragging]);
+
+  return (
+    <div className="parameter-item">
+      <div className="parameter-header">
+        <span className="parameter-name">{cellRef}</span>
+        <span className="parameter-value">{localValue.toFixed(2)}</span>
+      </div>
+      <input
+        type="range"
+        min={config.min}
+        max={config.max}
+        step={config.step}
+        value={localValue}
+        onChange={handleChange}
+        onMouseDown={() => setIsDragging(true)}
+        onMouseUp={handleMouseUp}
+        onTouchStart={() => setIsDragging(true)}
+        onTouchEnd={handleMouseUp}
+        className="parameter-slider"
+      />
+      <div className="parameter-range">
+        <span>{config.min}</span>
+        <span>{config.max}</span>
+      </div>
+    </div>
+  );
+});

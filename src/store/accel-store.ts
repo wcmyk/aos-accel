@@ -341,11 +341,14 @@ export const useAccelStore = create<AccelState>()(
     },
 
     setTheme: (theme) => {
+      // Apply theme to document immediately to avoid lag
+      requestAnimationFrame(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+      });
+
       set((state) => {
         state.theme = theme;
       });
-      // Apply theme to document
-      document.documentElement.setAttribute('data-theme', theme);
     },
 
     refresh: () => {

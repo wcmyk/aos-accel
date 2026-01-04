@@ -10,8 +10,10 @@ import { CellValue, CellFormat } from '../engine/types';
 const ROWS = 1000;
 const COLS = 52; // A-AZ (52 columns)
 const ROW_HEIGHT = 24;
-const OVERSCAN = 3; // Reduced from 8 to save memory
+const COL_WIDTH = 100; // Width of each column in pixels
+const OVERSCAN = 1; // Reduced to minimum for performance
 const DEFAULT_VIEWPORT_HEIGHT = 600;
+const DEFAULT_VIEWPORT_WIDTH = 1200;
 
 interface GridCellProps {
   row: number;
@@ -103,6 +105,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const fillRangeRaf = useRef<number | null>(null);
   const [scrollPosition, setScrollPosition] = useState({ top: 0, left: 0 });
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
+  const [viewportWidth, setViewportWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const scrollRaf = useRef<number | null>(null);
 
   // Focus grid on mount for keyboard navigation
@@ -129,6 +132,7 @@ export const SpreadsheetGrid: React.FC = () => {
     const measure = () => {
       if (!gridWrapperRef.current) return;
       setViewportHeight(gridWrapperRef.current.clientHeight || DEFAULT_VIEWPORT_HEIGHT);
+      setViewportWidth(gridWrapperRef.current.clientWidth || DEFAULT_VIEWPORT_WIDTH);
       setScrollPosition({
         top: gridWrapperRef.current.scrollTop,
         left: gridWrapperRef.current.scrollLeft,
@@ -364,6 +368,8 @@ export const SpreadsheetGrid: React.FC = () => {
   }, []);
 
   const totalGridHeight = ROWS * ROW_HEIGHT;
+  const totalGridWidth = COLS * COL_WIDTH;
+
   const estimatedVisibleRowCount = viewportHeight > 0
     ? Math.ceil(viewportHeight / ROW_HEIGHT)
     : ROWS;
@@ -371,11 +377,23 @@ export const SpreadsheetGrid: React.FC = () => {
   const endRow = Math.min(ROWS, startRow + estimatedVisibleRowCount + OVERSCAN * 2 - 1);
   const topSpacerHeight = (startRow - 1) * ROW_HEIGHT;
   const bottomSpacerHeight = Math.max(totalGridHeight - endRow * ROW_HEIGHT, 0);
+
+  const estimatedVisibleColCount = viewportWidth > 0
+    ? Math.ceil(viewportWidth / COL_WIDTH)
+    : COLS;
+  const startCol = Math.max(1, Math.floor(scrollPosition.left / COL_WIDTH) + 1 - OVERSCAN);
+  const endCol = Math.min(COLS, startCol + estimatedVisibleColCount + OVERSCAN * 2 - 1);
+  const leftSpacerWidth = (startCol - 1) * COL_WIDTH;
+  const rightSpacerWidth = Math.max(totalGridWidth - endCol * COL_WIDTH, 0);
+
   const visibleRows = useMemo(
     () => Array.from({ length: endRow - startRow + 1 }, (_, i) => startRow + i),
     [startRow, endRow]
   );
-  const columns = useMemo(() => Array.from({ length: COLS }, (_, i) => i + 1), []);
+  const visibleColumns = useMemo(
+    () => Array.from({ length: endCol - startCol + 1 }, (_, i) => startCol + i),
+    [startCol, endCol]
+  );
 
   // Memoize selected cell data for formula bar to avoid duplicate getCellObject calls
   const selectedCellData = useMemo(() => {
@@ -454,11 +472,17 @@ export const SpreadsheetGrid: React.FC = () => {
           <thead>
             <tr>
               <th className="row-header"></th>
-              {columns.map((col) => (
+              {leftSpacerWidth > 0 && (
+                <th style={{ width: leftSpacerWidth }} />
+              )}
+              {visibleColumns.map((col) => (
                 <th key={col} className="col-header">
                   {colToLetter(col)}
                 </th>
               ))}
+              {rightSpacerWidth > 0 && (
+                <th style={{ width: rightSpacerWidth }} />
+              )}
             </tr>
           </thead>
           <tbody>
@@ -471,7 +495,10 @@ export const SpreadsheetGrid: React.FC = () => {
             {visibleRows.map((row) => (
               <tr key={row}>
                 <td className="row-header">{row}</td>
-                {columns.map((col) => {
+                {leftSpacerWidth > 0 && (
+                  <td style={{ width: leftSpacerWidth }} />
+                )}
+                {visibleColumns.map((col) => {
                   // Compute cell data on-demand to avoid storing massive Maps in memory
                   const cellData = getCellDisplayData(row, col);
                   const cellState = getCellStateData(row, col);
@@ -494,6 +521,9 @@ export const SpreadsheetGrid: React.FC = () => {
                     />
                   );
                 })}
+                {rightSpacerWidth > 0 && (
+                  <td style={{ width: rightSpacerWidth }} />
+                )}
               </tr>
             ))}
 

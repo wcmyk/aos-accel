@@ -71,6 +71,12 @@ interface AccelState {
   // Sorting
   sortColumn: (col: number, ascending: boolean) => void;
 
+  // Insert/Delete
+  insertRow: (row: number) => void;
+  deleteRow: (row: number) => void;
+  insertColumn: (col: number) => void;
+  deleteColumn: (col: number) => void;
+
   // Parameters
   setParameter: (row: number, col: number, min: number, max: number, step: number) => void;
   updateParameter: (row: number, col: number, value: number) => void;
@@ -79,6 +85,9 @@ interface AccelState {
   addGraph: (id: string, formula: string) => void;
   removeGraph: (id: string) => void;
   getGraphs: () => GraphDefinition[];
+
+  // Export
+  exportCSV: () => void;
 
   // Force re-render
   refresh: () => void;
@@ -237,6 +246,38 @@ export const useAccelStore = create<AccelState>()(
       });
     },
 
+    insertRow: (row) => {
+      const { engine } = get();
+      engine.insertRow(row);
+      set((state) => {
+        state.engine = engine;
+      });
+    },
+
+    deleteRow: (row) => {
+      const { engine } = get();
+      engine.deleteRow(row);
+      set((state) => {
+        state.engine = engine;
+      });
+    },
+
+    insertColumn: (col) => {
+      const { engine } = get();
+      engine.insertColumn(col);
+      set((state) => {
+        state.engine = engine;
+      });
+    },
+
+    deleteColumn: (col) => {
+      const { engine } = get();
+      engine.deleteColumn(col);
+      set((state) => {
+        state.engine = engine;
+      });
+    },
+
     setParameter: (row, col, min, max, step) => {
       const { engine } = get();
       engine.setParameter(row, col, min, max, step);
@@ -272,6 +313,24 @@ export const useAccelStore = create<AccelState>()(
     getGraphs: () => {
       const { engine } = get();
       return engine.getGraphs();
+    },
+
+    exportCSV: () => {
+      const { engine } = get();
+      const csv = engine.exportCSV();
+
+      // Download the CSV file
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'spreadsheet.csv');
+      link.style.visibility = 'hidden';
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     },
 
     refresh: () => {

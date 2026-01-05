@@ -21,6 +21,8 @@ export const Ribbon: React.FC = () => {
   });
 
   const handleThemeChange = useCallback((newTheme: string) => {
+    if (newTheme === localTheme) return;
+
     // Disable all transitions temporarily to prevent layout thrashing
     const style = document.createElement('style');
     style.id = 'disable-transitions';
@@ -42,28 +44,7 @@ export const Ribbon: React.FC = () => {
         }, 50);
       });
     });
-  }, []);
-
-  const handleThemeChange = useCallback((newTheme: Theme) => {
-    if (newTheme === localTheme) return;
-    applyTheme(newTheme);
-  }, [applyTheme, localTheme]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    const safeStoredTheme = (): Theme | null => {
-      try {
-        return (typeof window !== 'undefined' && window.localStorage.getItem('accel-theme')) as Theme | null;
-      } catch {
-        return null;
-      }
-    };
-
-    const storedTheme = safeStoredTheme();
-    const domTheme = document.documentElement.getAttribute('data-theme') as Theme | null;
-    applyTheme(storedTheme || domTheme || 'default');
-  }, [applyTheme]);
+  }, [localTheme]);
 
   const renderHomeTab = () => (
     <>
@@ -477,7 +458,7 @@ export const Ribbon: React.FC = () => {
           <select
             className="ribbon-input"
             value={localTheme}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleThemeChange(e.target.value as Theme)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleThemeChange(e.target.value)}
             style={{ width: '180px' }}
           >
             <option value="default">Default</option>

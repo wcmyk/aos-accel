@@ -632,6 +632,13 @@ export class AccelEngine {
         plotGraphIds.add(graphId);
         const existing = worksheet.graphs.get(graphId);
 
+        const inferredDimensions = Math.max(
+          cell.ast.args.length,
+          ...cell.ast.args.map((arg) => (arg.type === 'function' && arg.name === 'COORD') ? arg.args.length : 0),
+          existing?.dimensions || 0,
+          2
+        );
+
         const graph: GraphDefinition = {
           id: graphId,
           type: 'plot',
@@ -642,7 +649,7 @@ export class AccelEngine {
           domain: existing?.domain,
           range: existing?.range,
           cellBindings: depGraph.extractDependencies(cell.ast),
-          dimensions: cell.ast.args.length,
+          dimensions: inferredDimensions,
         };
 
         worksheet.graphs.set(graphId, graph);

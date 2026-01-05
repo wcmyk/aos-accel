@@ -7,8 +7,7 @@ import { GraphDefinition, Worksheet } from './types';
 import { Evaluator } from './evaluator';
 
 export interface Point {
-  x: number;
-  y: number;
+  coords: number[];
 }
 
 export interface GraphData {
@@ -16,17 +15,14 @@ export interface GraphData {
   points: Point[];
   color: string;
   visible: boolean;
+  dimensions: number;
+  type: GraphDefinition['type'];
 }
 
 interface CacheEntry {
   points: Point[];
   cellVersions: Map<string, number>;
 }
-
-type AxisSelection = {
-  xIndex: number;
-  yIndex: number;
-};
 
 export class GraphRenderer {
   private worksheet: Worksheet;
@@ -92,7 +88,7 @@ export class GraphRenderer {
         const y = evaluator.evaluate(graph.ast, { x });
 
         if (typeof y === 'number' && isFinite(y)) {
-          points.push({ x, y });
+          points.push({ coords: [x, y] });
         } else {
           // Discontinuity - add break in the line
           if (points.length > 0 && !points[points.length - 1]) {
@@ -122,21 +118,27 @@ export class GraphRenderer {
 
   /**
    * Render data-driven plots created via PLOT formulas.
-   * Axis selection allows users to pivot between dimensions (e.g., X/Y, X/Z).
+   * Supports both axis-aligned arguments (e.g., PLOT(Xs, Ys, Zs)) and tuple-style
+   * inputs such as COORD(x,y,z).
    */
-  private renderPlot(graph: GraphDefinition, axisSelection: AxisSelection): Point[] {
+  private renderPlot(graph: GraphDefinition): Point[] {
     if (!graph.ast || graph.ast.type !== 'function') {
       return [];
     }
 
     const evaluator = new Evaluator(this.worksheet);
     const axisData: number[][] = [];
+    const tuplePoints: number[][] = [];
 
     for (const arg of graph.ast.args) {
       try {
         const value = evaluator.evaluate(arg);
         const flattened = this.flattenValues(value);
-        if (flattened.length > 0) {
+        const tuples = this.extractTuples(value);
+
+        if (tuples.length > 0) {
+          tuplePoints.push(...tuples);
+        } else if (flattened.length > 0) {
           axisData.push(flattened);
         }
       } catch {
@@ -144,20 +146,28 @@ export class GraphRenderer {
       }
     }
 
+    // If tuples were provided (e.g., COORD outputs), return them directly.
+    if (tuplePoints.length > 0) {
+      return tuplePoints
+        .filter((tuple) => tuple.length >= 2)
+        .map((coords) => ({ coords }));
+    }
+
     if (axisData.length < 2) {
       return [];
     }
 
-    const xAxis = axisData[axisSelection.xIndex] || axisData[0];
-    const yAxis = axisData[axisSelection.yIndex] || axisData[1];
-    const length = Math.min(xAxis.length, yAxis.length);
+    const primaryAxisLength = Math.min(...axisData.map((axis) => axis.length));
     const points: Point[] = [];
 
-    for (let i = 0; i < length; i++) {
-      const x = xAxis[i];
-      const y = yAxis[i];
-      if (isFinite(x) && isFinite(y)) {
-        points.push({ x, y });
+    for (let i = 0; i < primaryAxisLength; i++) {
+      const coords: number[] = [];
+      for (const axis of axisData) {
+        const value = axis[i];
+        coords.push(isFinite(value) ? value : NaN);
+      }
+      if (coords.length >= 2 && coords.every((v) => Number.isFinite(v))) {
+        points.push({ coords });
       }
     }
 
@@ -182,10 +192,32 @@ export class GraphRenderer {
     return Number.isFinite(num) ? [num] : [];
   }
 
+  private extractTuples(value: any): number[][] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    // Single tuple such as COORD(x,y,z)
+    if (value.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+      return [value as number[]];
+    }
+
+    const tuples: number[][] = [];
+    for (const entry of value) {
+      if (Array.isArray(entry)) {
+        const flattened = this.flattenValues(entry);
+        if (flattened.length >= 2) {
+          tuples.push(flattened);
+        }
+      }
+    }
+    return tuples;
+  }
+
   /**
    * Render all graphs in the worksheet
    */
-  renderAll(resolution: number = 1000, axisSelection: AxisSelection = { xIndex: 0, yIndex: 1 }): GraphData[] {
+  renderAll(resolution: number = 1000): GraphData[] {
     const graphsData: GraphData[] = [];
 
     for (const graph of this.worksheet.graphs.values()) {
@@ -199,11 +231,11 @@ export class GraphRenderer {
           break;
 
         case 'plot': {
-          const cacheKey = `${graph.id}-${axisSelection.xIndex}-${axisSelection.yIndex}`;
+          const cacheKey = `${graph.id}-plot-${graph.ast.args.length}`;
           if (this.isCacheValid(graph, cacheKey)) {
             points = this.cache.get(cacheKey)!.points;
           } else {
-            points = this.renderPlot(graph, axisSelection);
+            points = this.renderPlot(graph);
             const cellVersions = new Map<string, number>();
             for (const cellKey of graph.cellBindings) {
               cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
@@ -235,7 +267,11 @@ export class GraphRenderer {
                 if (Array.isArray(result) && result.length >= 2) {
                   const [x, y] = result;
                   if (typeof x === 'number' && typeof y === 'number' && isFinite(x) && isFinite(y)) {
-                    points.push({ x, y });
+                    const coords: number[] = [x, y];
+                    if (typeof result[2] === 'number' && isFinite(result[2])) {
+                      coords.push(result[2]);
+                    }
+                    points.push({ coords });
                   }
                 }
               } catch {
@@ -279,7 +315,7 @@ export class GraphRenderer {
                   const val = evaluator.evaluate(graph.ast, { x, y });
                   // Plot points where f(x,y) is close to zero
                   if (typeof val === 'number' && Math.abs(val) < 0.1) {
-                    points.push({ x, y });
+                    points.push({ coords: [x, y] });
                   }
                 } catch {
                   // Skip on error
@@ -320,7 +356,7 @@ export class GraphRenderer {
 
           // Create points from paired values
           for (let i = 0; i < Math.min(xValues.length, yValues.length); i++) {
-            points.push({ x: xValues[i], y: yValues[i] });
+            points.push({ coords: [xValues[i], yValues[i]] });
           }
           break;
         }
@@ -331,6 +367,8 @@ export class GraphRenderer {
         points,
         color: graph.color,
         visible: graph.visible,
+        dimensions: Math.max(graph.dimensions || 2, points[0]?.coords.length || 0, 2),
+        type: graph.type,
       });
     }
 

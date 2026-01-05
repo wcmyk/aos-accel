@@ -126,6 +126,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isDraggingFill, setIsDraggingFill] = useState(false);
+  const [isFormulaSelecting, setIsFormulaSelecting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const gridWrapperRef = useRef<HTMLDivElement>(null);
@@ -135,6 +136,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [viewportWidth, setViewportWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const scrollRaf = useRef<number | null>(null);
+  const selectionRangeRef = useRef(selectionRange);
 
   // Focus grid on mount for keyboard navigation
   useEffect(() => {
@@ -142,6 +144,16 @@ export const SpreadsheetGrid: React.FC = () => {
       gridRef.current.focus();
     }
   }, []);
+
+  useEffect(() => {
+    selectionRangeRef.current = selectionRange;
+  }, [selectionRange]);
+
+  useEffect(() => {
+    if (!editingCell) {
+      setIsFormulaSelecting(false);
+    }
+  }, [editingCell]);
 
   useEffect(() => {
     return () => {
@@ -182,12 +194,17 @@ export const SpreadsheetGrid: React.FC = () => {
   const handleCellClick = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
     const row = parseInt(e.currentTarget.dataset.row || '0', 10);
     const col = parseInt(e.currentTarget.dataset.col || '0', 10);
-    if (row && col) {
-      selectCell(row, col);
-      setEditingCell(null);
-      setEditValue('');
+    if (!row || !col) return;
+
+    if (editingCell) {
+      e.preventDefault();
+      return;
     }
-  }, [selectCell]);
+
+    selectCell(row, col);
+    setEditingCell(null);
+    setEditValue('');
+  }, [editingCell, selectCell]);
 
   const startEditing = useCallback((row: number, col: number, initialValue: string = '') => {
     setEditingCell({ row, col });
@@ -212,6 +229,12 @@ export const SpreadsheetGrid: React.FC = () => {
     const col = parseInt(e.currentTarget.dataset.col || '0', 10);
 
     if (row && col) {
+      if (editingCell) {
+        e.preventDefault();
+        setIsFormulaSelecting(true);
+        startSelection(row, col);
+        return;
+      }
       if (e.shiftKey && selectedCell) {
         // Shift+click to extend selection
         startSelection(selectedCell.row, selectedCell.col);
@@ -222,19 +245,7 @@ export const SpreadsheetGrid: React.FC = () => {
         startSelection(row, col);
       }
     }
-  }, [selectedCell, startSelection, updateSelection, endSelection]);
-
-  // Global mouse up handler for selection
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      if (isSelecting) {
-        endSelection();
-      }
-    };
-
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, [isSelecting, endSelection]);
+  }, [editingCell, selectedCell, setIsFormulaSelecting, startSelection, updateSelection, endSelection]);
 
   const handleCellSubmit = useCallback(() => {
     if (editingCell) {
@@ -424,6 +435,63 @@ export const SpreadsheetGrid: React.FC = () => {
     }
     return letter;
   }, []);
+
+  const insertSelectionIntoFormula = useCallback((start: { row: number; col: number }, end: { row: number; col: number }) => {
+    if (!editingCell) return;
+    const startRef = `${colToLetter(start.col)}${start.row}`;
+    const endRef = `${colToLetter(end.col)}${end.row}`;
+    const refString = (start.row === end.row && start.col === end.col)
+      ? startRef
+      : `${startRef}:${endRef}`;
+
+    const input = inputRef.current;
+    const fallbackLength = editValue.length;
+    const selectionStart = input?.selectionStart ?? fallbackLength;
+    const selectionEnd = input?.selectionEnd ?? fallbackLength;
+
+    setEditValue((prev) => {
+      const before = prev.slice(0, selectionStart);
+      const after = prev.slice(selectionEnd);
+      return `${before}${refString}${after}`;
+    });
+
+    requestAnimationFrame(() => {
+      if (input) {
+        const cursor = selectionStart + refString.length;
+        input.selectionStart = cursor;
+        input.selectionEnd = cursor;
+        input.focus();
+      }
+    });
+  }, [colToLetter, editValue, editingCell]);
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isFormulaSelecting) {
+        const range = selectionRangeRef.current;
+        if (range) {
+          insertSelectionIntoFormula(range.start, range.end);
+        } else if (selectedCell) {
+          insertSelectionIntoFormula(selectedCell, selectedCell);
+        }
+
+        if (editingCell) {
+          selectCell(editingCell.row, editingCell.col);
+        }
+        setIsFormulaSelecting(false);
+        clearSelection();
+        endSelection();
+        return;
+      }
+
+      if (isSelecting) {
+        endSelection();
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, [clearSelection, editingCell, endSelection, insertSelectionIntoFormula, isFormulaSelecting, isSelecting, selectedCell, selectCell]);
 
   const columnLabels = useMemo(
     () => Array.from({ length: COLS }, (_, idx) => colToLetter(idx + 1)),

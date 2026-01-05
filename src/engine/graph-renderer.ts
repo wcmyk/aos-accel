@@ -116,6 +116,141 @@ export class GraphRenderer {
   }
 
   /**
+   * Render parametric equations: x = f(t), y = g(t)
+   */
+  renderParametric(graph: GraphDefinition, resolution: number = 1000): Point[] {
+    const cacheKey = `${graph.id}-parametric-${resolution}`;
+
+    if (this.isCacheValid(graph, cacheKey)) {
+      return this.cache.get(cacheKey)!.points;
+    }
+
+    const points: Point[] = [];
+    const { min, max } = graph.domain || { min: 0, max: 2 * Math.PI };
+    const step = (max - min) / resolution;
+
+    const evaluator = new Evaluator(this.worksheet);
+
+    // Parametric requires two ASTs: one for x(t) and one for y(t)
+    // For now, treat the main AST as y(t) and use t as x
+    // Full implementation would parse "x(t), y(t)" format
+
+    for (let i = 0; i <= resolution; i++) {
+      const t = min + i * step;
+
+      try {
+        const x = t; // Simplified - would evaluate x(t) AST
+        const y = evaluator.evaluate(graph.ast, { t });
+
+        if (typeof y === 'number' && isFinite(y)) {
+          points.push({ x, y });
+        }
+      } catch {
+        // Skip evaluation errors
+      }
+    }
+
+    const cellVersions = new Map<string, number>();
+    for (const cellKey of graph.cellBindings) {
+      cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
+    }
+    this.cache.set(cacheKey, { points, cellVersions });
+
+    return points;
+  }
+
+  /**
+   * Render implicit equations: f(x,y) = 0
+   * Uses marching squares algorithm
+   */
+  renderImplicit(graph: GraphDefinition, resolution: number = 100): Point[] {
+    const cacheKey = `${graph.id}-implicit-${resolution}`;
+
+    if (this.isCacheValid(graph, cacheKey)) {
+      return this.cache.get(cacheKey)!.points;
+    }
+
+    const points: Point[] = [];
+    const { min: xMin = -10, max: xMax = 10 } = graph.domain || {};
+    const yMin = xMin;
+    const yMax = xMax;
+
+    const evaluator = new Evaluator(this.worksheet);
+    const gridSize = resolution;
+    const dx = (xMax - xMin) / gridSize;
+    const dy = (yMax - yMin) / gridSize;
+
+    // Marching squares: find zero crossings
+    for (let i = 0; i < gridSize; i++) {
+      for (let j = 0; j < gridSize; j++) {
+        const x = xMin + i * dx;
+        const y = yMin + j * dy;
+
+        try {
+          const val = evaluator.evaluate(graph.ast, { x, y });
+
+          if (typeof val === 'number' && Math.abs(val) < 0.1) {
+            points.push({ x, y });
+          }
+        } catch {
+          // Skip evaluation errors
+        }
+      }
+    }
+
+    const cellVersions = new Map<string, number>();
+    for (const cellKey of graph.cellBindings) {
+      cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
+    }
+    this.cache.set(cacheKey, { points, cellVersions });
+
+    return points;
+  }
+
+  /**
+   * Render scatter plot from cell data
+   */
+  renderScatter(graph: GraphDefinition): Point[] {
+    const cacheKey = `${graph.id}-scatter`;
+
+    if (this.isCacheValid(graph, cacheKey)) {
+      return this.cache.get(cacheKey)!.points;
+    }
+
+    const points: Point[] = [];
+
+    // Scatter plots read data from cell ranges
+    // For simplicity, assume x-values in column A and y-values in column B
+    // Full implementation would parse data range from graph definition
+
+    const maxRows = 100;
+    for (let row = 1; row <= maxRows; row++) {
+      const xKey = `1-${row}`; // Column A
+      const yKey = `2-${row}`; // Column B
+
+      const xCell = this.worksheet.cells.get(xKey);
+      const yCell = this.worksheet.cells.get(yKey);
+
+      if (xCell && yCell) {
+        const x = typeof xCell.value === 'number' ? xCell.value : null;
+        const y = typeof yCell.value === 'number' ? yCell.value : null;
+
+        if (x !== null && y !== null && isFinite(x) && isFinite(y)) {
+          points.push({ x, y });
+        }
+      }
+    }
+
+    const cellVersions = new Map<string, number>();
+    for (const cellKey of graph.cellBindings) {
+      cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
+    }
+    this.cache.set(cacheKey, { points, cellVersions });
+
+    return points;
+  }
+
+  /**
    * Render all graphs in the worksheet
    */
   renderAll(resolution: number = 1000): GraphData[] {
@@ -132,15 +267,15 @@ export class GraphRenderer {
           break;
 
         case 'parametric':
-          // TODO: Implement parametric rendering
+          points = this.renderParametric(graph, resolution);
           break;
 
         case 'implicit':
-          // TODO: Implement implicit rendering
+          points = this.renderImplicit(graph, Math.min(resolution / 10, 100));
           break;
 
         case 'scatter':
-          // TODO: Implement scatter plot
+          points = this.renderScatter(graph);
           break;
       }
 

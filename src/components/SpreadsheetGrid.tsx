@@ -135,6 +135,8 @@ export const SpreadsheetGrid: React.FC = () => {
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [viewportWidth, setViewportWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const scrollRaf = useRef<number | null>(null);
+  const caretPositionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const lastInsertedRef = useRef<{ start: number; end: number } | null>(null);
 
   // Focus grid on mount for keyboard navigation
   useEffect(() => {
@@ -184,8 +186,6 @@ export const SpreadsheetGrid: React.FC = () => {
     const col = parseInt(e.currentTarget.dataset.col || '0', 10);
     if (row && col) {
       selectCell(row, col);
-      setEditingCell(null);
-      setEditValue('');
     }
   }, [selectCell]);
 
@@ -194,7 +194,15 @@ export const SpreadsheetGrid: React.FC = () => {
     const cellObj = getCellObject(row, col);
     const value = initialValue || cellObj?.formula || String(cellObj?.value ?? '');
     setEditValue(value);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    lastInsertedRef.current = null;
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const pos = inputRef.current.value.length;
+        inputRef.current.setSelectionRange(pos, pos);
+        caretPositionRef.current = { start: pos, end: pos };
+      }
+    }, 0);
   }, [getCellObject]);
 
   const handleCellDoubleClick = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
@@ -241,6 +249,7 @@ export const SpreadsheetGrid: React.FC = () => {
       setCell(editingCell.row, editingCell.col, editValue);
       setEditingCell(null);
       setEditValue('');
+      lastInsertedRef.current = null;
       gridRef.current?.focus();
     }
   }, [editingCell, editValue, setCell]);
@@ -489,6 +498,67 @@ export const SpreadsheetGrid: React.FC = () => {
     return selectedCellData.formula || String(selectedCellData.value);
   }, [editingCell, editValue, selectedCellData]);
 
+  const buildReferenceString = useCallback((startRow: number, startCol: number, endRow?: number, endCol?: number) => {
+    const normalizedStartRow = Math.min(startRow, endRow ?? startRow);
+    const normalizedStartCol = Math.min(startCol, endCol ?? startCol);
+    const normalizedEndRow = Math.max(startRow, endRow ?? startRow);
+    const normalizedEndCol = Math.max(startCol, endCol ?? startCol);
+
+    const startRef = `${colToLetter(normalizedStartCol)}${normalizedStartRow}`;
+    const endRef = `${colToLetter(normalizedEndCol)}${normalizedEndRow}`;
+
+    return normalizedStartRow === normalizedEndRow && normalizedStartCol === normalizedEndCol
+      ? startRef
+      : `${startRef}:${endRef}`;
+  }, [colToLetter]);
+
+  const applyReferenceToFormula = useCallback((reference: string, replaceExisting: boolean) => {
+    if (!editingCell) return;
+    const selection = replaceExisting && lastInsertedRef.current
+      ? lastInsertedRef.current
+      : caretPositionRef.current;
+
+    const start = Math.max(0, selection.start ?? 0);
+    const end = Math.max(start, selection.end ?? start);
+
+    setEditValue((prev) => {
+      const nextValue = prev.slice(0, start) + reference + prev.slice(end);
+      const caretPos = start + reference.length;
+      caretPositionRef.current = { start: caretPos, end: caretPos };
+      lastInsertedRef.current = { start, end: caretPos };
+
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.setSelectionRange(caretPos, caretPos);
+        }
+      });
+
+      return nextValue;
+    });
+  }, [editingCell]);
+
+  useEffect(() => {
+    if (!editingCell) {
+      lastInsertedRef.current = null;
+    }
+  }, [editingCell]);
+
+  useEffect(() => {
+    if (!editingCell || !selectedCell) return;
+
+    const targetRow = selectionRange ? selectionRange.end.row : selectedCell.row;
+    const targetCol = selectionRange ? selectionRange.end.col : selectedCell.col;
+
+    if (targetRow === editingCell.row && targetCol === editingCell.col && !selectionRange) return;
+
+    const reference = selectionRange
+      ? buildReferenceString(selectionRange.start.row, selectionRange.start.col, selectionRange.end.row, selectionRange.end.col)
+      : buildReferenceString(targetRow, targetCol);
+
+    applyReferenceToFormula(reference, Boolean(selectionRange) || Boolean(lastInsertedRef.current));
+  }, [applyReferenceToFormula, buildReferenceString, editingCell, selectedCell, selectionRange]);
+
   // Helper function to get cell state (computed on-demand, not stored)
   // Memoized with version to only update when cells actually change
   const getCellDisplayData = useCallback((row: number, col: number) => {
@@ -539,9 +609,21 @@ export const SpreadsheetGrid: React.FC = () => {
           type="text"
           className="formula-input"
           value={formulaBarValue}
-          onChange={(e) => setEditValue(e.target.value)}
+          onChange={(e) => {
+            setEditValue(e.target.value);
+            caretPositionRef.current = {
+              start: e.target.selectionStart ?? 0,
+              end: e.target.selectionEnd ?? 0,
+            };
+            lastInsertedRef.current = null;
+          }}
+          onSelect={(e) => {
+            caretPositionRef.current = {
+              start: e.currentTarget.selectionStart ?? 0,
+              end: e.currentTarget.selectionEnd ?? 0,
+            };
+          }}
           onKeyDown={handleFormulaKeyDown}
-          onBlur={handleCellSubmit}
           onFocus={() => {
             if (selectedCell && !editingCell) {
               startEditing(selectedCell.row, selectedCell.col);

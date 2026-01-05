@@ -21,6 +21,7 @@ export class AccelEngine {
 
     // Create default worksheet
     this.addWorksheet('Sheet1');
+    this.seedDemoWorkbook();
   }
 
   addWorksheet(name: string): void {
@@ -31,6 +32,11 @@ export class AccelEngine {
       namedRanges: new Map(),
     };
     this.workbook.sheets.set(name, worksheet);
+  }
+
+  private seedDemoWorkbook(): void {
+    // Demo data removed - start with empty spreadsheet
+    // Users can add their own data
   }
 
   getWorksheet(name?: string): Worksheet {
@@ -117,6 +123,31 @@ export class AccelEngine {
     const worksheet = this.getWorksheet(sheetName);
     const cellKey = this.cellKey(row, col);
     return worksheet.cells.get(cellKey);
+  }
+
+  /**
+   * Apply formatting to a cell
+   */
+  formatCell(row: number, col: number, format: Partial<import('./types').CellFormat>, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+    const cellKey = this.cellKey(row, col);
+
+    let cell = worksheet.cells.get(cellKey);
+    if (!cell) {
+      cell = {
+        address: { row, col },
+        value: null,
+        dependencies: new Set(),
+        dependents: new Set(),
+      };
+      worksheet.cells.set(cellKey, cell);
+    }
+
+    // Merge format properties
+    cell.format = {
+      ...cell.format,
+      ...format,
+    };
   }
 
   /**
@@ -303,6 +334,233 @@ export class AccelEngine {
     }
 
     return result;
+  }
+
+  /**
+   * Sort a column and rearrange adjacent columns to maintain row integrity
+   */
+  sortColumn(col: number, ascending: boolean = true, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+
+    // Find the data range (rows with values in the sorted column)
+    const rowsWithData: Array<{ row: number; cells: Map<number, Cell> }> = [];
+
+    for (const [key, cell] of worksheet.cells) {
+      const [cellCol, cellRow] = key.split(',').map(Number);
+
+      // Find existing row or create new one
+      let rowData = rowsWithData.find(r => r.row === cellRow);
+      if (!rowData) {
+        rowData = { row: cellRow, cells: new Map() };
+        rowsWithData.push(rowData);
+      }
+      rowData.cells.set(cellCol, cell);
+    }
+
+    // Filter to only rows that have a value in the sort column
+    const dataRows = rowsWithData.filter(r => r.cells.has(col));
+
+    // Sort rows by the value in the sort column
+    dataRows.sort((a, b) => {
+      const aVal = a.cells.get(col)?.value ?? null;
+      const bVal = b.cells.get(col)?.value ?? null;
+
+      // Handle null/undefined values
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return ascending ? 1 : -1;
+      if (bVal === null) return ascending ? -1 : 1;
+
+      // Compare values
+      let comparison = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal;
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal));
+      }
+
+      return ascending ? comparison : -comparison;
+    });
+
+    // Clear the old cells in the sorted range
+    const sortedRows = dataRows.map(r => r.row);
+    const allCols = new Set<number>();
+    dataRows.forEach(r => r.cells.forEach((_, c) => allCols.add(c)));
+
+    for (const row of sortedRows) {
+      for (const c of allCols) {
+        const key = this.cellKey(row, c);
+        worksheet.cells.delete(key);
+      }
+    }
+
+    // Write the sorted data back
+    dataRows.forEach((rowData, index) => {
+      const newRow = sortedRows[index];
+      rowData.cells.forEach((cell, cellCol) => {
+        const newKey = this.cellKey(newRow, cellCol);
+        const newCell = {
+          ...cell,
+          address: { row: newRow, col: cellCol },
+        };
+        worksheet.cells.set(newKey, newCell);
+      });
+    });
+  }
+
+  /**
+   * Insert a row at the specified position, shifting rows down
+   */
+  insertRow(row: number, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+    const cellsToMove: Array<[string, Cell]> = [];
+
+    // Find all cells at or after the insert row
+    worksheet.cells.forEach((cell, key) => {
+      if (cell.address.row >= row) {
+        cellsToMove.push([key, cell]);
+      }
+    });
+
+    // Delete old cells
+    cellsToMove.forEach(([key]) => worksheet.cells.delete(key));
+
+    // Re-insert cells with updated row numbers
+    cellsToMove.forEach(([, cell]) => {
+      const newRow = cell.address.row + 1;
+      const newKey = this.cellKey(newRow, cell.address.col);
+      const newCell = {
+        ...cell,
+        address: { row: newRow, col: cell.address.col },
+      };
+      worksheet.cells.set(newKey, newCell);
+    });
+  }
+
+  /**
+   * Delete a row, shifting rows up
+   */
+  deleteRow(row: number, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+    const cellsToMove: Array<[string, Cell]> = [];
+
+    // Delete all cells in the target row
+    worksheet.cells.forEach((cell, key) => {
+      if (cell.address.row === row) {
+        worksheet.cells.delete(key);
+      } else if (cell.address.row > row) {
+        cellsToMove.push([key, cell]);
+      }
+    });
+
+    // Delete old cells
+    cellsToMove.forEach(([key]) => worksheet.cells.delete(key));
+
+    // Re-insert cells with updated row numbers
+    cellsToMove.forEach(([, cell]) => {
+      const newRow = cell.address.row - 1;
+      const newKey = this.cellKey(newRow, cell.address.col);
+      const newCell = {
+        ...cell,
+        address: { row: newRow, col: cell.address.col },
+      };
+      worksheet.cells.set(newKey, newCell);
+    });
+  }
+
+  /**
+   * Insert a column at the specified position, shifting columns right
+   */
+  insertColumn(col: number, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+    const cellsToMove: Array<[string, Cell]> = [];
+
+    // Find all cells at or after the insert column
+    worksheet.cells.forEach((cell, key) => {
+      if (cell.address.col >= col) {
+        cellsToMove.push([key, cell]);
+      }
+    });
+
+    // Delete old cells
+    cellsToMove.forEach(([key]) => worksheet.cells.delete(key));
+
+    // Re-insert cells with updated column numbers
+    cellsToMove.forEach(([, cell]) => {
+      const newCol = cell.address.col + 1;
+      const newKey = this.cellKey(cell.address.row, newCol);
+      const newCell = {
+        ...cell,
+        address: { row: cell.address.row, col: newCol },
+      };
+      worksheet.cells.set(newKey, newCell);
+    });
+  }
+
+  /**
+   * Delete a column, shifting columns left
+   */
+  deleteColumn(col: number, sheetName?: string): void {
+    const worksheet = this.getWorksheet(sheetName);
+    const cellsToMove: Array<[string, Cell]> = [];
+
+    // Delete all cells in the target column
+    worksheet.cells.forEach((cell, key) => {
+      if (cell.address.col === col) {
+        worksheet.cells.delete(key);
+      } else if (cell.address.col > col) {
+        cellsToMove.push([key, cell]);
+      }
+    });
+
+    // Delete old cells
+    cellsToMove.forEach(([key]) => worksheet.cells.delete(key));
+
+    // Re-insert cells with updated column numbers
+    cellsToMove.forEach(([, cell]) => {
+      const newCol = cell.address.col - 1;
+      const newKey = this.cellKey(cell.address.row, newCol);
+      const newCell = {
+        ...cell,
+        address: { row: cell.address.row, col: newCol },
+      };
+      worksheet.cells.set(newKey, newCell);
+    });
+  }
+
+  /**
+   * Export worksheet as CSV
+   */
+  exportCSV(sheetName?: string): string {
+    const worksheet = this.getWorksheet(sheetName);
+    const rows: string[][] = [];
+
+    // Find the bounds of the data
+    let maxRow = 0;
+    let maxCol = 0;
+    worksheet.cells.forEach((cell) => {
+      maxRow = Math.max(maxRow, cell.address.row);
+      maxCol = Math.max(maxCol, cell.address.col);
+    });
+
+    // Create CSV rows
+    for (let row = 1; row <= maxRow; row++) {
+      const rowData: string[] = [];
+      for (let col = 1; col <= maxCol; col++) {
+        const cell = this.getCellObject(row, col, sheetName);
+        const value = cell?.value ?? '';
+
+        // Escape CSV values
+        let csvValue = String(value);
+        if (csvValue.includes(',') || csvValue.includes('"') || csvValue.includes('\n')) {
+          csvValue = `"${csvValue.replace(/"/g, '""')}"`;
+        }
+
+        rowData.push(csvValue);
+      }
+      rows.push(rowData);
+    }
+
+    return rows.map(row => row.join(',')).join('\n');
   }
 
   /**

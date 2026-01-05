@@ -32,19 +32,21 @@ export const AutomationPanel: React.FC = () => {
 
   return (
     <div className="automation-panel">
-      <h4>Automation</h4>
       <div className="script-list">
         {EXAMPLE_SCRIPTS.map((script, idx) => (
           <div key={idx} className="script-item">
-            <span>{script.name}</span>
-            <button onClick={() => handleRunScript(script)} disabled={running}>
+            <div>
+              <p className="script-name">{script.name}</p>
+              {script.description && <p className="script-desc">{script.description}</p>}
+            </div>
+            <button className="btn ghost" onClick={() => handleRunScript(script)} disabled={running}>
               Run
             </button>
           </div>
         ))}
       </div>
       {running && (
-        <button className="stop-button" onClick={handleStop}>
+        <button className="btn danger" onClick={handleStop}>
           Stop
         </button>
       )}

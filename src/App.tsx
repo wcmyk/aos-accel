@@ -1,41 +1,44 @@
 /**
  * Main Accel Application
- * Unified spreadsheet + graphing environment
+ * Full-featured Excel replacement
  */
 
-import React from 'react';
 import { SpreadsheetGrid } from './components/SpreadsheetGrid';
-import { GraphCanvas } from './components/GraphCanvas';
-import { ParameterPanel } from './components/ParameterPanel';
-import { Toolbar } from './components/Toolbar';
-import { AutomationPanel } from './components/AutomationPanel';
+import { Ribbon } from './components/Ribbon';
 import './App.css';
 
 function App() {
   return (
-    <div className="accel-app">
-      <header className="app-header">
-        <h1>🧮 Accel</h1>
-        <p className="tagline">Unified Spreadsheet + Graphing Environment</p>
-      </header>
-
-      <div className="app-layout">
-        <div className="left-panel">
-          <Toolbar />
-          <ParameterPanel />
-          <AutomationPanel />
+    <div className="excel-shell">
+      <div className="title-bar">
+        <div className="title-bar__left">
+          <div className="traffic-lights">
+            <span className="light red" />
+            <span className="light yellow" />
+            <span className="light green" />
+          </div>
+          <div className="title">
+            <strong>Accel.xlsx</strong>
+            <span>Professional Spreadsheet Application</span>
+          </div>
         </div>
-
-        <div className="main-content">
-          <div className="spreadsheet-section">
-            <SpreadsheetGrid />
-          </div>
-
-          <div className="graph-section">
-            <GraphCanvas />
-          </div>
+        <div className="title-bar__right">
+          <span className="status-dot" />
+          AutoSave Off
         </div>
       </div>
+
+      <Ribbon />
+
+      <div className="workspace-fullwidth">
+        <SpreadsheetGrid />
+      </div>
+
+      <footer className="status-bar">
+        <span>Ready</span>
+        <span>Sheet1</span>
+        <span>Average: - | Count: - | Sum: -</span>
+      </footer>
     </div>
   );
 }

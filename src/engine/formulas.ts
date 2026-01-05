@@ -15,7 +15,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   },
 
   AVERAGE: (...args) => {
-    const values = flattenArgs(args);
+    const values = flattenArgs(args).map(toNumber);
     if (values.length === 0) return 0;
     return values.reduce((sum: number, val) => sum + toNumber(val), 0) / values.length;
   },
@@ -213,7 +213,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return str;
   },
 
-  TEXT: (value, format?) => {
+  TEXT: (value, _format?) => {
     // Basic text formatting
     return String(value);
   },
@@ -245,7 +245,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   SECOND: (dateValue) => new Date(toNumber(dateValue)).getSeconds(),
 
   // ===== LOOKUP/REFERENCE FUNCTIONS =====
-  VLOOKUP: (lookupValue, tableArray, colIndexNum, rangeLookup = true) => {
+  VLOOKUP: (lookupValue, tableArray, colIndexNum, _rangeLookup = true) => {
     // Simplified implementation
     if (!Array.isArray(tableArray)) return null;
 
@@ -261,7 +261,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return null;
   },
 
-  HLOOKUP: (lookupValue, tableArray, rowIndexNum, rangeLookup = true) => {
+  HLOOKUP: (lookupValue, tableArray, rowIndexNum, _rangeLookup = true) => {
     if (!Array.isArray(tableArray)) return null;
 
     const rows = tableArray as CellValue[][];
@@ -297,7 +297,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return null;
   },
 
-  MATCH: (lookupValue, lookupArray, matchType = 1) => {
+  MATCH: (lookupValue, lookupArray, _matchType = 1) => {
     if (!Array.isArray(lookupArray)) return null;
 
     const index = lookupArray.indexOf(lookupValue);
@@ -383,12 +383,328 @@ export const FORMULAS: Record<string, FormulaFunction> = {
 
     return rate;
   },
+
+  // ===== CONDITIONAL AGGREGATION =====
+  SUMIF: (range, criteria, sumRange?) => {
+    const rangeVals = flattenArgs([range]);
+    const sumVals = sumRange ? flattenArgs([sumRange]) : rangeVals;
+    let sum = 0;
+    for (let i = 0; i < rangeVals.length; i++) {
+      if (meetsCriteria(rangeVals[i], criteria)) {
+        sum += toNumber(sumVals[i] ?? 0);
+      }
+    }
+    return sum;
+  },
+
+  COUNTIF: (range, criteria) => {
+    const vals = flattenArgs([range]);
+    return vals.filter(v => meetsCriteria(v, criteria)).length;
+  },
+
+  AVERAGEIF: (range, criteria, avgRange?) => {
+    const rangeVals = flattenArgs([range]);
+    const avgVals = avgRange ? flattenArgs([avgRange]) : rangeVals;
+    let sum = 0, count = 0;
+    for (let i = 0; i < rangeVals.length; i++) {
+      if (meetsCriteria(rangeVals[i], criteria)) {
+        sum += toNumber(avgVals[i] ?? 0);
+        count++;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  },
+
+  SUMIFS: (sumRange, ...pairs) => {
+    const sumVals = flattenArgs([sumRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    let sum = 0;
+    for (let i = 0; i < sumVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        sum += toNumber(sumVals[i]);
+      }
+    }
+    return sum;
+  },
+
+  COUNTIFS: (...pairs) => {
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    if (criteriaList.length === 0) return 0;
+    const length = criteriaList[0].range.length;
+    let count = 0;
+    for (let i = 0; i < length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) count++;
+    }
+    return count;
+  },
+
+  AVERAGEIFS: (avgRange, ...pairs) => {
+    const avgVals = flattenArgs([avgRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    let sum = 0, count = 0;
+    for (let i = 0; i < avgVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        sum += toNumber(avgVals[i]);
+        count++;
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  },
+
+  MAXIFS: (maxRange, ...pairs) => {
+    const maxVals = flattenArgs([maxRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    const matching: number[] = [];
+    for (let i = 0; i < maxVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        matching.push(toNumber(maxVals[i]));
+      }
+    }
+    return matching.length > 0 ? Math.max(...matching) : 0;
+  },
+
+  MINIFS: (minRange, ...pairs) => {
+    const minVals = flattenArgs([minRange]);
+    const criteriaList: Array<{range: CellValue[], criteria: CellValue}> = [];
+    for (let i = 0; i < pairs.length; i += 2) {
+      criteriaList.push({ range: flattenArgs([pairs[i]]), criteria: pairs[i + 1] });
+    }
+    const matching: number[] = [];
+    for (let i = 0; i < minVals.length; i++) {
+      if (criteriaList.every(p => meetsCriteria(p.range[i], p.criteria))) {
+        matching.push(toNumber(minVals[i]));
+      }
+    }
+    return matching.length > 0 ? Math.min(...matching) : 0;
+  },
+
+  // ===== MORE MATH =====
+  PRODUCT: (...args) => flattenArgs(args).map(toNumber).reduce((a, b) => a * b, 1),
+  SUMPRODUCT: (...arrays) => {
+    const arrs = arrays.map(a => flattenArgs([a]).map(toNumber));
+    const length = Math.min(...arrs.map(a => a.length));
+    let sum = 0;
+    for (let i = 0; i < length; i++) {
+      let product = 1;
+      for (const arr of arrs) product *= arr[i];
+      sum += product;
+    }
+    return sum;
+  },
+  SUMSQ: (...args) => flattenArgs(args).map(toNumber).reduce((sum, v) => sum + v * v, 0),
+  QUOTIENT: (num, denom) => Math.trunc(toNumber(num) / toNumber(denom)),
+  INT: (number) => Math.floor(toNumber(number)),
+  GCD: (...args) => {
+    const gcd2 = (a: number, b: number): number => b === 0 ? a : gcd2(b, a % b);
+    return flattenArgs(args).map(toNumber).reduce(gcd2);
+  },
+  LCM: (...args) => {
+    const gcd2 = (a: number, b: number): number => b === 0 ? a : gcd2(b, a % b);
+    const lcm2 = (a: number, b: number) => (a * b) / gcd2(a, b);
+    return flattenArgs(args).map(toNumber).reduce(lcm2);
+  },
+  COMBIN: (n, k) => {
+    const num = toNumber(n), choose = toNumber(k);
+    if (choose > num || choose < 0) return 0;
+    let result = 1;
+    for (let i = 0; i < choose; i++) {
+      result *= (num - i) / (i + 1);
+    }
+    return Math.round(result);
+  },
+
+  // ===== MORE STAT =====
+  LARGE: (arr, k) => flattenArgs([arr]).map(toNumber).sort((a, b) => b - a)[toNumber(k) - 1] ?? null,
+  SMALL: (arr, k) => flattenArgs([arr]).map(toNumber).sort((a, b) => a - b)[toNumber(k) - 1] ?? null,
+  PERCENTILE: (arr, k) => {
+    const v = flattenArgs([arr]).map(toNumber).sort((a, b) => a - b);
+    const i = toNumber(k) * (v.length - 1);
+    const l = Math.floor(i), u = Math.ceil(i), w = i - l;
+    return v[l] * (1 - w) + v[u] * w;
+  },
+  QUARTILE: (arr, quart) => {
+    const q = toNumber(quart);
+    if (q === 0) return FORMULAS.MIN(arr);
+    if (q === 4) return FORMULAS.MAX(arr);
+    return FORMULAS.PERCENTILE(arr, q / 4);
+  },
+  RANK: (number, ref, order = 0) => {
+    const num = toNumber(number);
+    const vals = flattenArgs([ref]).map(toNumber);
+    const sorted = toNumber(order) === 0 ? vals.sort((a, b) => b - a) : vals.sort((a, b) => a - b);
+    return sorted.indexOf(num) + 1;
+  },
+
+  // ===== MORE TEXT =====
+  TEXTJOIN: (delim, ignoreEmpty, ...texts) => {
+    const vals = flattenArgs(texts);
+    const filtered = toBoolean(ignoreEmpty) ? vals.filter(v => v !== null && v !== '') : vals;
+    return filtered.map(String).join(String(delim));
+  },
+  REPT: (text, times) => String(text).repeat(toNumber(times)),
+  EXACT: (a, b) => String(a) === String(b),
+  CHAR: (n) => String.fromCharCode(toNumber(n)),
+  CODE: (text) => String(text).charCodeAt(0),
+
+  // ===== DATE/TIME =====
+  DAYS: (end, start) => Math.floor((toNumber(end) - toNumber(start)) / 86400000),
+  WEEKDAY: (date, type = 1) => {
+    const d = new Date(toNumber(date)).getDay();
+    const t = toNumber(type);
+    if (t === 1) return d + 1;
+    if (t === 2) return d === 0 ? 7 : d;
+    return d === 0 ? 6 : d - 1;
+  },
+
+  // ===== LOGICAL =====
+  XOR: (...args) => flattenArgs(args).filter(toBoolean).length % 2 === 1,
+  IFERROR: (val, ifErr) => (typeof val === 'string' && val.startsWith('#ERROR')) ? ifErr : val,
+  IFNA: (val, ifNA) => (val === null || val === undefined) ? ifNA : val,
+
+  // ===== INFORMATION =====
+  ISBLANK: (v) => v === null || v === '',
+  ISERROR: (v) => typeof v === 'string' && v.startsWith('#ERROR'),
+  ISTEXT: (v) => typeof v === 'string',
+  ISNUMBER: (v) => typeof v === 'number',
+  ISLOGICAL: (v) => typeof v === 'boolean',
+  ISEVEN: (v) => toNumber(v) % 2 === 0,
+  ISODD: (v) => toNumber(v) % 2 !== 0,
+
+  // ===== MATRIX FUNCTIONS =====
+
+  /**
+   * TRANSPOSE - Returns the transpose of an array or range
+   * Example: TRANSPOSE([[1,2],[3,4]]) => [[1,3],[2,4]]
+   */
+  TRANSPOSE: (matrix) => {
+    const mat = toMatrix(matrix);
+    if (!mat || mat.length === 0) return [];
+
+    const rows = mat.length;
+    const cols = mat[0].length;
+    const result: number[][] = [];
+
+    for (let c = 0; c < cols; c++) {
+      const newRow: number[] = [];
+      for (let r = 0; r < rows; r++) {
+        newRow.push(mat[r][c]);
+      }
+      result.push(newRow);
+    }
+
+    return result;
+  },
+
+  /**
+   * MMULT - Returns the matrix product of two arrays
+   * Example: MMULT([[1,2],[3,4]], [[5,6],[7,8]]) => [[19,22],[43,50]]
+   */
+  MMULT: (matrix1, matrix2) => {
+    const mat1 = toMatrix(matrix1);
+    const mat2 = toMatrix(matrix2);
+
+    if (!mat1 || !mat2 || mat1.length === 0 || mat2.length === 0) {
+      return '#VALUE!';
+    }
+
+    const rows1 = mat1.length;
+    const cols1 = mat1[0].length;
+    const rows2 = mat2.length;
+    const cols2 = mat2[0].length;
+
+    // Matrix multiplication requires cols1 === rows2
+    if (cols1 !== rows2) {
+      return '#VALUE!';
+    }
+
+    const result: number[][] = [];
+
+    for (let i = 0; i < rows1; i++) {
+      const row: number[] = [];
+      for (let j = 0; j < cols2; j++) {
+        let sum = 0;
+        for (let k = 0; k < cols1; k++) {
+          sum += mat1[i][k] * mat2[k][j];
+        }
+        row.push(sum);
+      }
+      result.push(row);
+    }
+
+    return result;
+  },
+
+  /**
+   * MDETERM - Returns the matrix determinant of an array
+   * Example: MDETERM([[1,2],[3,4]]) => -2
+   */
+  MDETERM: (matrix) => {
+    const mat = toMatrix(matrix);
+
+    if (!mat || mat.length === 0) {
+      return '#VALUE!';
+    }
+
+    const rows = mat.length;
+    const cols = mat[0].length;
+
+    // Determinant only defined for square matrices
+    if (rows !== cols) {
+      return '#VALUE!';
+    }
+
+    return determinant(mat);
+  },
+
+  /**
+   * MINVERSE - Returns the inverse matrix of an array
+   * Example: MINVERSE([[1,2],[3,4]]) => [[-2,1],[1.5,-0.5]]
+   */
+  MINVERSE: (matrix) => {
+    const mat = toMatrix(matrix);
+
+    if (!mat || mat.length === 0) {
+      return '#VALUE!';
+    }
+
+    const n = mat.length;
+    const cols = mat[0].length;
+
+    // Inverse only defined for square matrices
+    if (n !== cols) {
+      return '#VALUE!';
+    }
+
+    const det = determinant(mat);
+
+    // Matrix is singular (not invertible)
+    if (Math.abs(det) < 1e-10) {
+      return '#NUM!';
+    }
+
+    return matrixInverse(mat);
+  },
 };
 
-// Helper functions
+// ===== HELPER FUNCTIONS =====
+
+/**
+ * Flatten nested arrays into a single array of values
+ */
 function flattenArgs(args: CellValue[]): CellValue[] {
   const result: CellValue[] = [];
-
   for (const arg of args) {
     if (Array.isArray(arg)) {
       result.push(...flattenArgs(arg));
@@ -396,10 +712,12 @@ function flattenArgs(args: CellValue[]): CellValue[] {
       result.push(arg);
     }
   }
-
   return result;
 }
 
+/**
+ * Convert a value to a number
+ */
 function toNumber(value: CellValue): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 1 : 0;
@@ -407,16 +725,177 @@ function toNumber(value: CellValue): number {
     const num = parseFloat(value);
     return isNaN(num) ? 0 : num;
   }
-  if (value === null) return 0;
-  if (Array.isArray(value)) return value.length > 0 ? toNumber(value[0]) : 0;
   return 0;
 }
 
+/**
+ * Convert a value to a boolean
+ */
 function toBoolean(value: CellValue): boolean {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value !== 0;
   if (typeof value === 'string') return value.toLowerCase() === 'true' || value !== '';
-  if (value === null) return false;
-  if (Array.isArray(value)) return value.length > 0;
   return false;
+}
+
+/**
+ * Check if a value meets criteria (for SUMIF, COUNTIF, etc.)
+ * Supports operators: >, >=, <, <=, =, <>, and wildcards (* ?)
+ */
+function meetsCriteria(value: CellValue, criteria: CellValue): boolean {
+  if (typeof criteria === 'string') {
+    const criteriaStr = String(criteria);
+
+    // Check for comparison operators
+    const match = criteriaStr.match(/^([<>=!]+)(.*)$/);
+    if (match) {
+      const op = match[1];
+      const compareValue = match[2];
+      const numValue = toNumber(value);
+      const numCompare = toNumber(compareValue);
+
+      switch (op) {
+        case '>': return numValue > numCompare;
+        case '>=': return numValue >= numCompare;
+        case '<': return numValue < numCompare;
+        case '<=': return numValue <= numCompare;
+        case '=': return value === compareValue || numValue === numCompare;
+        case '<>':
+        case '!=': return value !== compareValue && numValue !== numCompare;
+      }
+    }
+
+    // Check for wildcard matching
+    if (criteriaStr.includes('*') || criteriaStr.includes('?')) {
+      const regex = new RegExp('^' + criteriaStr.replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i');
+      return regex.test(String(value));
+    }
+  }
+
+  return value === criteria;
+}
+
+/**
+ * Convert a value to a matrix (2D array of numbers)
+ */
+function toMatrix(value: CellValue): number[][] | null {
+  // If it's already a 2D array, convert to numbers
+  if (Array.isArray(value)) {
+    // Check if it's a 2D array
+    if (Array.isArray(value[0])) {
+      return (value as CellValue[][]).map(row =>
+        row.map(cell => toNumber(cell))
+      );
+    }
+    // If it's a 1D array, treat as a single row
+    return [(value as CellValue[]).map(cell => toNumber(cell))];
+  }
+
+  // If it's a single value, treat as 1x1 matrix
+  return [[toNumber(value)]];
+}
+
+/**
+ * Calculate the determinant of a square matrix using Laplace expansion
+ */
+function determinant(matrix: number[][]): number {
+  const n = matrix.length;
+
+  // Base case: 1x1 matrix
+  if (n === 1) {
+    return matrix[0][0];
+  }
+
+  // Base case: 2x2 matrix
+  if (n === 2) {
+    return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+  }
+
+  // Recursive case: Use Laplace expansion along first row
+  let det = 0;
+  for (let j = 0; j < n; j++) {
+    const minor = getMinor(matrix, 0, j);
+    const cofactor = Math.pow(-1, j) * matrix[0][j] * determinant(minor);
+    det += cofactor;
+  }
+
+  return det;
+}
+
+/**
+ * Get the minor matrix by removing row i and column j
+ */
+function getMinor(matrix: number[][], rowToRemove: number, colToRemove: number): number[][] {
+  const result: number[][] = [];
+
+  for (let i = 0; i < matrix.length; i++) {
+    if (i === rowToRemove) continue;
+
+    const row: number[] = [];
+    for (let j = 0; j < matrix[i].length; j++) {
+      if (j === colToRemove) continue;
+      row.push(matrix[i][j]);
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+/**
+ * Calculate the inverse of a square matrix using Gauss-Jordan elimination
+ */
+function matrixInverse(matrix: number[][]): number[][] {
+  const n = matrix.length;
+
+  // Create augmented matrix [A | I]
+  const augmented: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const row: number[] = [...matrix[i]];
+    for (let j = 0; j < n; j++) {
+      row.push(i === j ? 1 : 0);
+    }
+    augmented.push(row);
+  }
+
+  // Forward elimination
+  for (let i = 0; i < n; i++) {
+    // Find pivot
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+
+    // Swap rows
+    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+
+    // Make diagonal element 1
+    const pivot = augmented[i][i];
+    if (Math.abs(pivot) < 1e-10) {
+      throw new Error('Matrix is singular');
+    }
+
+    for (let j = 0; j < 2 * n; j++) {
+      augmented[i][j] /= pivot;
+    }
+
+    // Eliminate column
+    for (let k = 0; k < n; k++) {
+      if (k === i) continue;
+      const factor = augmented[k][i];
+      for (let j = 0; j < 2 * n; j++) {
+        augmented[k][j] -= factor * augmented[i][j];
+      }
+    }
+  }
+
+  // Extract inverse from right half of augmented matrix
+  const inverse: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    inverse.push(augmented[i].slice(n));
+  }
+
+  return inverse;
 }

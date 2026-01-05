@@ -55,6 +55,17 @@ export class AccelEngine {
     const worksheet = this.getWorksheet(sheetName);
     const cellKey = this.cellKey(row, col);
 
+    // Lazy cleanup: remove empty cells with no dependencies
+    const existingCell = worksheet.cells.get(cellKey);
+    if ((input === '' || input === null) && existingCell) {
+      if (existingCell.dependencies.size === 0 &&
+          existingCell.dependents.size === 0 &&
+          !existingCell.isParameter) {
+        worksheet.cells.delete(cellKey);
+        return;
+      }
+    }
+
     let cell = worksheet.cells.get(cellKey);
     if (!cell) {
       cell = {

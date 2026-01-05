@@ -9,7 +9,8 @@ import { GraphRenderer } from '../engine/graph-renderer';
 
 export const GraphCanvas: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { engine, getGraphs } = useAccelStore();
+  const rafRef = useRef<number | null>(null);
+  const { engine, getGraphs, getGraphRenderer } = useAccelStore();
   const [viewport, setViewport] = useState({
     xMin: -10,
     xMax: 10,
@@ -116,46 +117,58 @@ export const GraphCanvas: React.FC = React.memo(() => {
   };
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw axes
-    drawAxes(ctx, canvas.width, canvas.height, viewport);
-
-    // Render graphs
-    const worksheet = engine.getWorksheet();
-    const renderer = new GraphRenderer(worksheet);
-    const graphsData = renderer.renderAll(1000);
-
-    for (const graphData of graphsData) {
-      if (!graphData.visible || graphData.points.length === 0) continue;
-
-      ctx.strokeStyle = graphData.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      let first = true;
-      for (const point of graphData.points) {
-        const screenX = mapToScreen(point.x, viewport.xMin, viewport.xMax, 0, canvas.width);
-        const screenY = mapToScreen(point.y, viewport.yMin, viewport.yMax, canvas.height, 0);
-
-        if (first) {
-          ctx.moveTo(screenX, screenY);
-          first = false;
-        } else {
-          ctx.lineTo(screenX, screenY);
-        }
-      }
-
-      ctx.stroke();
+    // Cancel previous RAF if exists
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
     }
-  }, [engine, viewport, getGraphs, drawAxes, mapToScreen, canvasSize]);
+
+    rafRef.current = requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw axes
+      drawAxes(ctx, canvas.width, canvas.height, viewport);
+
+      // Get cached renderer from store
+      const graphRenderer = getGraphRenderer();
+      const graphsData = graphRenderer.renderAll(1000);
+
+      for (const graphData of graphsData) {
+        if (!graphData.visible || graphData.points.length === 0) continue;
+
+        ctx.strokeStyle = graphData.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        let first = true;
+        for (const point of graphData.points) {
+          const screenX = mapToScreen(point.x, viewport.xMin, viewport.xMax, 0, canvas.width);
+          const screenY = mapToScreen(point.y, viewport.yMin, viewport.yMax, canvas.height, 0);
+
+          if (first) {
+            ctx.moveTo(screenX, screenY);
+            first = false;
+          } else {
+            ctx.lineTo(screenX, screenY);
+          }
+        }
+
+        ctx.stroke();
+      }
+    });
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [viewport, getGraphs, getGraphRenderer, canvasSize]);
 
   const handleZoom = (delta: number) => {
     setViewport((prev) => {

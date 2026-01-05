@@ -13,12 +13,18 @@ type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Automa
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs } = useAccelStore();
 
   // Theme is managed locally to avoid triggering re-renders across the entire app
   const [localTheme, setLocalTheme] = useState<string>(() => {
     return document.documentElement.getAttribute('data-theme') || 'default';
   });
+
+  // Dialog states for parameter and graph management
+  const [showParamDialog, setShowParamDialog] = useState(false);
+  const [paramConfig, setParamConfig] = useState({ min: 0, max: 10, step: 0.1 });
+  const [showGraphDialog, setShowGraphDialog] = useState(false);
+  const [graphFormula, setGraphFormula] = useState('');
 
   const handleThemeChange = useCallback((newTheme: string) => {
     if (newTheme === localTheme) return;
@@ -45,6 +51,30 @@ export const Ribbon: React.FC = () => {
       });
     });
   }, [localTheme]);
+
+  const handleAddParameter = useCallback(() => {
+    if (!selectedCell) {
+      alert('Please select a cell first');
+      return;
+    }
+    setParameter(selectedCell.row, selectedCell.col, paramConfig.min, paramConfig.max, paramConfig.step);
+    setShowParamDialog(false);
+  }, [selectedCell, paramConfig, setParameter]);
+
+  const handleAddGraph = useCallback(() => {
+    if (!graphFormula.trim()) {
+      alert('Please enter a formula');
+      return;
+    }
+    try {
+      const id = `graph_${Date.now()}`;
+      addGraph(id, graphFormula);
+      setGraphFormula('');
+      setShowGraphDialog(false);
+    } catch (error) {
+      alert(`Error adding graph: ${(error as Error).message}`);
+    }
+  }, [graphFormula, addGraph]);
 
   const renderHomeTab = () => (
     <>
@@ -387,37 +417,60 @@ export const Ribbon: React.FC = () => {
     </>
   );
 
-  const renderGraphingTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Graph Settings</p>
-        <div className="ribbon-controls">
-          <button className="btn">Add Graph</button>
-          <button className="btn">Edit Graph</button>
-          <button className="btn">Remove Graph</button>
-        </div>
-      </div>
+  const renderGraphingTab = () => {
+    const graphs = getGraphs();
 
-      <div className="ribbon-group">
-        <p className="ribbon-title">Graph Types</p>
-        <div className="ribbon-controls">
-          <button className="btn">Function</button>
-          <button className="btn">Parametric</button>
-          <button className="btn">Implicit</button>
-          <button className="btn">Scatter</button>
+    return (
+      <>
+        <div className="ribbon-group">
+          <p className="ribbon-title">Graph Settings</p>
+          <div className="ribbon-controls">
+            <button className="btn" onClick={() => setShowGraphDialog(true)}>Add Graph</button>
+            <button className="btn" disabled={graphs.length === 0}>Edit Graph</button>
+          </div>
+          {graphs.length > 0 && (
+            <div style={{ maxHeight: '100px', overflowY: 'auto', marginTop: '8px' }}>
+              {graphs.map((graph) => (
+                <div key={graph.id} style={{ display: 'flex', gap: '8px', padding: '4px', alignItems: 'center' }}>
+                  <span style={{ color: graph.color, fontSize: '16px' }}>●</span>
+                  <span style={{ flex: 1, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{graph.formula}</span>
+                  <button
+                    className="ribbon-btn"
+                    onClick={() => removeGraph(graph.id)}
+                    title="Remove"
+                    style={{ padding: '2px 6px', fontSize: '14px', cursor: 'pointer' }}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
 
-      <div className="ribbon-group">
-        <p className="ribbon-title">Parameters</p>
-        <div className="ribbon-controls">
-          <button className="btn" disabled={!selectedCell}>
-            Make Parameter from Selection
-          </button>
+        <div className="ribbon-group">
+          <p className="ribbon-title">Graph Types</p>
+          <div className="ribbon-controls">
+            <button className="btn">Function</button>
+            <button className="btn">Parametric</button>
+            <button className="btn">Implicit</button>
+            <button className="btn">Scatter</button>
+          </div>
         </div>
-      </div>
-    </>
-  );
+
+        <div className="ribbon-group">
+          <p className="ribbon-title">Parameters</p>
+          <div className="ribbon-controls">
+            <button
+              className="btn"
+              disabled={!selectedCell}
+              onClick={() => setShowParamDialog(true)}
+            >
+              Make Parameter from Selection
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  };
 
   const renderReviewTab = () => (
     <>
@@ -559,6 +612,72 @@ export const Ribbon: React.FC = () => {
       <div className="ribbon">
         {renderActiveTab()}
       </div>
+
+      {showGraphDialog && (
+        <div className="dialog">
+          <div className="dialog-content">
+            <div>
+              <p className="eyebrow">Add Graph</p>
+              <h3>Bind a formula to the graph</h3>
+              <p className="dialog-subtitle">Reference grid cells directly to keep graphs and cells in sync.</p>
+            </div>
+            <label>
+              Formula (e.g., A1 * x + B1):
+              <input
+                type="text"
+                value={graphFormula}
+                onChange={(e) => setGraphFormula(e.target.value)}
+                placeholder="y = f(x)"
+              />
+            </label>
+            <div className="dialog-buttons">
+              <button className="btn" onClick={handleAddGraph}>Add</button>
+              <button className="btn ghost" onClick={() => setShowGraphDialog(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showParamDialog && (
+        <div className="dialog">
+          <div className="dialog-content">
+            <div>
+              <p className="eyebrow">Parameter</p>
+              <h3>Create a slider from the selected cell</h3>
+              <p className="dialog-subtitle">Min, max, and step will drive graph recalculation instantly.</p>
+            </div>
+            <label>
+              Min:
+              <input
+                type="number"
+                value={paramConfig.min}
+                onChange={(e) => setParamConfig({ ...paramConfig, min: parseFloat(e.target.value) })}
+              />
+            </label>
+            <label>
+              Max:
+              <input
+                type="number"
+                value={paramConfig.max}
+                onChange={(e) => setParamConfig({ ...paramConfig, max: parseFloat(e.target.value) })}
+              />
+            </label>
+            <label>
+              Step:
+              <input
+                type="number"
+                value={paramConfig.step}
+                step="0.01"
+                onChange={(e) => setParamConfig({ ...paramConfig, step: parseFloat(e.target.value) })}
+              />
+            </label>
+            <div className="dialog-buttons">
+              <button className="btn" onClick={handleAddParameter}>Create</button>
+              <button className="btn ghost" onClick={() => setShowParamDialog(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

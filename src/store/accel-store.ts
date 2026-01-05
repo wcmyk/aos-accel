@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { AccelEngine } from '../engine/engine';
 import { CellValue, Cell, GraphDefinition } from '../engine/types';
+import { GraphRenderer } from '../engine/graph-renderer';
 
 export type Theme = 'default' | 'pastel-yellow' | 'pastel-blue' | 'pastel-brown' | 'pastel-red' | 'pastel-pink' | 'pastel-green' | 'pastel-purple';
 
@@ -112,6 +113,7 @@ interface AccelState {
   clipboard: ClipboardCell | null;
   fillRange: { row: number; col: number } | null;
   version: number; // Version counter to force re-renders
+  graphRenderer: GraphRenderer | null;
 
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
@@ -149,6 +151,11 @@ interface AccelState {
   addGraph: (id: string, formula: string) => void;
   removeGraph: (id: string) => void;
   getGraphs: () => GraphDefinition[];
+  getGraphRenderer: () => GraphRenderer;
+  invalidateGraphCache: (cellKeys: string[]) => void;
+
+  // Batch operations
+  batchUpdate: (operations: Array<() => void>) => void;
 
   // Export
   exportCSV: () => void;
@@ -164,10 +171,14 @@ export const useAccelStore = create<AccelState>()(
     clipboard: null,
     fillRange: null,
     version: 0,
+    graphRenderer: null,
 
     setCell: (row, col, value) => {
       const { engine } = get();
       engine.setCell(row, col, value);
+      // Invalidate graph cache for changed cell
+      const cellKey = `${col},${row}`;
+      get().invalidateGraphCache([cellKey]);
       set((state) => {
         state.version = (state.version || 0) + 1;
       });
@@ -400,6 +411,36 @@ export const useAccelStore = create<AccelState>()(
 
     refresh: () => {
       set(() => ({}));
+    },
+
+    getGraphRenderer: () => {
+      const { engine, graphRenderer } = get();
+      if (!graphRenderer) {
+        const worksheet = engine.getWorksheet();
+        const newRenderer = new GraphRenderer(worksheet);
+        set((state) => {
+          state.graphRenderer = newRenderer;
+        });
+        return newRenderer;
+      }
+      return graphRenderer;
+    },
+
+    invalidateGraphCache: (cellKeys) => {
+      const { graphRenderer } = get();
+      if (graphRenderer) {
+        graphRenderer.invalidateCache(cellKeys);
+      }
+    },
+
+    batchUpdate: (operations) => {
+      const { engine } = get();
+      // Execute all operations
+      operations.forEach(op => op());
+      // Single state update to trigger one re-render
+      set((state) => {
+        state.version = (state.version || 0) + 1;
+      });
     },
   }))
 );

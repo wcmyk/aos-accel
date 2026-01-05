@@ -131,17 +131,117 @@ export class GraphRenderer {
           points = this.renderFunction(graph, resolution);
           break;
 
-        case 'parametric':
-          // TODO: Implement parametric rendering
-          break;
+        case 'parametric': {
+          // Parametric plots: x = f(t), y = g(t)
+          const cacheKey = `${graph.id}-${resolution}`;
 
-        case 'implicit':
-          // TODO: Implement implicit rendering
-          break;
+          // Check cache
+          if (this.isCacheValid(graph, cacheKey)) {
+            points = this.cache.get(cacheKey)!.points;
+          } else {
+            const { min, max } = graph.domain || { min: 0, max: 2 * Math.PI };
+            const step = (max - min) / resolution;
+            const evaluator = new Evaluator(this.worksheet);
 
-        case 'scatter':
-          // TODO: Implement scatter plot
+            for (let i = 0; i <= resolution; i++) {
+              const t = min + i * step;
+              try {
+                // Evaluate formula with parameter t
+                const result = evaluator.evaluate(graph.ast, { t });
+
+                // Expect result to be an array [x, y] or object with x, y properties
+                if (Array.isArray(result) && result.length >= 2) {
+                  const [x, y] = result;
+                  if (typeof x === 'number' && typeof y === 'number' && isFinite(x) && isFinite(y)) {
+                    points.push({ x, y });
+                  }
+                }
+              } catch {
+                // Skip on error
+              }
+            }
+
+            // Cache result
+            const cellVersions = new Map<string, number>();
+            for (const cellKey of graph.cellBindings) {
+              cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
+            }
+            this.cache.set(cacheKey, { points, cellVersions });
+          }
           break;
+        }
+
+        case 'implicit': {
+          // Implicit plots: f(x,y) = 0
+          // Simplified approach: sample grid and find near-zero values
+          const cacheKey = `${graph.id}-${resolution}`;
+
+          // Check cache
+          if (this.isCacheValid(graph, cacheKey)) {
+            points = this.cache.get(cacheKey)!.points;
+          } else {
+            const { min: xMin, max: xMax } = graph.domain || { min: -10, max: 10 };
+            const { min: yMin, max: yMax } = graph.range || { min: -10, max: 10 };
+            const gridRes = Math.floor(Math.sqrt(resolution)); // e.g., 30x30 grid for 900 resolution
+            const xStep = (xMax - xMin) / gridRes;
+            const yStep = (yMax - yMin) / gridRes;
+            const evaluator = new Evaluator(this.worksheet);
+
+            // Sample grid and find zero crossings
+            for (let xi = 0; xi <= gridRes; xi++) {
+              for (let yi = 0; yi <= gridRes; yi++) {
+                const x = xMin + xi * xStep;
+                const y = yMin + yi * yStep;
+
+                try {
+                  const val = evaluator.evaluate(graph.ast, { x, y });
+                  // Plot points where f(x,y) is close to zero
+                  if (typeof val === 'number' && Math.abs(val) < 0.1) {
+                    points.push({ x, y });
+                  }
+                } catch {
+                  // Skip on error
+                }
+              }
+            }
+
+            // Cache result
+            const cellVersions = new Map<string, number>();
+            for (const cellKey of graph.cellBindings) {
+              cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
+            }
+            this.cache.set(cacheKey, { points, cellVersions });
+          }
+          break;
+        }
+
+        case 'scatter': {
+          // Scatter plots: plot discrete points from cell ranges
+          // Extract x and y values from cell bindings
+          const xValues: number[] = [];
+          const yValues: number[] = [];
+
+          // Sort cell keys to ensure consistent ordering
+          const sortedCellKeys = Array.from(graph.cellBindings).sort();
+
+          for (const cellKey of sortedCellKeys) {
+            const cell = this.worksheet.cells.get(cellKey);
+            if (cell && typeof cell.value === 'number') {
+              // Alternate between x and y values
+              if (xValues.length === yValues.length) {
+                xValues.push(cell.value);
+              } else {
+                yValues.push(cell.value);
+              }
+            }
+          }
+
+          // Create points from paired values
+          for (let i = 0; i < Math.min(xValues.length, yValues.length); i++) {
+            points.push({ x: xValues[i], y: yValues[i] });
+          }
+          break;
+        }
       }
 
       graphsData.push({

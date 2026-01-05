@@ -5,6 +5,7 @@
 
 import { SpreadsheetGrid } from './components/SpreadsheetGrid';
 import { Ribbon } from './components/Ribbon';
+import { GraphCanvas } from './components/GraphCanvas';
 import './App.css';
 
 function App() {
@@ -30,8 +31,15 @@ function App() {
 
       <Ribbon />
 
-      <div className="workspace-fullwidth">
-        <SpreadsheetGrid />
+      <div className="workspace">
+        <div className="sheet-panel">
+          <SpreadsheetGrid />
+        </div>
+        <div className="insight-panel">
+          <div className="card">
+            <GraphCanvas />
+          </div>
+        </div>
       </div>
 
       <footer className="status-bar">

@@ -330,6 +330,25 @@ body {
   border-radius: 4px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  height: calc(100vh - 200px);
+  overflow: auto;
+}
+
+.insight-panel {
+  height: calc(100vh - 200px);
+  overflow: auto;
+}
+
+.insight-panel .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.insight-panel .graph-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .insight-panel {

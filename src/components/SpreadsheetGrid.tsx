@@ -184,8 +184,6 @@ export const SpreadsheetGrid: React.FC = () => {
     const col = parseInt(e.currentTarget.dataset.col || '0', 10);
     if (row && col) {
       selectCell(row, col);
-      setEditingCell(null);
-      setEditValue('');
     }
   }, [selectCell]);
 
@@ -541,7 +539,6 @@ export const SpreadsheetGrid: React.FC = () => {
           value={formulaBarValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleFormulaKeyDown}
-          onBlur={handleCellSubmit}
           onFocus={() => {
             if (selectedCell && !editingCell) {
               startEditing(selectedCell.row, selectedCell.col);

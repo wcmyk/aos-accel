@@ -190,7 +190,7 @@ export interface TableBlock extends Block {
   type: 'table';
   columns: string[];
   rows: AdvancedCellValue[][];
-  metadata: {
+  metadata: ValueMetadata & {
     experimentId?: string;
     timestamp?: number;
     parameters?: Record<string, any>;

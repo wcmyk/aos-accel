@@ -302,7 +302,7 @@ export class RandomVariableClass {
       case 'normal':
         return new NormalDistribution(dist.mu, dist.sigma);
       case 'uniform':
-        return new Uniform Distribution(dist.min, dist.max);
+        return new UniformDistribution(dist.min, dist.max);
       case 'exponential':
         return new ExponentialDistribution(dist.lambda);
       case 'binomial':

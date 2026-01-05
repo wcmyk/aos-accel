@@ -115,11 +115,24 @@ interface AccelState {
   version: number; // Version counter to force re-renders
   graphRenderer: GraphRenderer | null;
 
+  // Multi-cell selection
+  selectionRange: {
+    start: { row: number; col: number };
+    end: { row: number; col: number };
+  } | null;
+  isSelecting: boolean;
+
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
   getCell: (row: number, col: number) => CellValue;
   getCellObject: (row: number, col: number) => Cell | undefined;
   selectCell: (row: number, col: number) => void;
+
+  // Selection actions
+  startSelection: (row: number, col: number) => void;
+  updateSelection: (row: number, col: number) => void;
+  endSelection: () => void;
+  clearSelection: () => void;
 
   // Clipboard operations
   copyCell: (row: number, col: number) => void;
@@ -172,6 +185,8 @@ export const useAccelStore = create<AccelState>()(
     fillRange: null,
     version: 0,
     graphRenderer: null,
+    selectionRange: null,
+    isSelecting: false,
 
     setCell: (row, col, value) => {
       const { engine } = get();
@@ -197,6 +212,35 @@ export const useAccelStore = create<AccelState>()(
     selectCell: (row, col) => {
       set((state) => {
         state.selectedCell = { row, col };
+      });
+    },
+
+    startSelection: (row, col) => {
+      set((state) => {
+        state.selectionRange = { start: { row, col }, end: { row, col } };
+        state.isSelecting = true;
+        state.selectedCell = { row, col };
+      });
+    },
+
+    updateSelection: (row, col) => {
+      set((state) => {
+        if (state.isSelecting && state.selectionRange) {
+          state.selectionRange.end = { row, col };
+        }
+      });
+    },
+
+    endSelection: () => {
+      set((state) => {
+        state.isSelecting = false;
+      });
+    },
+
+    clearSelection: () => {
+      set((state) => {
+        state.selectionRange = null;
+        state.isSelecting = false;
       });
     },
 

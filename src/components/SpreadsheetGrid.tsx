@@ -25,9 +25,11 @@ interface GridCellProps {
   isEditing: boolean;
   isParameter?: boolean;
   isInFillRange: boolean;
+  isInSelectionRange?: boolean;
   onClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
   onDoubleClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
   onMouseEnter: (e: React.MouseEvent<HTMLTableCellElement>) => void;
+  onMouseDown?: (e: React.MouseEvent<HTMLTableCellElement>) => void;
   onFillHandleMouseDown: (e: React.MouseEvent) => void;
 }
 
@@ -40,9 +42,11 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
   isEditing,
   isParameter,
   isInFillRange,
+  isInSelectionRange,
   onClick,
   onDoubleClick,
   onMouseEnter,
+  onMouseDown,
   onFillHandleMouseDown,
 }) => {
   const cellStyle: React.CSSProperties = useMemo(() => ({
@@ -57,10 +61,11 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
     <td
       data-row={row}
       data-col={col}
-      className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''}`}
+      className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''} ${isInSelectionRange ? 'in-selection' : ''}`}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
+      onMouseDown={onMouseDown}
       style={cellFormat?.backgroundColor ? { backgroundColor: cellFormat.backgroundColor } : undefined}
     >
       {!isEditing && (
@@ -86,6 +91,7 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
     prev.isEditing === next.isEditing &&
     prev.isParameter === next.isParameter &&
     prev.isInFillRange === next.isInFillRange &&
+    prev.isInSelectionRange === next.isInSelectionRange &&
     prev.cellFormat?.bold === next.cellFormat?.bold &&
     prev.cellFormat?.italic === next.cellFormat?.italic &&
     prev.cellFormat?.underline === next.cellFormat?.underline &&
@@ -98,6 +104,8 @@ export const SpreadsheetGrid: React.FC = () => {
   // Split selectors: actions don't trigger re-renders, only data changes do
   const selectedCell = useAccelStore((state) => state.selectedCell);
   const fillRange = useAccelStore((state) => state.fillRange);
+  const selectionRange = useAccelStore((state) => state.selectionRange);
+  const isSelecting = useAccelStore((state) => state.isSelecting);
   const version = useAccelStore((state) => state.version);
 
   // Actions - stable references, don't cause re-renders
@@ -105,6 +113,10 @@ export const SpreadsheetGrid: React.FC = () => {
   const getCell = useAccelStore((state) => state.getCell);
   const getCellObject = useAccelStore((state) => state.getCellObject);
   const selectCell = useAccelStore((state) => state.selectCell);
+  const startSelection = useAccelStore((state) => state.startSelection);
+  const updateSelection = useAccelStore((state) => state.updateSelection);
+  const endSelection = useAccelStore((state) => state.endSelection);
+  const clearSelection = useAccelStore((state) => state.clearSelection);
   const copyCell = useAccelStore((state) => state.copyCell);
   const pasteCell = useAccelStore((state) => state.pasteCell);
   const cutCell = useAccelStore((state) => state.cutCell);
@@ -193,6 +205,47 @@ export const SpreadsheetGrid: React.FC = () => {
       startEditing(row, col);
     }
   }, [selectCell, startEditing]);
+
+  const handleCellMouseDown = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
+    if (e.button !== 0) return; // Only left click
+    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
+    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
+
+    if (row && col) {
+      if (e.shiftKey && selectedCell) {
+        // Shift+click to extend selection
+        startSelection(selectedCell.row, selectedCell.col);
+        updateSelection(row, col);
+        endSelection();
+      } else {
+        // Start new selection
+        startSelection(row, col);
+      }
+    }
+  }, [selectedCell, startSelection, updateSelection, endSelection]);
+
+  const handleCellMouseEnterWhileSelecting = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
+    if (!isSelecting) return;
+
+    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
+    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
+
+    if (row && col) {
+      updateSelection(row, col);
+    }
+  }, [isSelecting, updateSelection]);
+
+  // Global mouse up handler for selection
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isSelecting) {
+        endSelection();
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, [isSelecting, endSelection]);
 
   const handleCellSubmit = useCallback(() => {
     if (editingCell) {
@@ -462,13 +515,22 @@ export const SpreadsheetGrid: React.FC = () => {
   const getCellStateData = useCallback((row: number, col: number) => {
     const isSelected = selectedCell?.row === row && selectedCell?.col === col;
     const isEditing = editingCell?.row === row && editingCell?.col === col;
+
+    // Check if cell is in selection range
+    const isInSelectionRange = selectionRange ? (
+      row >= Math.min(selectionRange.start.row, selectionRange.end.row) &&
+      row <= Math.max(selectionRange.start.row, selectionRange.end.row) &&
+      col >= Math.min(selectionRange.start.col, selectionRange.end.col) &&
+      col <= Math.max(selectionRange.start.col, selectionRange.end.col)
+    ) : false;
+
     const isInFillRange = fillRange && selectedCell ? (
       (selectedCell.row === row && col >= Math.min(selectedCell.col, fillRange.col) && col <= Math.max(selectedCell.col, fillRange.col)) ||
       (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
     ) : false;
 
-    return { isSelected, isEditing, isInFillRange };
-  }, [selectedCell, editingCell, fillRange]);
+    return { isSelected, isEditing, isInSelectionRange, isInFillRange };
+  }, [selectedCell, editingCell, selectionRange, fillRange]);
 
   return (
     <div
@@ -549,9 +611,11 @@ export const SpreadsheetGrid: React.FC = () => {
                       isEditing={cellState.isEditing}
                       isParameter={cellData.isParameter}
                       isInFillRange={cellState.isInFillRange}
+                      isInSelectionRange={cellState.isInSelectionRange}
                       onClick={handleCellClick}
                       onDoubleClick={handleCellDoubleClick}
-                      onMouseEnter={handleCellMouseEnter}
+                      onMouseDown={handleCellMouseDown}
+                      onMouseEnter={isSelecting ? handleCellMouseEnterWhileSelecting : handleCellMouseEnter}
                       onFillHandleMouseDown={handleFillHandleMouseDown}
                     />
                   );

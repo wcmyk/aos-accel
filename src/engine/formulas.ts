@@ -110,6 +110,17 @@ export const FORMULAS: Record<string, FormulaFunction> = {
 
   RADIANS: (degrees) => (toNumber(degrees) * Math.PI) / 180,
 
+  // ===== COORDINATE/GRAPHING FUNCTIONS =====
+  COORD: (...args) => {
+    // Returns an array of coordinates for use in parametric/scatter plots
+    // Usage: =COORD(x, y) for 2D, =COORD(x, y, z) for 3D, etc.
+    // Example: =COORD(A1*COS(t), A1*SIN(t)) for parametric circle
+    if (args.length < 2) {
+      throw new Error('COORD requires at least 2 arguments (x, y)');
+    }
+    return args.map(arg => toNumber(arg));
+  },
+
   // ===== STATISTICAL FUNCTIONS =====
   COUNT: (...args) => {
     return flattenArgs(args).filter(v => typeof v === 'number').length;

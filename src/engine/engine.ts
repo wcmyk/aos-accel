@@ -25,6 +25,9 @@ export class AccelEngine {
   }
 
   addWorksheet(name: string): void {
+    if (this.workbook.sheets.has(name)) {
+      throw new Error(`Worksheet already exists: ${name}`);
+    }
     const worksheet: Worksheet = {
       name,
       cells: new Map(),
@@ -32,6 +35,39 @@ export class AccelEngine {
       namedRanges: new Map(),
     };
     this.workbook.sheets.set(name, worksheet);
+    this.workbook.activeSheet = name;
+  }
+
+  deleteWorksheet(name: string): void {
+    if (!this.workbook.sheets.has(name)) {
+      throw new Error(`Worksheet not found: ${name}`);
+    }
+    if (this.workbook.sheets.size === 1) {
+      throw new Error('Cannot delete the last worksheet');
+    }
+
+    this.workbook.sheets.delete(name);
+
+    if (this.workbook.activeSheet === name) {
+      // Move active sheet to the first available sheet
+      const [firstSheet] = this.workbook.sheets.keys();
+      this.workbook.activeSheet = firstSheet;
+    }
+  }
+
+  setActiveWorksheet(name: string): void {
+    if (!this.workbook.sheets.has(name)) {
+      throw new Error(`Worksheet not found: ${name}`);
+    }
+    this.workbook.activeSheet = name;
+  }
+
+  getSheetNames(): string[] {
+    return Array.from(this.workbook.sheets.keys());
+  }
+
+  getActiveSheetName(): string {
+    return this.workbook.activeSheet;
   }
 
   private seedDemoWorkbook(): void {
@@ -220,7 +256,7 @@ export class AccelEngine {
   addGraph(
     id: string,
     formula: string,
-    type: 'function' | 'parametric' | 'implicit' | 'scatter' = 'function',
+    type: 'function' | 'parametric' | 'implicit' | 'scatter' | 'plot' = 'function',
     sheetName?: string
   ): void {
     const worksheet = this.getWorksheet(sheetName);
@@ -313,9 +349,10 @@ export class AccelEngine {
     }
   }
 
-  private updateGraphs(_cellKey: string, _worksheet: Worksheet): void {
-    // Graphs update automatically because they evaluate AST on-demand
-    // No action needed here, but we could trigger UI updates
+  private updateGraphs(_cellKey: string, worksheet: Worksheet): void {
+    // Graphs update automatically because they evaluate AST on-demand.
+    // Synchronize any embedded PLOT formulas into graph definitions.
+    this.syncPlotGraphs(worksheet);
   }
 
   private cellKey(row: number, col: number): string {
@@ -579,5 +616,44 @@ export class AccelEngine {
    */
   export(): Workbook {
     return this.workbook;
+  }
+
+  /**
+   * Synchronize graphs generated from PLOT formulas embedded in cells.
+   * Each cell that contains a top-level PLOT(...) formula is treated as a graph definition.
+   */
+  private syncPlotGraphs(worksheet: Worksheet): void {
+    const depGraph = new DependencyGraph(worksheet.cells);
+    const plotGraphIds = new Set<string>();
+
+    worksheet.cells.forEach((cell, key) => {
+      if (cell.ast && cell.ast.type === 'function' && cell.ast.name === 'PLOT') {
+        const graphId = `plot-${key}`;
+        plotGraphIds.add(graphId);
+        const existing = worksheet.graphs.get(graphId);
+
+        const graph: GraphDefinition = {
+          id: graphId,
+          type: 'plot',
+          formula: cell.formula || '=PLOT()',
+          ast: cell.ast,
+          color: existing?.color || this.generateColor(),
+          visible: existing?.visible ?? true,
+          domain: existing?.domain,
+          range: existing?.range,
+          cellBindings: depGraph.extractDependencies(cell.ast),
+          dimensions: cell.ast.args.length,
+        };
+
+        worksheet.graphs.set(graphId, graph);
+      }
+    });
+
+    // Remove plot graphs that no longer have a backing cell
+    worksheet.graphs.forEach((graph, id) => {
+      if (graph.type === 'plot' && !plotGraphIds.has(id)) {
+        worksheet.graphs.delete(id);
+      }
+    });
   }
 }

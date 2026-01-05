@@ -61,7 +61,7 @@ export interface CellFormat {
 
 export interface GraphDefinition {
   id: string;
-  type: 'function' | 'parametric' | 'implicit' | 'scatter';
+  type: 'function' | 'parametric' | 'implicit' | 'scatter' | 'plot';
   formula: string;
   ast: ASTNode;
   color: string;
@@ -69,6 +69,7 @@ export interface GraphDefinition {
   domain?: { min: number; max: number };
   range?: { min: number; max: number };
   cellBindings: Set<string>;
+  dimensions?: number;
 }
 
 export interface Worksheet {

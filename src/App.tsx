@@ -6,9 +6,13 @@
 import { SpreadsheetGrid } from './components/SpreadsheetGrid';
 import { Ribbon } from './components/Ribbon';
 import { GraphCanvas } from './components/GraphCanvas';
+import { SheetTabs } from './components/SheetTabs';
+import { useAccelStore } from './store/accel-store';
 import './App.css';
 
 function App() {
+  const activeSheet = useAccelStore((state) => state.activeSheet);
+
   return (
     <div className="excel-shell">
       <div className="title-bar">
@@ -42,9 +46,11 @@ function App() {
         </div>
       </div>
 
+      <SheetTabs />
+
       <footer className="status-bar">
         <span>Ready</span>
-        <span>Sheet1</span>
+        <span>{activeSheet}</span>
         <span>Average: - | Count: - | Sum: -</span>
       </footer>
     </div>

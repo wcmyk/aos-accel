@@ -85,6 +85,13 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   },
 
+  /**
+   * PLOT helper
+   * Returns a placeholder string so cells with PLOT formulas do not error.
+   * Graph rendering logic reads the AST directly to build plots.
+   */
+  PLOT: (..._args) => 'PLOT',
+
   // ===== TRIGONOMETRIC FUNCTIONS =====
   SIN: (value) => Math.sin(toNumber(value)),
 

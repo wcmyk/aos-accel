@@ -5,12 +5,10 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
-import { GraphRenderer } from '../engine/graph-renderer';
-
 export const GraphCanvas: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
-  const { engine, getGraphs, getGraphRenderer } = useAccelStore();
+  const { getGraphs, getGraphRenderer } = useAccelStore();
   const [viewport, setViewport] = useState({
     xMin: -10,
     xMax: 10,
@@ -18,6 +16,21 @@ export const GraphCanvas: React.FC = React.memo(() => {
     yMax: 10,
   });
   const [canvasSize, setCanvasSize] = useState({ width: 900, height: 540 });
+  const [axisSelection, setAxisSelection] = useState({ xIndex: 0, yIndex: 1 });
+
+  const graphs = getGraphs();
+  const maxDimensions = graphs
+    .filter((g) => g.type === 'plot')
+    .reduce((max, g) => Math.max(max, g.dimensions || 2), 2);
+
+  useEffect(() => {
+    setAxisSelection((prev) => {
+      const cappedX = Math.min(prev.xIndex, Math.max(0, maxDimensions - 1));
+      const cappedY = Math.min(prev.yIndex, Math.max(0, maxDimensions - 1));
+      if (cappedX === prev.xIndex && cappedY === prev.yIndex) return prev;
+      return { xIndex: cappedX, yIndex: cappedY };
+    });
+  }, [maxDimensions]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -137,7 +150,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
 
       // Get cached renderer from store
       const graphRenderer = getGraphRenderer();
-      const graphsData = graphRenderer.renderAll(1000);
+      const graphsData = graphRenderer.renderAll(1000, axisSelection);
 
       for (const graphData of graphsData) {
         if (!graphData.visible || graphData.points.length === 0) continue;
@@ -168,7 +181,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [viewport, getGraphs, getGraphRenderer, canvasSize]);
+  }, [viewport, getGraphRenderer, canvasSize, axisSelection]);
 
   const handleZoom = (delta: number) => {
     setViewport((prev) => {
@@ -204,6 +217,32 @@ export const GraphCanvas: React.FC = React.memo(() => {
           <div className="chip">X: [{viewport.xMin.toFixed(1)}, {viewport.xMax.toFixed(1)}]</div>
           <div className="chip">Y: [{viewport.yMin.toFixed(1)}, {viewport.yMax.toFixed(1)}]</div>
         </div>
+        {maxDimensions > 1 && (
+          <div className="axis-picker">
+            <label>
+              Horizontal Axis
+              <select
+                value={axisSelection.xIndex}
+                onChange={(e) => setAxisSelection({ ...axisSelection, xIndex: Number(e.target.value) })}
+              >
+                {Array.from({ length: maxDimensions }, (_, i) => (
+                  <option key={`x-${i}`} value={i}>Axis {i + 1}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Vertical Axis
+              <select
+                value={axisSelection.yIndex}
+                onChange={(e) => setAxisSelection({ ...axisSelection, yIndex: Number(e.target.value) })}
+              >
+                {Array.from({ length: maxDimensions }, (_, i) => (
+                  <option key={`y-${i}`} value={i}>Axis {i + 1}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
         <div className="control-actions">
           <button className="btn" onClick={() => handleZoom(1)}>Zoom In</button>
           <button className="btn ghost" onClick={() => handleZoom(-1)}>Zoom Out</button>

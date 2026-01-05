@@ -589,7 +589,8 @@ body {
   height: 24px;
   text-align: left;
   padding: 0.15rem 0.35rem;
-  transition: background 120ms ease;
+  /* Removed transition to prevent lag during theme changes */
+  contain: layout style paint;
 }
 
 .spreadsheet-grid .row-header,
@@ -618,7 +619,8 @@ body {
   outline: 2px solid var(--cell-selected);
   outline-offset: -2px;
   background: var(--cell-bg);
-  filter: brightness(0.95);
+  /* Replaced expensive filter with opacity for better performance */
+  opacity: 0.95;
 }
 
 .cell.parameter {
@@ -847,4 +849,20 @@ body {
 
 .spreadsheet-container:focus {
   outline: none;
+}
+
+/* Performance: Disable all transitions during theme changes */
+body.theme-transitioning * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Performance: Optimize grid rendering */
+.grid-wrapper {
+  contain: layout style paint;
+  will-change: scroll-position;
+}
+
+.spreadsheet-grid tbody {
+  contain: layout style;
 }

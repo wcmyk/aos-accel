@@ -3,8 +3,8 @@
  * Tabbed interface for all spreadsheet operations
  */
 
-import React, { useState, useCallback } from 'react';
-import { useAccelStore } from '../store/accel-store';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Theme, useAccelStore } from '../store/accel-store';
 import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
 import { IconButton } from './Icons';
@@ -43,6 +43,27 @@ export const Ribbon: React.FC = () => {
       });
     });
   }, []);
+
+  const handleThemeChange = useCallback((newTheme: Theme) => {
+    if (newTheme === localTheme) return;
+    applyTheme(newTheme);
+  }, [applyTheme, localTheme]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const safeStoredTheme = (): Theme | null => {
+      try {
+        return (typeof window !== 'undefined' && window.localStorage.getItem('accel-theme')) as Theme | null;
+      } catch {
+        return null;
+      }
+    };
+
+    const storedTheme = safeStoredTheme();
+    const domTheme = document.documentElement.getAttribute('data-theme') as Theme | null;
+    applyTheme(storedTheme || domTheme || 'default');
+  }, [applyTheme]);
 
   const renderHomeTab = () => (
     <>
@@ -456,7 +477,7 @@ export const Ribbon: React.FC = () => {
           <select
             className="ribbon-input"
             value={localTheme}
-            onChange={(e) => handleThemeChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleThemeChange(e.target.value as Theme)}
             style={{ width: '180px' }}
           >
             <option value="default">Default</option>

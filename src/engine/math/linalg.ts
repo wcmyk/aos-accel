@@ -69,6 +69,10 @@ export function vectorNorm(v: Vector, p: number = 2): number {
   );
 }
 
+export function magnitude(v: Vector): number {
+  return vectorNorm(v, 2);
+}
+
 export function normalize(v: Vector): Vector {
   const norm = vectorNorm(v, 2);
   if (norm === 0) {

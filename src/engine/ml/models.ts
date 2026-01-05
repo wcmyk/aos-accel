@@ -54,7 +54,6 @@ export class LinearRegression implements Model {
    * Fit using normal equation: w = (X^T X + λI)^-1 X^T y
    */
   fit(X: Matrix, y: Vector): TrainingHistory {
-    const n = X.rows;
     const d = X.cols;
 
     // Add bias column (all 1s)
@@ -170,7 +169,6 @@ export class LogisticRegression implements Model {
       verbose = false,
     } = options;
 
-    const n = X.rows;
     const d = X.cols;
 
     // Initialize weights
@@ -311,10 +309,8 @@ export interface Layer {
 
 export class NeuralNetwork implements Model {
   private layers: Layer[] = [];
-  private architecture: number[];
 
   constructor(architecture: number[], activation: ActivationFunction = 'relu') {
-    this.architecture = architecture;
 
     // Initialize layers
     for (let i = 0; i < architecture.length - 1; i++) {

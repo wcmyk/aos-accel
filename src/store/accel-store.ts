@@ -17,13 +17,43 @@ interface ClipboardCell {
 }
 
 /**
- * Calculate the fill value based on the source value and step
- * Handles numbers, text with numbers, and formulas
+ * Adjust cell references in formulas for fill operations
+ * Example: A1 → A2, A3, etc. when filling down
  */
-function calculateFillValue(sourceValue: CellValue, step: number, sourceFormula?: string): string | number {
-  // If there's a formula, return it as-is (Excel would adjust references, but we'll keep it simple)
+function adjustFormulaReferences(formula: string, rowOffset: number, colOffset: number): string {
+  // Match cell references like A1, B2, $A$1, A$1, $A1
+  return formula.replace(/(\$?)([A-Z]+)(\$?)(\d+)/g, (match, colAbs, col, rowAbs, row) => {
+    const rowNum = parseInt(row, 10);
+    const newRow = rowAbs ? rowNum : rowNum + rowOffset;
+
+    // Convert column letters to number, adjust, and convert back
+    let colNum = 0;
+    for (let i = 0; i < col.length; i++) {
+      colNum = colNum * 26 + (col.charCodeAt(i) - 64);
+    }
+    const newColNum = colAbs ? colNum : colNum + colOffset;
+
+    // Convert number back to letters
+    let newCol = '';
+    let n = newColNum;
+    while (n > 0) {
+      const remainder = (n - 1) % 26;
+      newCol = String.fromCharCode(65 + remainder) + newCol;
+      n = Math.floor((n - 1) / 26);
+    }
+
+    return `${colAbs}${newCol}${rowAbs}${newRow}`;
+  });
+}
+
+/**
+ * Calculate the fill value based on the source value and step
+ * Handles numbers, text with numbers, formulas with relative references, dates, and patterns
+ */
+function calculateFillValue(sourceValue: CellValue, step: number, sourceFormula?: string, isVertical: boolean = true): string | number {
+  // Handle formulas with relative reference adjustment
   if (sourceFormula) {
-    return sourceFormula;
+    return adjustFormulaReferences(sourceFormula, isVertical ? step : 0, isVertical ? 0 : step);
   }
 
   // If it's a number, increment it
@@ -31,8 +61,39 @@ function calculateFillValue(sourceValue: CellValue, step: number, sourceFormula?
     return sourceValue + step;
   }
 
-  // If it's a string, check if it ends with a number
+  // If it's a string, try various patterns
   if (typeof sourceValue === 'string') {
+    // Check for day names
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayIndex = days.findIndex(d => d.toLowerCase() === sourceValue.toLowerCase());
+    if (dayIndex !== -1) {
+      return days[(dayIndex + step) % 7];
+    }
+
+    // Check for short day names
+    const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const shortDayIndex = shortDays.findIndex(d => d.toLowerCase() === sourceValue.toLowerCase());
+    if (shortDayIndex !== -1) {
+      return shortDays[(shortDayIndex + step) % 7];
+    }
+
+    // Check for month names
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthIndex = months.findIndex(m => m.toLowerCase() === sourceValue.toLowerCase());
+    if (monthIndex !== -1) {
+      return months[(monthIndex + step) % 12];
+    }
+
+    // Check for short month names
+    const shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const shortMonthIndex = shortMonths.findIndex(m => m.toLowerCase() === sourceValue.toLowerCase());
+    if (shortMonthIndex !== -1) {
+      return shortMonths[(shortMonthIndex + step) % 12];
+    }
+
+    // Check for text ending with number (e.g., "Item1" → "Item2")
     const match = sourceValue.match(/^(.*?)(\d+)$/);
     if (match) {
       const prefix = match[1];
@@ -211,7 +272,7 @@ export const useAccelStore = create<AccelState>()(
 
         for (let i = 1; i <= steps; i++) {
           const targetRow = startRow + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula);
+          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula, true);
           engine.setCell(targetRow, startCol, fillValue);
         }
       } else if (isHorizontal) {
@@ -221,7 +282,7 @@ export const useAccelStore = create<AccelState>()(
 
         for (let i = 1; i <= steps; i++) {
           const targetCol = startCol + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula);
+          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula, false);
           engine.setCell(startRow, targetCol, fillValue);
         }
       }

@@ -1,9 +1,21 @@
 /**
  * Excel formula library
- * Implements ~350-400 Excel functions
+ * Implements ~350-400 Excel functions + Scientific Computing
  */
 
 import { CellValue } from './types';
+
+// Scientific Computing Imports
+import * as Mechanics from './physics/mechanics';
+import * as Quantum from './physics/quantum';
+import * as Waves from './physics/waves';
+import * as Thermo from './physics/thermodynamics';
+import * as LinAlg from './math/linalg';
+import * as Calculus from './math/calculus';
+import * as Stats from './stats/distributions';
+import * as Inference from './stats/inference';
+import * as Models from './ml/models';
+import { createVector, createMatrix } from './math/linalg';
 
 type FormulaFunction = (...args: CellValue[]) => CellValue;
 
@@ -696,6 +708,396 @@ export const FORMULAS: Record<string, FormulaFunction> = {
 
     return matrixInverse(mat);
   },
+
+  // ===== PHYSICS: MECHANICS =====
+
+  /**
+   * PROJECTILE - Calculate projectile motion
+   * Args: v0 (initial velocity), angle (radians), [g=9.81], [h0=0]
+   * Returns: Array [maxHeight, range, flightTime]
+   */
+  PROJECTILE: (v0, angle, g = 9.81, h0 = 0) => {
+    const result = Mechanics.projectileMotion(
+      toNumber(v0),
+      toNumber(angle),
+      toNumber(g),
+      toNumber(h0)
+    );
+    return [result.maxHeight, result.range, result.flightTime];
+  },
+
+  /**
+   * KINETIC_ENERGY - Calculate kinetic energy: KE = 1/2 mv²
+   * Args: mass, velocity (can be vector array)
+   */
+  KINETIC_ENERGY: (mass, ...velocityComponents) => {
+    const m = toNumber(mass);
+    const vData = velocityComponents.map(toNumber);
+    const v = createVector(vData);
+    return Mechanics.kineticEnergy(m, v);
+  },
+
+  /**
+   * POTENTIAL_ENERGY - Calculate gravitational potential energy: PE = mgh
+   * Args: mass, height, [g=9.81]
+   */
+  POTENTIAL_ENERGY: (mass, height, g = 9.81) => {
+    return Mechanics.gravitationalPotentialEnergy(
+      toNumber(mass),
+      toNumber(height),
+      toNumber(g)
+    );
+  },
+
+  /**
+   * SPRING_FORCE - Calculate spring force: F = -kx
+   * Args: spring_constant, displacement
+   */
+  SPRING_FORCE: (k, x) => {
+    return Mechanics.springForce(toNumber(k), toNumber(x));
+  },
+
+  /**
+   * PENDULUM_PERIOD - Calculate period of simple pendulum: T = 2π√(L/g)
+   * Args: length, [g=9.81]
+   */
+  PENDULUM_PERIOD: (L, g = 9.81) => {
+    const omega = Math.sqrt(toNumber(g) / toNumber(L));
+    return 2 * Math.PI / omega;
+  },
+
+  /**
+   * ANGULAR_VELOCITY - Calculate angular velocity: ω = v/r
+   * Args: velocity, radius
+   */
+  ANGULAR_VELOCITY: (v, r) => {
+    return Mechanics.angularVelocity(toNumber(v), toNumber(r));
+  },
+
+  // ===== PHYSICS: QUANTUM MECHANICS =====
+
+  /**
+   * PARTICLE_IN_BOX - Calculate energy of particle in infinite square well
+   * Args: n (quantum number), L (box length), [mass=electron mass]
+   * Returns: energy in Joules
+   */
+  PARTICLE_IN_BOX: (n, L, mass = Quantum.m_e) => {
+    const result = Quantum.particleInBox(
+      Math.floor(toNumber(n)),
+      toNumber(L),
+      toNumber(mass)
+    );
+    return result.energy;
+  },
+
+  /**
+   * QUANTUM_HO - Calculate energy of quantum harmonic oscillator
+   * Args: n (quantum number), omega (angular frequency), [mass=electron mass]
+   * Returns: energy = ħω(n + 1/2)
+   */
+  QUANTUM_HO: (n, omega, mass = Quantum.m_e) => {
+    const result = Quantum.quantumHarmonicOscillator(
+      Math.floor(toNumber(n)),
+      toNumber(omega),
+      toNumber(mass)
+    );
+    return result.energy;
+  },
+
+  /**
+   * DE_BROGLIE - Calculate de Broglie wavelength: λ = h/p
+   * Args: momentum
+   */
+  DE_BROGLIE: (momentum) => {
+    return Quantum.deBroglieWavelength(toNumber(momentum));
+  },
+
+  /**
+   * PHOTOELECTRIC - Calculate photoelectric effect
+   * Args: wavelength (m), work_function (J)
+   * Returns: Array [kineticEnergy, stoppingVoltage, canEject]
+   */
+  PHOTOELECTRIC: (wavelength, workFunction) => {
+    const result = Quantum.photoelectricEffect(
+      toNumber(wavelength),
+      toNumber(workFunction)
+    );
+    return [result.kineticEnergy, result.stoppingVoltage, result.canEject ? 1 : 0];
+  },
+
+  /**
+   * BOHR_ENERGY - Calculate energy of electron in Bohr model
+   * Args: n (principal quantum number)
+   * Returns: energy in Joules (negative = bound state)
+   */
+  BOHR_ENERGY: (n) => {
+    const result = Quantum.bohrModel(Math.floor(toNumber(n)));
+    return result.energy;
+  },
+
+  /**
+   * PLANCK_CONSTANT - Returns Planck's constant in J·s
+   */
+  PLANCK: () => Quantum.h,
+
+  /**
+   * HBAR - Returns reduced Planck's constant in J·s
+   */
+  HBAR: () => Quantum.hbar,
+
+  // ===== MATH: CALCULUS =====
+
+  /**
+   * DERIVATIVE - Numerical derivative at a point
+   * Args: formula_reference, x_value, [h=1e-5]
+   * Note: formula_reference should be a cell with a formula
+   */
+  DERIVATIVE: (fx, x, h = 1e-5) => {
+    // Simple numerical derivative for scalar values
+    // In practice, this would need to evaluate a formula at different points
+    return '#N/A'; // Placeholder - requires formula evaluation context
+  },
+
+  /**
+   * INTEGRATE - Numerical integration using Simpson's rule
+   * Args: start, end, num_points, ...values
+   * Note: values should be an array of function values at equally spaced points
+   */
+  INTEGRATE: (a, b, n, ...values) => {
+    const start = toNumber(a);
+    const end = toNumber(b);
+    const points = toNumber(n);
+
+    if (values.length === 0) return 0;
+
+    const h = (end - start) / (points - 1);
+    const vals = flattenArgs(values).map(toNumber);
+
+    // Simpson's rule
+    let sum = vals[0] + vals[vals.length - 1];
+    for (let i = 1; i < vals.length - 1; i++) {
+      sum += (i % 2 === 0 ? 2 : 4) * vals[i];
+    }
+
+    return (h / 3) * sum;
+  },
+
+  // ===== MATH: LINEAR ALGEBRA =====
+
+  /**
+   * DOT_PRODUCT - Calculate dot product of two vectors
+   * Args: vector1, vector2 (arrays or ranges)
+   */
+  DOT_PRODUCT: (...args) => {
+    const values = flattenArgs(args).map(toNumber);
+    const mid = Math.floor(values.length / 2);
+    const v1 = createVector(values.slice(0, mid));
+    const v2 = createVector(values.slice(mid));
+    return LinAlg.dotProduct(v1, v2);
+  },
+
+  /**
+   * VECTOR_NORM - Calculate norm (magnitude) of a vector
+   * Args: ...components or array
+   */
+  VECTOR_NORM: (...args) => {
+    const values = flattenArgs(args).map(toNumber);
+    const v = createVector(values);
+    return LinAlg.magnitude(v);
+  },
+
+  /**
+   * MATRIX_RANK - Calculate rank of a matrix
+   * Args: matrix (2D array)
+   */
+  MATRIX_RANK: (matrix) => {
+    const mat = toMatrix(matrix);
+    if (!mat || mat.length === 0) return '#VALUE!';
+
+    const m = createMatrix(mat);
+    return LinAlg.rank(m);
+  },
+
+  /**
+   * MATRIX_TRACE - Calculate trace (sum of diagonal) of a matrix
+   * Args: matrix (square 2D array)
+   */
+  MATRIX_TRACE: (matrix) => {
+    const mat = toMatrix(matrix);
+    if (!mat || mat.length === 0) return '#VALUE!';
+
+    const m = createMatrix(mat);
+    return LinAlg.trace(m);
+  },
+
+  /**
+   * CONDITION_NUMBER - Calculate condition number of a matrix
+   * Args: matrix (square 2D array)
+   */
+  CONDITION_NUMBER: (matrix) => {
+    const mat = toMatrix(matrix);
+    if (!mat || mat.length === 0) return '#VALUE!';
+
+    const m = createMatrix(mat);
+    try {
+      return LinAlg.conditionNumber(m);
+    } catch (e) {
+      return '#NUM!';
+    }
+  },
+
+  // ===== STATISTICS: DISTRIBUTIONS =====
+
+  /**
+   * NORMAL_PDF - Normal distribution probability density function
+   * Args: x, mean, std_dev
+   */
+  NORMAL_PDF: (x, mu, sigma) => {
+    const dist = new Stats.NormalDistribution(toNumber(mu), toNumber(sigma));
+    return dist.pdf(toNumber(x));
+  },
+
+  /**
+   * NORMAL_CDF - Normal distribution cumulative distribution function
+   * Args: x, mean, std_dev
+   */
+  NORMAL_CDF: (x, mu, sigma) => {
+    const dist = new Stats.NormalDistribution(toNumber(mu), toNumber(sigma));
+    return dist.cdf(toNumber(x));
+  },
+
+  /**
+   * EXPONENTIAL_PDF - Exponential distribution PDF
+   * Args: x, lambda
+   */
+  EXPONENTIAL_PDF: (x, lambda) => {
+    const dist = new Stats.ExponentialDistribution(toNumber(lambda));
+    return dist.pdf(toNumber(x));
+  },
+
+  /**
+   * UNIFORM_PDF - Uniform distribution PDF
+   * Args: x, min, max
+   */
+  UNIFORM_PDF: (x, min, max) => {
+    const dist = new Stats.UniformDistribution(toNumber(min), toNumber(max));
+    return dist.pdf(toNumber(x));
+  },
+
+  // ===== STATISTICS: INFERENCE =====
+
+  /**
+   * T_TEST - Perform one-sample t-test
+   * Args: hypothesized_mean, alpha, ...data_values
+   * Returns: Array [t-statistic, p-value, significant (1/0)]
+   */
+  T_TEST: (mu0, alpha, ...dataValues) => {
+    const values = flattenArgs(dataValues).map(toNumber);
+    const data = createVector(values);
+
+    try {
+      const result = Inference.oneSampleTTest(data, toNumber(mu0), toNumber(alpha));
+      return [result.statistic, result.pValue, result.significant ? 1 : 0];
+    } catch (e) {
+      return '#NUM!';
+    }
+  },
+
+  /**
+   * T_TEST_TWO - Perform two-sample t-test
+   * Args: alpha, ...data_values (first half = group1, second half = group2)
+   * Returns: Array [t-statistic, p-value, significant (1/0)]
+   */
+  T_TEST_TWO: (alpha, ...dataValues) => {
+    const values = flattenArgs(dataValues).map(toNumber);
+    const mid = Math.floor(values.length / 2);
+    const data1 = createVector(values.slice(0, mid));
+    const data2 = createVector(values.slice(mid));
+
+    try {
+      const result = Inference.twoSampleTTest(data1, data2, toNumber(alpha));
+      return [result.statistic, result.pValue, result.significant ? 1 : 0];
+    } catch (e) {
+      return '#NUM!';
+    }
+  },
+
+  /**
+   * CONFIDENCE_INTERVAL - Calculate confidence interval for mean
+   * Args: confidence_level, ...data_values
+   * Returns: Array [lower_bound, upper_bound]
+   */
+  CONFIDENCE_INTERVAL: (confidence, ...dataValues) => {
+    const values = flattenArgs(dataValues).map(toNumber);
+    const data = createVector(values);
+
+    try {
+      const result = Inference.meanConfidenceInterval(data, toNumber(confidence));
+      return [result.lower, result.upper];
+    } catch (e) {
+      return '#NUM!';
+    }
+  },
+
+  // ===== MACHINE LEARNING =====
+
+  /**
+   * LINEAR_REGRESSION - Perform linear regression
+   * Args: y_values, x_values (same length)
+   * Returns: Array [slope, intercept, r_squared]
+   * Note: Simplified for single variable regression
+   */
+  LINEAR_REGRESSION: (...args) => {
+    const values = flattenArgs(args).map(toNumber);
+    const mid = Math.floor(values.length / 2);
+    const yData = values.slice(0, mid);
+    const xData = values.slice(mid);
+
+    if (yData.length !== xData.length) return '#VALUE!';
+
+    const n = yData.length;
+    const sumX = xData.reduce((a, b) => a + b, 0);
+    const sumY = yData.reduce((a, b) => a + b, 0);
+    const sumXY = xData.reduce((sum, x, i) => sum + x * yData[i], 0);
+    const sumX2 = xData.reduce((sum, x) => sum + x * x, 0);
+    const sumY2 = yData.reduce((sum, y) => sum + y * y, 0);
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    // Calculate R²
+    const meanY = sumY / n;
+    const ssTotal = sumY2 - n * meanY * meanY;
+    const ssRes = yData.reduce((sum, y, i) => {
+      const pred = slope * xData[i] + intercept;
+      return sum + (y - pred) ** 2;
+    }, 0);
+    const rSquared = 1 - ssRes / ssTotal;
+
+    return [slope, intercept, rSquared];
+  },
+
+  // ===== PHYSICAL CONSTANTS =====
+
+  /**
+   * SPEED_OF_LIGHT - Speed of light in m/s
+   */
+  SPEED_OF_LIGHT: () => Quantum.c,
+
+  /**
+   * ELECTRON_MASS - Electron rest mass in kg
+   */
+  ELECTRON_MASS: () => Quantum.m_e,
+
+  /**
+   * ELEMENTARY_CHARGE - Elementary charge in Coulombs
+   */
+  ELEMENTARY_CHARGE: () => Quantum.e,
+
+  /**
+   * BOLTZMANN - Boltzmann constant in J/K
+   */
+  BOLTZMANN: () => Quantum.k_B,
 };
 
 // ===== HELPER FUNCTIONS =====

@@ -15,6 +15,7 @@
   --border-color: #d9d9d9;
   --cell-bg: #ffffff;
   --cell-border: #e0e0e0;
+  --cell-border-strong: #cfd3d7;
   --cell-selected: #217346;
   --ribbon-bg: #f0f0f0;
   --button-bg: #ffffff;
@@ -36,6 +37,7 @@
   --border-color: #f0e5c8;
   --cell-bg: #fffef7;
   --cell-border: #f5edd5;
+  --cell-border-strong: #e0cfa0;
   --cell-selected: #d4a017;
   --ribbon-bg: #fff9db;
   --button-bg: #fff9db;
@@ -57,6 +59,7 @@
   --border-color: #b8dce8;
   --cell-bg: #f5fbfd;
   --cell-border: #d5eef5;
+  --cell-border-strong: #b6d6e4;
   --cell-selected: #2196f3;
   --ribbon-bg: #dbeef5;
   --button-bg: #dbeef5;
@@ -78,6 +81,7 @@
   --border-color: #d8cdc0;
   --cell-bg: #fdfcfb;
   --cell-border: #ede7df;
+  --cell-border-strong: #d1c6b8;
   --cell-selected: #8b6f47;
   --ribbon-bg: #ece4dc;
   --button-bg: #ece4dc;
@@ -99,6 +103,7 @@
   --border-color: #f0b8b8;
   --cell-bg: #fff5f5;
   --cell-border: #ffd5d5;
+  --cell-border-strong: #e0b8b8;
   --cell-selected: #e53935;
   --ribbon-bg: #ffd5d5;
   --button-bg: #ffd5d5;
@@ -120,6 +125,7 @@
   --border-color: #f0b8d8;
   --cell-bg: #fff5fb;
   --cell-border: #ffd5ed;
+  --cell-border-strong: #e0b5d6;
   --cell-selected: #e91e63;
   --ribbon-bg: #ffd5ed;
   --button-bg: #ffd5ed;
@@ -141,6 +147,7 @@
   --border-color: #b8e8b8;
   --cell-bg: #f5fdf5;
   --cell-border: #d5f5d5;
+  --cell-border-strong: #b6d6b8;
   --cell-selected: #4caf50;
   --ribbon-bg: #d5f5d5;
   --button-bg: #d5f5d5;
@@ -162,6 +169,7 @@
   --border-color: #d0b8e8;
   --cell-bg: #f8f5fd;
   --cell-border: #e5d5f5;
+  --cell-border-strong: #c8b8e0;
   --cell-selected: #9c27b0;
   --ribbon-bg: #e5d5f5;
   --button-bg: #e5d5f5;
@@ -604,6 +612,8 @@ body {
 .spreadsheet-grid th,
 .spreadsheet-grid td {
   border: 1px solid var(--cell-border);
+  border-right-color: var(--cell-border-strong);
+  border-left-color: var(--cell-border-strong);
   width: 120px;
   height: 24px;
   text-align: left;

@@ -111,6 +111,7 @@ interface AccelState {
   selectedCell: { row: number; col: number } | null;
   clipboard: ClipboardCell | null;
   fillRange: { row: number; col: number } | null;
+  version: number; // Version counter to force re-renders
 
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
@@ -162,13 +163,13 @@ export const useAccelStore = create<AccelState>()(
     selectedCell: null,
     clipboard: null,
     fillRange: null,
+    version: 0,
 
     setCell: (row, col, value) => {
       const { engine } = get();
       engine.setCell(row, col, value);
       set((state) => {
-        // Trigger re-render by updating reference
-        state.engine = engine;
+        state.version = (state.version || 0) + 1;
       });
     },
 
@@ -272,7 +273,7 @@ export const useAccelStore = create<AccelState>()(
 
         for (let i = 1; i <= steps; i++) {
           const targetRow = startRow + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula, true);
+          const fillValue = calculateFillValue(sourceValue, i * direction, sourceCell?.formula, true);
           engine.setCell(targetRow, startCol, fillValue);
         }
       } else if (isHorizontal) {
@@ -282,14 +283,15 @@ export const useAccelStore = create<AccelState>()(
 
         for (let i = 1; i <= steps; i++) {
           const targetCol = startCol + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i, sourceCell?.formula, false);
+          const fillValue = calculateFillValue(sourceValue, i * direction, sourceCell?.formula, false);
           engine.setCell(startRow, targetCol, fillValue);
         }
       }
 
+      // Force state update by creating new reference
       set((state) => {
-        state.engine = engine;
         state.fillRange = null;
+        state.version = (state.version || 0) + 1; // Increment version to force update
       });
     },
 

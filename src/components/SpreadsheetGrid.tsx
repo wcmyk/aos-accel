@@ -95,33 +95,22 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
 });
 
 export const SpreadsheetGrid: React.FC = () => {
-  const {
-    setCell,
-    getCell,
-    getCellObject,
-    selectCell,
-    selectedCell,
-    copyCell,
-    pasteCell,
-    cutCell,
-    fillRange,
-    setFillRange,
-    clearFillRange,
-    executeFill,
-  } = useAccelStore(useShallow((state) => ({
-    setCell: state.setCell,
-    getCell: state.getCell,
-    getCellObject: state.getCellObject,
-    selectCell: state.selectCell,
-    selectedCell: state.selectedCell,
-    copyCell: state.copyCell,
-    pasteCell: state.pasteCell,
-    cutCell: state.cutCell,
-    fillRange: state.fillRange,
-    setFillRange: state.setFillRange,
-    clearFillRange: state.clearFillRange,
-    executeFill: state.executeFill,
-  })));
+  // Split selectors: actions don't trigger re-renders, only data changes do
+  const selectedCell = useAccelStore((state) => state.selectedCell);
+  const fillRange = useAccelStore((state) => state.fillRange);
+  const version = useAccelStore((state) => state.version);
+
+  // Actions - stable references, don't cause re-renders
+  const setCell = useAccelStore((state) => state.setCell);
+  const getCell = useAccelStore((state) => state.getCell);
+  const getCellObject = useAccelStore((state) => state.getCellObject);
+  const selectCell = useAccelStore((state) => state.selectCell);
+  const copyCell = useAccelStore((state) => state.copyCell);
+  const pasteCell = useAccelStore((state) => state.pasteCell);
+  const cutCell = useAccelStore((state) => state.cutCell);
+  const setFillRange = useAccelStore((state) => state.setFillRange);
+  const clearFillRange = useAccelStore((state) => state.clearFillRange);
+  const executeFill = useAccelStore((state) => state.executeFill);
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isDraggingFill, setIsDraggingFill] = useState(false);
@@ -457,6 +446,7 @@ export const SpreadsheetGrid: React.FC = () => {
   }, [editingCell, editValue, selectedCellData]);
 
   // Helper function to get cell state (computed on-demand, not stored)
+  // Memoized with version to only update when cells actually change
   const getCellDisplayData = useCallback((row: number, col: number) => {
     const cellObj = getCellObject(row, col);
     const value = getCell(row, col);
@@ -466,7 +456,7 @@ export const SpreadsheetGrid: React.FC = () => {
       isParameter: cellObj?.isParameter || false,
       format: cellObj?.format,
     };
-  }, [getCellObject, getCell, formatCellValue]);
+  }, [getCellObject, getCell, formatCellValue, version]);
 
   // Helper function to get cell state (computed on-demand, not stored)
   const getCellStateData = useCallback((row: number, col: number) => {

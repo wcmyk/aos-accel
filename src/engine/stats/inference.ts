@@ -9,6 +9,7 @@
 
 import { Vector } from '../types-advanced';
 import { mean, variance, standardDeviation } from './distributions';
+import { createVector } from '../math/linalg';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // STATISTICAL DISTRIBUTIONS (Critical Values)
@@ -223,7 +224,7 @@ export function pairedTTest(
   }
 
   const differences = data1.data.map((x, i) => x - data2.data[i]);
-  const diffVector: Vector = { data: differences, length: differences.length };
+  const diffVector = createVector(differences);
 
   return oneSampleTTest(diffVector, 0, alpha);
 }

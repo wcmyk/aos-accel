@@ -11,13 +11,13 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   // ===== MATH FUNCTIONS =====
   SUM: (...args) => {
     const values = flattenArgs(args);
-    return values.reduce((sum, val) => sum + toNumber(val), 0);
+    return values.reduce((sum: number, val) => sum + toNumber(val), 0);
   },
 
   AVERAGE: (...args) => {
     const values = flattenArgs(args);
     if (values.length === 0) return 0;
-    return values.reduce((sum, val) => sum + toNumber(val), 0) / values.length;
+    return values.reduce((sum: number, val) => sum + toNumber(val), 0) / values.length;
   },
 
   MIN: (...args) => {
@@ -356,7 +356,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   },
 
   IRR: (values, guess = 0.1) => {
-    const vals = flattenArgs(values).map(toNumber);
+    const vals = flattenArgs([values]).map(toNumber);
 
     // Newton-Raphson method
     let rate = toNumber(guess);

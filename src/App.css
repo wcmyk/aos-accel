@@ -714,6 +714,7 @@ body {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .axis-picker label {
@@ -745,9 +746,16 @@ body {
   color: var(--text-primary);
 }
 
+.chip.emphasis {
+  border-color: #1f8ceb;
+  color: #1f8ceb;
+  background: rgba(31, 140, 235, 0.12);
+}
+
 .control-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .graph-canvas-shell {

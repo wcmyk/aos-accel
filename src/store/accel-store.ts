@@ -22,8 +22,10 @@ interface ClipboardCell {
  * Example: A1 → A2, A3, etc. when filling down
  */
 function adjustFormulaReferences(formula: string, rowOffset: number, colOffset: number): string {
+  const referenceRegex = /(\$?)([A-Z]+)(\$?)(\d+)/g;
+
   // Match cell references like A1, B2, $A$1, A$1, $A1
-  return formula.replace(/(\$?)([A-Z]+)(\$?)(\d+)/g, (match, colAbs, col, rowAbs, row) => {
+  const replaceReference = (_match: string, colAbs: string, col: string, rowAbs: string, row: string) => {
     const rowNum = parseInt(row, 10);
     const newRow = rowAbs ? rowNum : rowNum + rowOffset;
 
@@ -44,7 +46,41 @@ function adjustFormulaReferences(formula: string, rowOffset: number, colOffset: 
     }
 
     return `${colAbs}${newCol}${rowAbs}${newRow}`;
-  });
+  };
+
+  let result = '';
+  let segmentStart = 0;
+  let inString = false;
+
+  for (let i = 0; i < formula.length; i++) {
+    const char = formula[i];
+    if (char === '"') {
+      if (inString) {
+        // Handle escaped quote ("")
+        if (formula[i + 1] === '"') {
+          i++; // Skip the escaped quote
+          continue;
+        }
+        // Close string: append untouched string segment
+        result += formula.slice(segmentStart, i + 1);
+        segmentStart = i + 1;
+        inString = false;
+      } else {
+        // Process non-string segment before entering a string
+        result += formula.slice(segmentStart, i).replace(referenceRegex, replaceReference);
+        segmentStart = i;
+        inString = true;
+      }
+    }
+  }
+
+  // Process trailing segment
+  if (segmentStart < formula.length) {
+    const tail = formula.slice(segmentStart);
+    result += inString ? tail : tail.replace(referenceRegex, replaceReference);
+  }
+
+  return result;
 }
 
 /**

@@ -582,6 +582,121 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   ISLOGICAL: (v) => typeof v === 'boolean',
   ISEVEN: (v) => toNumber(v) % 2 === 0,
   ISODD: (v) => toNumber(v) % 2 !== 0,
+
+  // ===== MATRIX FUNCTIONS =====
+
+  /**
+   * TRANSPOSE - Returns the transpose of an array or range
+   * Example: TRANSPOSE([[1,2],[3,4]]) => [[1,3],[2,4]]
+   */
+  TRANSPOSE: (matrix) => {
+    const mat = toMatrix(matrix);
+    if (!mat || mat.length === 0) return [];
+
+    const rows = mat.length;
+    const cols = mat[0].length;
+    const result: number[][] = [];
+
+    for (let c = 0; c < cols; c++) {
+      const newRow: number[] = [];
+      for (let r = 0; r < rows; r++) {
+        newRow.push(mat[r][c]);
+      }
+      result.push(newRow);
+    }
+
+    return result;
+  },
+
+  /**
+   * MMULT - Returns the matrix product of two arrays
+   * Example: MMULT([[1,2],[3,4]], [[5,6],[7,8]]) => [[19,22],[43,50]]
+   */
+  MMULT: (matrix1, matrix2) => {
+    const mat1 = toMatrix(matrix1);
+    const mat2 = toMatrix(matrix2);
+
+    if (!mat1 || !mat2 || mat1.length === 0 || mat2.length === 0) {
+      return '#VALUE!';
+    }
+
+    const rows1 = mat1.length;
+    const cols1 = mat1[0].length;
+    const rows2 = mat2.length;
+    const cols2 = mat2[0].length;
+
+    // Matrix multiplication requires cols1 === rows2
+    if (cols1 !== rows2) {
+      return '#VALUE!';
+    }
+
+    const result: number[][] = [];
+
+    for (let i = 0; i < rows1; i++) {
+      const row: number[] = [];
+      for (let j = 0; j < cols2; j++) {
+        let sum = 0;
+        for (let k = 0; k < cols1; k++) {
+          sum += mat1[i][k] * mat2[k][j];
+        }
+        row.push(sum);
+      }
+      result.push(row);
+    }
+
+    return result;
+  },
+
+  /**
+   * MDETERM - Returns the matrix determinant of an array
+   * Example: MDETERM([[1,2],[3,4]]) => -2
+   */
+  MDETERM: (matrix) => {
+    const mat = toMatrix(matrix);
+
+    if (!mat || mat.length === 0) {
+      return '#VALUE!';
+    }
+
+    const rows = mat.length;
+    const cols = mat[0].length;
+
+    // Determinant only defined for square matrices
+    if (rows !== cols) {
+      return '#VALUE!';
+    }
+
+    return determinant(mat);
+  },
+
+  /**
+   * MINVERSE - Returns the inverse matrix of an array
+   * Example: MINVERSE([[1,2],[3,4]]) => [[-2,1],[1.5,-0.5]]
+   */
+  MINVERSE: (matrix) => {
+    const mat = toMatrix(matrix);
+
+    if (!mat || mat.length === 0) {
+      return '#VALUE!';
+    }
+
+    const n = mat.length;
+    const cols = mat[0].length;
+
+    // Inverse only defined for square matrices
+    if (n !== cols) {
+      return '#VALUE!';
+    }
+
+    const det = determinant(mat);
+
+    // Matrix is singular (not invertible)
+    if (Math.abs(det) < 1e-10) {
+      return '#NUM!';
+    }
+
+    return matrixInverse(mat);
+  },
 };
 
 // ===== HELPER FUNCTIONS =====
@@ -659,4 +774,129 @@ function meetsCriteria(value: CellValue, criteria: CellValue): boolean {
   }
 
   return value === criteria;
+}
+
+/**
+ * Convert a value to a matrix (2D array of numbers)
+ */
+function toMatrix(value: CellValue): number[][] | null {
+  // If it's already a 2D array, convert to numbers
+  if (Array.isArray(value)) {
+    // Check if it's a 2D array
+    if (Array.isArray(value[0])) {
+      return (value as CellValue[][]).map(row =>
+        row.map(cell => toNumber(cell))
+      );
+    }
+    // If it's a 1D array, treat as a single row
+    return [(value as CellValue[]).map(cell => toNumber(cell))];
+  }
+
+  // If it's a single value, treat as 1x1 matrix
+  return [[toNumber(value)]];
+}
+
+/**
+ * Calculate the determinant of a square matrix using Laplace expansion
+ */
+function determinant(matrix: number[][]): number {
+  const n = matrix.length;
+
+  // Base case: 1x1 matrix
+  if (n === 1) {
+    return matrix[0][0];
+  }
+
+  // Base case: 2x2 matrix
+  if (n === 2) {
+    return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+  }
+
+  // Recursive case: Use Laplace expansion along first row
+  let det = 0;
+  for (let j = 0; j < n; j++) {
+    const minor = getMinor(matrix, 0, j);
+    const cofactor = Math.pow(-1, j) * matrix[0][j] * determinant(minor);
+    det += cofactor;
+  }
+
+  return det;
+}
+
+/**
+ * Get the minor matrix by removing row i and column j
+ */
+function getMinor(matrix: number[][], rowToRemove: number, colToRemove: number): number[][] {
+  const result: number[][] = [];
+
+  for (let i = 0; i < matrix.length; i++) {
+    if (i === rowToRemove) continue;
+
+    const row: number[] = [];
+    for (let j = 0; j < matrix[i].length; j++) {
+      if (j === colToRemove) continue;
+      row.push(matrix[i][j]);
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+/**
+ * Calculate the inverse of a square matrix using Gauss-Jordan elimination
+ */
+function matrixInverse(matrix: number[][]): number[][] {
+  const n = matrix.length;
+
+  // Create augmented matrix [A | I]
+  const augmented: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const row: number[] = [...matrix[i]];
+    for (let j = 0; j < n; j++) {
+      row.push(i === j ? 1 : 0);
+    }
+    augmented.push(row);
+  }
+
+  // Forward elimination
+  for (let i = 0; i < n; i++) {
+    // Find pivot
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+
+    // Swap rows
+    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+
+    // Make diagonal element 1
+    const pivot = augmented[i][i];
+    if (Math.abs(pivot) < 1e-10) {
+      throw new Error('Matrix is singular');
+    }
+
+    for (let j = 0; j < 2 * n; j++) {
+      augmented[i][j] /= pivot;
+    }
+
+    // Eliminate column
+    for (let k = 0; k < n; k++) {
+      if (k === i) continue;
+      const factor = augmented[k][i];
+      for (let j = 0; j < 2 * n; j++) {
+        augmented[k][j] -= factor * augmented[i][j];
+      }
+    }
+  }
+
+  // Extract inverse from right half of augmented matrix
+  const inverse: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    inverse.push(augmented[i].slice(n));
+  }
+
+  return inverse;
 }

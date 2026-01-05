@@ -21,10 +21,27 @@ export const Ribbon: React.FC = () => {
   });
 
   const handleThemeChange = useCallback((newTheme: string) => {
-    // Apply theme to DOM immediately
-    document.documentElement.setAttribute('data-theme', newTheme);
-    // Update local state for the select value
-    setLocalTheme(newTheme);
+    // Disable all transitions temporarily to prevent layout thrashing
+    const style = document.createElement('style');
+    style.id = 'disable-transitions';
+    style.textContent = '* { transition: none !important; }';
+    document.head.appendChild(style);
+
+    // Apply theme in next frame
+    requestAnimationFrame(() => {
+      document.documentElement.setAttribute('data-theme', newTheme);
+      setLocalTheme(newTheme);
+
+      // Re-enable transitions after paint
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          const disableStyle = document.getElementById('disable-transitions');
+          if (disableStyle) {
+            document.head.removeChild(disableStyle);
+          }
+        }, 50);
+      });
+    });
   }, []);
 
   const renderHomeTab = () => (

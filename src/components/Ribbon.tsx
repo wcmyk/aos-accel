@@ -16,45 +16,29 @@ export const Ribbon: React.FC = () => {
   const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV } = useAccelStore();
 
   // Theme is managed locally to avoid triggering re-renders across the entire app
-  const [localTheme, setLocalTheme] = useState<Theme>('default');
+  const [localTheme, setLocalTheme] = useState<string>(() => {
+    return document.documentElement.getAttribute('data-theme') || 'default';
+  });
 
-  const applyTheme = useCallback((nextTheme: Theme) => {
-    if (typeof document === 'undefined') return;
+  const handleThemeChange = useCallback((newTheme: string) => {
+    // Disable all transitions temporarily to prevent layout thrashing
+    const style = document.createElement('style');
+    style.id = 'disable-transitions';
+    style.textContent = '* { transition: none !important; }';
+    document.head.appendChild(style);
 
-    const root = document.documentElement;
-    const body = document.body;
-    const themeToApply = nextTheme || 'default';
-    const currentTheme = (root.getAttribute('data-theme') as Theme | null) || 'default';
-
-    if (currentTheme === themeToApply) {
-      setLocalTheme(themeToApply);
-      return;
-    }
-
-    // PERFORMANCE FIX: Disable all transitions during theme change
-    body.classList.add('theme-transitioning');
-
-    // Use requestAnimationFrame to batch DOM updates and prevent blocking
+    // Apply theme in next frame
     requestAnimationFrame(() => {
-      if (themeToApply === 'default') {
-        root.removeAttribute('data-theme');
-      } else {
-        root.setAttribute('data-theme', themeToApply);
-      }
+      document.documentElement.setAttribute('data-theme', newTheme);
+      setLocalTheme(newTheme);
 
-      // Persist for future sessions
-      try {
-        window.localStorage.setItem('accel-theme', themeToApply);
-      } catch {
-        // Ignore storage failures (private mode, etc.)
-      }
-
-      setLocalTheme(themeToApply);
-
-      // Re-enable transitions after theme has been applied and painted
+      // Re-enable transitions after paint
       requestAnimationFrame(() => {
         setTimeout(() => {
-          body.classList.remove('theme-transitioning');
+          const disableStyle = document.getElementById('disable-transitions');
+          if (disableStyle) {
+            document.head.removeChild(disableStyle);
+          }
         }, 50);
       });
     });

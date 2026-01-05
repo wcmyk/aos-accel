@@ -114,6 +114,8 @@ interface AccelState {
   fillRange: { row: number; col: number } | null;
   version: number; // Version counter to force re-renders
   graphRenderer: GraphRenderer | null;
+  activeSheet: string;
+  sheetNames: string[];
 
   // Multi-cell selection
   selectionRange: {
@@ -175,6 +177,12 @@ interface AccelState {
 
   // Force re-render
   refresh: () => void;
+
+  // Worksheets
+  addSheet: () => void;
+  deleteSheet: (name: string) => void;
+  setActiveSheet: (name: string) => void;
+  getSheetNames: () => string[];
 }
 
 export const useAccelStore = create<AccelState>()(
@@ -185,6 +193,8 @@ export const useAccelStore = create<AccelState>()(
     fillRange: null,
     version: 0,
     graphRenderer: null,
+    activeSheet: 'Sheet1',
+    sheetNames: ['Sheet1'],
     selectionRange: null,
     isSelecting: false,
 
@@ -455,6 +465,68 @@ export const useAccelStore = create<AccelState>()(
 
     refresh: () => {
       set(() => ({}));
+    },
+
+    addSheet: () => {
+      const { engine, sheetNames } = get();
+      let suffix = sheetNames.length + 1;
+      let name = `Sheet${suffix}`;
+      while (sheetNames.includes(name)) {
+        suffix += 1;
+        name = `Sheet${suffix}`;
+      }
+
+      engine.addWorksheet(name);
+      set((state) => {
+        state.engine = engine;
+        state.activeSheet = name;
+        state.sheetNames = [...sheetNames, name];
+        state.selectedCell = null;
+        state.selectionRange = null;
+        state.fillRange = null;
+        state.graphRenderer = null;
+        state.version = (state.version || 0) + 1;
+      });
+    },
+
+    deleteSheet: (name) => {
+      const { engine, sheetNames, activeSheet } = get();
+      if (sheetNames.length === 1) {
+        return;
+      }
+      engine.deleteWorksheet(name);
+      const remaining = sheetNames.filter((sheet) => sheet !== name);
+      const nextActive = activeSheet === name ? remaining[0] : activeSheet;
+      engine.setActiveWorksheet(nextActive);
+
+      set((state) => {
+        state.engine = engine;
+        state.activeSheet = nextActive;
+        state.sheetNames = remaining;
+        state.selectedCell = null;
+        state.selectionRange = null;
+        state.fillRange = null;
+        state.graphRenderer = null;
+        state.version = (state.version || 0) + 1;
+      });
+    },
+
+    setActiveSheet: (name) => {
+      const { engine } = get();
+      engine.setActiveWorksheet(name);
+      set((state) => {
+        state.activeSheet = name;
+        state.graphRenderer = null;
+        state.selectedCell = null;
+        state.selectionRange = null;
+        state.fillRange = null;
+        state.version = (state.version || 0) + 1;
+      });
+    },
+
+    getSheetNames: () => {
+      const { sheetNames } = get();
+      return sheetNames;
     },
 
     getGraphRenderer: () => {

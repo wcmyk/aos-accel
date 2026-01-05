@@ -23,6 +23,11 @@ interface CacheEntry {
   cellVersions: Map<string, number>;
 }
 
+type AxisSelection = {
+  xIndex: number;
+  yIndex: number;
+};
+
 export class GraphRenderer {
   private worksheet: Worksheet;
   private cache: Map<string, CacheEntry> = new Map();
@@ -116,9 +121,71 @@ export class GraphRenderer {
   }
 
   /**
+   * Render data-driven plots created via PLOT formulas.
+   * Axis selection allows users to pivot between dimensions (e.g., X/Y, X/Z).
+   */
+  private renderPlot(graph: GraphDefinition, axisSelection: AxisSelection): Point[] {
+    if (!graph.ast || graph.ast.type !== 'function') {
+      return [];
+    }
+
+    const evaluator = new Evaluator(this.worksheet);
+    const axisData: number[][] = [];
+
+    for (const arg of graph.ast.args) {
+      try {
+        const value = evaluator.evaluate(arg);
+        const flattened = this.flattenValues(value);
+        if (flattened.length > 0) {
+          axisData.push(flattened);
+        }
+      } catch {
+        axisData.push([]);
+      }
+    }
+
+    if (axisData.length < 2) {
+      return [];
+    }
+
+    const xAxis = axisData[axisSelection.xIndex] || axisData[0];
+    const yAxis = axisData[axisSelection.yIndex] || axisData[1];
+    const length = Math.min(xAxis.length, yAxis.length);
+    const points: Point[] = [];
+
+    for (let i = 0; i < length; i++) {
+      const x = xAxis[i];
+      const y = yAxis[i];
+      if (isFinite(x) && isFinite(y)) {
+        points.push({ x, y });
+      }
+    }
+
+    return points;
+  }
+
+  private flattenValues(value: any): number[] {
+    if (Array.isArray(value)) {
+      const result: number[] = [];
+      for (const v of value) {
+        result.push(...this.flattenValues(v));
+      }
+      return result;
+    }
+    if (typeof value === 'number') {
+      return [value];
+    }
+    if (typeof value === 'boolean') {
+      return [value ? 1 : 0];
+    }
+    const num = Number(value);
+    return Number.isFinite(num) ? [num] : [];
+  }
+
+  /**
    * Render all graphs in the worksheet
    */
-  renderAll(resolution: number = 1000): GraphData[] {
+  renderAll(resolution: number = 1000, axisSelection: AxisSelection = { xIndex: 0, yIndex: 1 }): GraphData[] {
     const graphsData: GraphData[] = [];
 
     for (const graph of this.worksheet.graphs.values()) {
@@ -130,6 +197,21 @@ export class GraphRenderer {
         case 'function':
           points = this.renderFunction(graph, resolution);
           break;
+
+        case 'plot': {
+          const cacheKey = `${graph.id}-${axisSelection.xIndex}-${axisSelection.yIndex}`;
+          if (this.isCacheValid(graph, cacheKey)) {
+            points = this.cache.get(cacheKey)!.points;
+          } else {
+            points = this.renderPlot(graph, axisSelection);
+            const cellVersions = new Map<string, number>();
+            for (const cellKey of graph.cellBindings) {
+              cellVersions.set(cellKey, this.cellVersions.get(cellKey) || 0);
+            }
+            this.cache.set(cacheKey, { points, cellVersions });
+          }
+          break;
+        }
 
         case 'parametric': {
           // Parametric plots: x = f(t), y = g(t)

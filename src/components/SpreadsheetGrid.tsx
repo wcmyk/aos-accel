@@ -224,17 +224,6 @@ export const SpreadsheetGrid: React.FC = () => {
     }
   }, [selectedCell, startSelection, updateSelection, endSelection]);
 
-  const handleCellMouseEnterWhileSelecting = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
-    if (!isSelecting) return;
-
-    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
-    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
-
-    if (row && col) {
-      updateSelection(row, col);
-    }
-  }, [isSelecting, updateSelection]);
-
   // Global mouse up handler for selection
   useEffect(() => {
     const handleGlobalMouseUp = () => {
@@ -289,28 +278,30 @@ export const SpreadsheetGrid: React.FC = () => {
   }, []);
 
   const handleCellMouseEnter = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
-    if (!isDraggingFill || !selectedCell) return;
-
     const row = parseInt(e.currentTarget.dataset.row || '0', 10);
     const col = parseInt(e.currentTarget.dataset.col || '0', 10);
     if (!row || !col) return;
 
-    // Only allow filling in the same row or column as the source
-    if (row === selectedCell.row || col === selectedCell.col) {
-      const targetChanged = !pendingFillTarget.current || pendingFillTarget.current.row !== row || pendingFillTarget.current.col !== col;
-      if (targetChanged) {
-        pendingFillTarget.current = { row, col };
-        if (fillRangeRaf.current === null) {
-          fillRangeRaf.current = requestAnimationFrame(() => {
-            if (pendingFillTarget.current) {
-              setFillRange(pendingFillTarget.current.row, pendingFillTarget.current.col);
-            }
-            fillRangeRaf.current = null;
-          });
+    if (isDraggingFill && selectedCell) {
+      // Only allow filling in the same row or column as the source
+      if (row === selectedCell.row || col === selectedCell.col) {
+        const targetChanged = !pendingFillTarget.current || pendingFillTarget.current.row !== row || pendingFillTarget.current.col !== col;
+        if (targetChanged) {
+          pendingFillTarget.current = { row, col };
+          if (fillRangeRaf.current === null) {
+            fillRangeRaf.current = requestAnimationFrame(() => {
+              if (pendingFillTarget.current) {
+                setFillRange(pendingFillTarget.current.row, pendingFillTarget.current.col);
+              }
+              fillRangeRaf.current = null;
+            });
+          }
         }
       }
+    } else if (isSelecting) {
+      updateSelection(row, col);
     }
-  }, [isDraggingFill, selectedCell, setFillRange]);
+  }, [isDraggingFill, selectedCell, setFillRange, isSelecting, updateSelection]);
 
   const handleMouseUp = useCallback(() => {
     if (isDraggingFill) {
@@ -615,7 +606,7 @@ export const SpreadsheetGrid: React.FC = () => {
                       onClick={handleCellClick}
                       onDoubleClick={handleCellDoubleClick}
                       onMouseDown={handleCellMouseDown}
-                      onMouseEnter={isSelecting ? handleCellMouseEnterWhileSelecting : handleCellMouseEnter}
+                      onMouseEnter={handleCellMouseEnter}
                       onFillHandleMouseDown={handleFillHandleMouseDown}
                     />
                   );

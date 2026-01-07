@@ -525,6 +525,10 @@ export const Ribbon: React.FC = () => {
             <option value="pastel-pink">Pastel Pink</option>
             <option value="pastel-green">Pastel Green</option>
             <option value="pastel-purple">Pastel Purple</option>
+            <option value="dark">Dark</option>
+            <option value="dark-blue">Dark Blue</option>
+            <option value="dark-green">Dark Green</option>
+            <option value="dark-purple">Dark Purple</option>
           </select>
         </div>
       </div>

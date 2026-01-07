@@ -144,6 +144,13 @@ export class GraphRenderer {
       }
     }
 
+    // If only one argument provided, auto-generate X axis (1, 2, 3, ...)
+    if (axisData.length === 1) {
+      const yData = axisData[0];
+      const xData = Array.from({ length: yData.length }, (_, i) => i + 1);
+      axisData.unshift(xData);
+    }
+
     if (axisData.length < 2) {
       return [];
     }

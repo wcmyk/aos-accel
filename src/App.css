@@ -180,6 +180,94 @@
   --input-border: #c8a8e0;
 }
 
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-gradient-start: #2d2d30;
+  --bg-gradient-end: #252526;
+  --text-primary: #cccccc;
+  --text-secondary: #858585;
+  --border-color: #3e3e42;
+  --cell-bg: #1e1e1e;
+  --cell-border: #3e3e42;
+  --cell-border-strong: #5a5a5a;
+  --cell-selected: #0e639c;
+  --ribbon-bg: #2d2d30;
+  --button-bg: #2d2d30;
+  --button-border: #3e3e42;
+  --button-hover: #3e3e42;
+  --button-active: #007acc;
+  --input-bg: #252526;
+  --input-border: #3e3e42;
+}
+
+/* Dark Blue Theme */
+[data-theme="dark-blue"] {
+  --bg-primary: #0f1419;
+  --bg-secondary: #1a1f29;
+  --bg-gradient-start: #1a2332;
+  --bg-gradient-end: #131a24;
+  --text-primary: #d4d4d4;
+  --text-secondary: #8a9199;
+  --border-color: #2d3748;
+  --cell-bg: #1a1f29;
+  --cell-border: #2d3748;
+  --cell-border-strong: #4a5568;
+  --cell-selected: #3182ce;
+  --ribbon-bg: #1a2332;
+  --button-bg: #1a2332;
+  --button-border: #2d3748;
+  --button-hover: #2d3748;
+  --button-active: #3182ce;
+  --input-bg: #1a1f29;
+  --input-border: #2d3748;
+}
+
+/* Dark Green Theme */
+[data-theme="dark-green"] {
+  --bg-primary: #0d1b0d;
+  --bg-secondary: #1a2e1a;
+  --bg-gradient-start: #1e3a1e;
+  --bg-gradient-end: #152815;
+  --text-primary: #c8e6c8;
+  --text-secondary: #7a9a7a;
+  --border-color: #2d4a2d;
+  --cell-bg: #1a2e1a;
+  --cell-border: #2d4a2d;
+  --cell-border-strong: #3d5a3d;
+  --cell-selected: #38a169;
+  --ribbon-bg: #1e3a1e;
+  --button-bg: #1e3a1e;
+  --button-border: #2d4a2d;
+  --button-hover: #2d4a2d;
+  --button-active: #38a169;
+  --input-bg: #1a2e1a;
+  --input-border: #2d4a2d;
+}
+
+/* Dark Purple Theme */
+[data-theme="dark-purple"] {
+  --bg-primary: #1a0f1e;
+  --bg-secondary: #2a1a35;
+  --bg-gradient-start: #3a2447;
+  --bg-gradient-end: #2a1835;
+  --text-primary: #e6d4f0;
+  --text-secondary: #9a7aa8;
+  --border-color: #4a2d5a;
+  --cell-bg: #2a1a35;
+  --cell-border: #4a2d5a;
+  --cell-border-strong: #5a3d6a;
+  --cell-selected: #805ad5;
+  --ribbon-bg: #3a2447;
+  --button-bg: #3a2447;
+  --button-border: #4a2d5a;
+  --button-hover: #4a2d5a;
+  --button-active: #805ad5;
+  --input-bg: #2a1a35;
+  --input-border: #4a2d5a;
+}
+
 body {
   font-family: 'Calibri', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -575,6 +663,7 @@ body {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--ribbon-bg);
+  position: relative;
 }
 
 .cell-reference {
@@ -596,6 +685,31 @@ body {
   font-size: 0.95rem;
   background: var(--input-bg);
   color: var(--text-primary);
+}
+
+.formula-hint {
+  position: absolute;
+  top: 100%;
+  left: 82px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: 'Consolas', 'SFMono-Regular', ui-monospace;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  white-space: nowrap;
+}
+
+.formula-hint strong {
+  color: var(--text-primary);
+}
+
+.formula-hint .current-param {
+  color: var(--cell-selected);
+  font-weight: bold;
 }
 
 .grid-wrapper {

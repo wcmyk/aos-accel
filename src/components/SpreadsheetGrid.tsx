@@ -126,6 +126,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isDraggingFill, setIsDraggingFill] = useState(false);
+  const [formulaHint, setFormulaHint] = useState<{ func: string; params: string[]; currentParam: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const gridWrapperRef = useRef<HTMLDivElement>(null);
@@ -137,6 +138,41 @@ export const SpreadsheetGrid: React.FC = () => {
   const scrollRaf = useRef<number | null>(null);
   const caretPositionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const lastInsertedRef = useRef<{ start: number; end: number } | null>(null);
+
+  // Formula signatures for parameter hints
+  const formulaSignatures: Record<string, string[]> = useMemo(() => ({
+    SUM: ['number1', 'number2', '...'],
+    AVERAGE: ['number1', 'number2', '...'],
+    COUNT: ['value1', 'value2', '...'],
+    MAX: ['number1', 'number2', '...'],
+    MIN: ['number1', 'number2', '...'],
+    IF: ['logical_test', 'value_if_true', 'value_if_false'],
+    VLOOKUP: ['lookup_value', 'table_array', 'col_index_num', '[range_lookup]'],
+    HLOOKUP: ['lookup_value', 'table_array', 'row_index_num', '[range_lookup]'],
+    INDEX: ['array', 'row_num', '[column_num]'],
+    MATCH: ['lookup_value', 'lookup_array', '[match_type]'],
+    CONCATENATE: ['text1', 'text2', '...'],
+    LEFT: ['text', '[num_chars]'],
+    RIGHT: ['text', '[num_chars]'],
+    MID: ['text', 'start_num', 'num_chars'],
+    LEN: ['text'],
+    TRIM: ['text'],
+    UPPER: ['text'],
+    LOWER: ['text'],
+    ROUND: ['number', 'num_digits'],
+    ROUNDUP: ['number', 'num_digits'],
+    ROUNDDOWN: ['number', 'num_digits'],
+    ABS: ['number'],
+    POWER: ['number', 'power'],
+    SQRT: ['number'],
+    SIN: ['number'],
+    COS: ['number'],
+    TAN: ['number'],
+    PLOT: ['y_values', '[x_values]'],
+    DATE: ['year', 'month', 'day'],
+    NOW: [],
+    TODAY: [],
+  }), []);
 
   // Focus grid on mount for keyboard navigation
   useEffect(() => {
@@ -454,6 +490,55 @@ export const SpreadsheetGrid: React.FC = () => {
     return String(value);
   }, []);
 
+  // Parse formula to detect function and current parameter for hints
+  const updateFormulaHint = useCallback((formula: string, caretPos: number) => {
+    if (!formula.startsWith('=')) {
+      setFormulaHint(null);
+      return;
+    }
+
+    // Find the function call that contains the caret
+    const beforeCaret = formula.substring(0, caretPos);
+
+    // Match function name and opening parenthesis
+    const funcMatch = beforeCaret.match(/([A-Z_]+)\(([^)]*)$/);
+    if (!funcMatch) {
+      setFormulaHint(null);
+      return;
+    }
+
+    const funcName = funcMatch[1];
+    const params = formulaSignatures[funcName];
+
+    if (!params) {
+      setFormulaHint(null);
+      return;
+    }
+
+    // Count commas to determine current parameter (ignoring commas in quotes)
+    const argsText = funcMatch[2];
+    let currentParam = 0;
+    let inQuotes = false;
+    let parenDepth = 0;
+
+    for (let i = 0; i < argsText.length; i++) {
+      const char = argsText[i];
+      if (char === '"' && (i === 0 || argsText[i - 1] !== '\\')) {
+        inQuotes = !inQuotes;
+      } else if (!inQuotes) {
+        if (char === '(') {
+          parenDepth++;
+        } else if (char === ')') {
+          parenDepth--;
+        } else if (char === ',' && parenDepth === 0) {
+          currentParam++;
+        }
+      }
+    }
+
+    setFormulaHint({ func: funcName, params, currentParam });
+  }, [formulaSignatures]);
+
   const totalGridHeight = ROWS * ROW_HEIGHT;
   const totalGridWidth = COLS * COL_WIDTH;
 
@@ -609,12 +694,15 @@ export const SpreadsheetGrid: React.FC = () => {
           className="formula-input"
           value={formulaBarValue}
           onChange={(e) => {
-            setEditValue(e.target.value);
+            const value = e.target.value;
+            const caretPos = e.target.selectionStart ?? 0;
+            setEditValue(value);
             caretPositionRef.current = {
-              start: e.target.selectionStart ?? 0,
+              start: caretPos,
               end: e.target.selectionEnd ?? 0,
             };
             lastInsertedRef.current = null;
+            updateFormulaHint(value, caretPos);
           }}
           onSelect={(e) => {
             caretPositionRef.current = {
@@ -630,6 +718,18 @@ export const SpreadsheetGrid: React.FC = () => {
           }}
           placeholder="Enter formula or value"
         />
+        {formulaHint && (
+          <div className="formula-hint">
+            <strong>{formulaHint.func}(</strong>
+            {formulaHint.params.map((param, idx) => (
+              <span key={idx} className={idx === formulaHint.currentParam ? 'current-param' : ''}>
+                {idx > 0 && ', '}
+                {param}
+              </span>
+            ))}
+            <strong>)</strong>
+          </div>
+        )}
       </div>
 
       <div

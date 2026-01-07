@@ -847,24 +847,46 @@ body {
 
 .axis-picker {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.axis-picker label {
+.plane-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.plane-buttons .btn {
+  min-width: 60px;
+  font-weight: 600;
+}
+
+.plane-buttons .btn.active {
+  background: var(--cell-selected);
+  color: #fff;
+  border-color: var(--cell-selected);
+}
+
+.axis-selectors {
+  display: flex;
+  gap: 10px;
+}
+
+.axis-selectors label {
   display: flex;
   flex-direction: column;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   gap: 4px;
   color: var(--text-secondary);
 }
 
-.axis-picker select {
-  padding: 4px 6px;
+.axis-selectors select {
+  padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid var(--button-border);
   background: var(--input-bg);
   color: var(--text-primary);
+  font-size: 0.9rem;
 }
 
 .graph-label {

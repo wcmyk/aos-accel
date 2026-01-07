@@ -11,8 +11,8 @@ import { CellValue, CellFormat } from '../engine/types';
 const ROWS = 1000;
 const COLS = 52; // A-AZ (52 columns)
 const ROW_HEIGHT = 24;
-const COL_WIDTH = 100; // Width of each column in pixels
-const OVERSCAN = 2; // Increased slightly for smoother scrolling without lag
+const COL_WIDTH = 120; // Width of each column in pixels (matches CSS)
+const OVERSCAN = 10; // Increased significantly to prevent cells disappearing during scroll
 const DEFAULT_VIEWPORT_HEIGHT = 600;
 const DEFAULT_VIEWPORT_WIDTH = 1200;
 
@@ -549,10 +549,14 @@ export const SpreadsheetGrid: React.FC = () => {
 
     if (targetRow === editingCell.row && targetCol === editingCell.col) return;
 
+    // Only insert references when actively selecting (not during passive scrolling)
+    // This prevents unwanted L#:L# insertions when just scrolling the sheet
+    if (!isSelecting && !selectionRange && !lastInsertedRef.current) return;
+
     // Pass range start if there's a selection range
     const rangeStart = selectionRange ? selectionRange.start : undefined;
     applyReferenceToFormula(targetRow, targetCol, Boolean(selectionRange) || Boolean(lastInsertedRef.current), rangeStart);
-  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange]);
+  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting]);
 
   // Helper function to get cell state (computed on-demand, not stored)
   // Memoized with version to only update when cells actually change

@@ -75,7 +75,13 @@ export const GraphCanvas: React.FC = React.memo(() => {
     height: number,
     vp: { xMin: number; xMax: number; yMin: number; yMax: number }
   ) => {
-    ctx.strokeStyle = '#333';
+    // Get colors from CSS variables for theme support
+    const styles = getComputedStyle(document.documentElement);
+    const isDark = document.documentElement.getAttribute('data-theme')?.includes('dark');
+    const axisColor = isDark ? '#d4d4d4' : '#333';
+    const gridColor = isDark ? '#3e3e42' : '#e0e0e0';
+
+    ctx.strokeStyle = axisColor;
     ctx.lineWidth = 1;
 
     // X-axis
@@ -97,7 +103,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
     }
 
     // Grid lines
-    ctx.strokeStyle = '#e0e0e0';
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 0.5;
 
     // Vertical grid lines
@@ -123,7 +129,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
     }
 
     // Labels
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = axisColor;
     ctx.font = '12px sans-serif';
     ctx.fillText(`X: [${vp.xMin.toFixed(1)}, ${vp.xMax.toFixed(1)}]`, 10, height - 10);
     ctx.fillText(`Y: [${vp.yMin.toFixed(1)}, ${vp.yMax.toFixed(1)}]`, 10, 20);

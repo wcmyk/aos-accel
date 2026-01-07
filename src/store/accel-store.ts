@@ -9,7 +9,7 @@ import { AccelEngine } from '../engine/engine';
 import { CellValue, Cell, GraphDefinition } from '../engine/types';
 import { GraphRenderer } from '../engine/graph-renderer';
 
-export type Theme = 'default' | 'pastel-yellow' | 'pastel-blue' | 'pastel-brown' | 'pastel-red' | 'pastel-pink' | 'pastel-green' | 'pastel-purple';
+export type Theme = 'default' | 'pastel-yellow' | 'pastel-blue' | 'pastel-brown' | 'pastel-red' | 'pastel-pink' | 'pastel-green' | 'pastel-purple' | 'dark' | 'dark-blue' | 'dark-green' | 'dark-purple';
 
 interface ClipboardCell {
   value: number | string | boolean | null;

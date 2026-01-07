@@ -498,9 +498,19 @@ export const SpreadsheetGrid: React.FC = () => {
     return selectedCellData.formula || String(selectedCellData.value);
   }, [editingCell, editValue, selectedCellData]);
 
-  const applyReferenceToFormula = useCallback((row: number, col: number, replaceExisting: boolean) => {
+  const applyReferenceToFormula = useCallback((row: number, col: number, replaceExisting: boolean, rangeStart?: { row: number; col: number }) => {
     if (!editingCell) return;
-    const refString = `${colToLetter(col)}${row}`;
+
+    // Create range reference if rangeStart is provided
+    let refString: string;
+    if (rangeStart) {
+      const startRef = `${colToLetter(rangeStart.col)}${rangeStart.row}`;
+      const endRef = `${colToLetter(col)}${row}`;
+      refString = `${startRef}:${endRef}`;
+    } else {
+      refString = `${colToLetter(col)}${row}`;
+    }
+
     const selection = replaceExisting && lastInsertedRef.current
       ? lastInsertedRef.current
       : caretPositionRef.current;
@@ -539,7 +549,9 @@ export const SpreadsheetGrid: React.FC = () => {
 
     if (targetRow === editingCell.row && targetCol === editingCell.col) return;
 
-    applyReferenceToFormula(targetRow, targetCol, Boolean(selectionRange) || Boolean(lastInsertedRef.current));
+    // Pass range start if there's a selection range
+    const rangeStart = selectionRange ? selectionRange.start : undefined;
+    applyReferenceToFormula(targetRow, targetCol, Boolean(selectionRange) || Boolean(lastInsertedRef.current), rangeStart);
   }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange]);
 
   // Helper function to get cell state (computed on-demand, not stored)

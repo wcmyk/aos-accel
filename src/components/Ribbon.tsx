@@ -29,11 +29,14 @@ export const Ribbon: React.FC = () => {
   const handleThemeChange = useCallback((newTheme: string) => {
     if (newTheme === localTheme) return;
 
-    // Disable all transitions temporarily to prevent layout thrashing
-    const style = document.createElement('style');
-    style.id = 'disable-transitions';
-    style.textContent = '* { transition: none !important; }';
-    document.head.appendChild(style);
+    // Reuse or create the transition disable style element
+    let style = document.getElementById('disable-transitions') as HTMLStyleElement;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'disable-transitions';
+      style.textContent = '* { transition: none !important; }';
+      document.head.appendChild(style);
+    }
 
     // Apply theme in next frame
     requestAnimationFrame(() => {

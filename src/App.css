@@ -24,6 +24,8 @@
   --button-active: #d9d9d9;
   --input-bg: #ffffff;
   --input-border: #d0d0d0;
+  --parameter-bg: #fff7d0;
+  --parameter-text: #233876;
 }
 
 /* Pastel Yellow Theme */
@@ -186,20 +188,22 @@
   --bg-secondary: #252526;
   --bg-gradient-start: #2d2d30;
   --bg-gradient-end: #252526;
-  --text-primary: #cccccc;
-  --text-secondary: #858585;
+  --text-primary: #d4d4d4;
+  --text-secondary: #9d9d9d;
   --border-color: #3e3e42;
   --cell-bg: #1e1e1e;
   --cell-border: #3e3e42;
   --cell-border-strong: #5a5a5a;
-  --cell-selected: #0e639c;
+  --cell-selected: #00a8e8;
   --ribbon-bg: #2d2d30;
   --button-bg: #2d2d30;
   --button-border: #3e3e42;
   --button-hover: #3e3e42;
-  --button-active: #007acc;
+  --button-active: #00a8e8;
   --input-bg: #252526;
   --input-border: #3e3e42;
+  --parameter-bg: #3a3a00;
+  --parameter-text: #ffeb3b;
 }
 
 /* Dark Blue Theme */
@@ -222,6 +226,8 @@
   --button-active: #3182ce;
   --input-bg: #1a1f29;
   --input-border: #2d3748;
+  --parameter-bg: #1a3a5a;
+  --parameter-text: #64b5f6;
 }
 
 /* Dark Green Theme */
@@ -244,6 +250,8 @@
   --button-active: #38a169;
   --input-bg: #1a2e1a;
   --input-border: #2d4a2d;
+  --parameter-bg: #2a4a1a;
+  --parameter-text: #81c784;
 }
 
 /* Dark Purple Theme */
@@ -266,6 +274,8 @@
   --button-active: #805ad5;
   --input-bg: #2a1a35;
   --input-border: #4a2d5a;
+  --parameter-bg: #3a1a4a;
+  --parameter-text: #ba68c8;
 }
 
 body {
@@ -725,7 +735,8 @@ body {
 
 .spreadsheet-grid th,
 .spreadsheet-grid td {
-  border: 1px solid var(--cell-border);
+  border-top: 1px solid var(--cell-border-strong);
+  border-bottom: 1px solid var(--cell-border-strong);
   border-right: 1.5px solid var(--cell-border-strong);
   border-left: 1px solid var(--cell-border-strong);
   width: 120px;
@@ -773,8 +784,8 @@ body {
 }
 
 .cell.parameter {
-  background: #fff7d0;
-  color: #233876;
+  background: var(--parameter-bg);
+  color: var(--parameter-text);
 }
 
 .cell-content {
@@ -836,24 +847,46 @@ body {
 
 .axis-picker {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.axis-picker label {
+.plane-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.plane-buttons .btn {
+  min-width: 60px;
+  font-weight: 600;
+}
+
+.plane-buttons .btn.active {
+  background: var(--cell-selected);
+  color: #fff;
+  border-color: var(--cell-selected);
+}
+
+.axis-selectors {
+  display: flex;
+  gap: 10px;
+}
+
+.axis-selectors label {
   display: flex;
   flex-direction: column;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   gap: 4px;
   color: var(--text-secondary);
 }
 
-.axis-picker select {
-  padding: 4px 6px;
+.axis-selectors select {
+  padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid var(--button-border);
   background: var(--input-bg);
   color: var(--text-primary);
+  font-size: 0.9rem;
 }
 
 .graph-label {

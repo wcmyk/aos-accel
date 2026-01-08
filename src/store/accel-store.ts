@@ -148,7 +148,9 @@ interface AccelState {
   selectedCell: { row: number; col: number } | null;
   clipboard: ClipboardCell | null;
   fillRange: { row: number; col: number } | null;
-  version: number; // Version counter to force re-renders
+  // Dirty cell tracking (Excel-grade performance optimization)
+  dirtyValues: Set<string>;      // Cells that changed value
+  dirtyFormulas: Set<string>;    // Formulas that need recalc
   graphRenderer: GraphRenderer | null;
   activeSheet: string;
   sheetNames: string[];
@@ -165,6 +167,7 @@ interface AccelState {
   getCell: (row: number, col: number) => CellValue;
   getCellObject: (row: number, col: number) => Cell | undefined;
   selectCell: (row: number, col: number) => void;
+  clearDirty: () => void;  // Clear dirty sets after render
 
   // Selection actions
   startSelection: (row: number, col: number) => void;
@@ -227,7 +230,8 @@ export const useAccelStore = create<AccelState>()(
     selectedCell: null,
     clipboard: null,
     fillRange: null,
-    version: 0,
+    dirtyValues: new Set<string>(),
+    dirtyFormulas: new Set<string>(),
     graphRenderer: null,
     activeSheet: 'Sheet1',
     sheetNames: ['Sheet1'],
@@ -236,12 +240,22 @@ export const useAccelStore = create<AccelState>()(
 
     setCell: (row, col, value) => {
       const { engine } = get();
-      engine.setCell(row, col, value);
-      // Invalidate graph cache for changed cell
       const cellKey = `${col},${row}`;
+
+      engine.setCell(row, col, value);
+
+      // Invalidate graph cache for changed cell
       get().invalidateGraphCache([cellKey]);
+
+      // Mark this cell and all dependents as dirty (Excel-grade optimization)
       set((state) => {
-        state.version = (state.version || 0) + 1;
+        state.dirtyValues.add(cellKey);
+
+        // Mark all dependent formulas as dirty
+        const dependents = engine.getDependents(row, col);
+        dependents.forEach(dep => {
+          state.dirtyFormulas.add(`${dep.col},${dep.row}`);
+        });
       });
     },
 
@@ -258,6 +272,13 @@ export const useAccelStore = create<AccelState>()(
     selectCell: (row, col) => {
       set((state) => {
         state.selectedCell = { row, col };
+      });
+    },
+
+    clearDirty: () => {
+      set((state) => {
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
       });
     },
 
@@ -389,10 +410,28 @@ export const useAccelStore = create<AccelState>()(
         }
       }
 
-      // Force state update by creating new reference
+      // Mark all filled cells as dirty
       set((state) => {
         state.fillRange = null;
-        state.version = (state.version || 0) + 1; // Increment version to force update
+
+        // Mark all cells in the fill range as dirty
+        if (isVertical) {
+          const direction = endRow > startRow ? 1 : -1;
+          const steps = Math.abs(endRow - startRow);
+          for (let i = 1; i <= steps; i++) {
+            const targetRow = startRow + i * direction;
+            const targetKey = `${startCol},${targetRow}`;
+            state.dirtyValues.add(targetKey);
+          }
+        } else if (isHorizontal) {
+          const direction = endCol > startCol ? 1 : -1;
+          const steps = Math.abs(endCol - startCol);
+          for (let i = 1; i <= steps; i++) {
+            const targetCol = startCol + i * direction;
+            const targetKey = `${targetCol},${startRow}`;
+            state.dirtyValues.add(targetKey);
+          }
+        }
       });
     },
 
@@ -521,7 +560,9 @@ export const useAccelStore = create<AccelState>()(
         state.selectionRange = null;
         state.fillRange = null;
         state.graphRenderer = null;
-        state.version = (state.version || 0) + 1;
+        // New sheet - clear dirty tracking
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
       });
     },
 
@@ -543,7 +584,9 @@ export const useAccelStore = create<AccelState>()(
         state.selectionRange = null;
         state.fillRange = null;
         state.graphRenderer = null;
-        state.version = (state.version || 0) + 1;
+        // Sheet deleted - clear dirty tracking
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
       });
     },
 
@@ -556,7 +599,9 @@ export const useAccelStore = create<AccelState>()(
         state.selectedCell = null;
         state.selectionRange = null;
         state.fillRange = null;
-        state.version = (state.version || 0) + 1;
+        // Switched sheet - clear dirty tracking
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
       });
     },
 
@@ -586,13 +631,10 @@ export const useAccelStore = create<AccelState>()(
     },
 
     batchUpdate: (operations) => {
-      const { engine } = get();
       // Execute all operations
       operations.forEach(op => op());
-      // Single state update to trigger one re-render
-      set((state) => {
-        state.version = (state.version || 0) + 1;
-      });
+      // Dirty tracking handles state updates automatically
+      // No need for manual version increment
     },
   }))
 );

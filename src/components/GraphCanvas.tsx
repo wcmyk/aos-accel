@@ -75,7 +75,13 @@ export const GraphCanvas: React.FC = React.memo(() => {
     height: number,
     vp: { xMin: number; xMax: number; yMin: number; yMax: number }
   ) => {
-    ctx.strokeStyle = '#333';
+    // Get colors from CSS variables for theme support
+    const styles = getComputedStyle(document.documentElement);
+    const isDark = document.documentElement.getAttribute('data-theme')?.includes('dark');
+    const axisColor = isDark ? '#d4d4d4' : '#333';
+    const gridColor = isDark ? '#3e3e42' : '#e0e0e0';
+
+    ctx.strokeStyle = axisColor;
     ctx.lineWidth = 1;
 
     // X-axis
@@ -97,7 +103,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
     }
 
     // Grid lines
-    ctx.strokeStyle = '#e0e0e0';
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 0.5;
 
     // Vertical grid lines
@@ -123,7 +129,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
     }
 
     // Labels
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = axisColor;
     ctx.font = '12px sans-serif';
     ctx.fillText(`X: [${vp.xMin.toFixed(1)}, ${vp.xMax.toFixed(1)}]`, 10, height - 10);
     ctx.fillText(`Y: [${vp.yMin.toFixed(1)}, ${vp.yMax.toFixed(1)}]`, 10, 20);
@@ -219,28 +225,62 @@ export const GraphCanvas: React.FC = React.memo(() => {
         </div>
         {maxDimensions > 1 && (
           <div className="axis-picker">
-            <label>
-              Horizontal Axis
-              <select
-                value={axisSelection.xIndex}
-                onChange={(e) => setAxisSelection({ ...axisSelection, xIndex: Number(e.target.value) })}
+            <p className="graph-label">View Plane</p>
+            <div className="plane-buttons">
+              <button
+                className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 1 ? 'active' : 'ghost'}`}
+                onClick={() => setAxisSelection({ xIndex: 0, yIndex: 1 })}
+                title="View X-Y plane"
               >
-                {Array.from({ length: maxDimensions }, (_, i) => (
-                  <option key={`x-${i}`} value={i}>Axis {i + 1}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Vertical Axis
-              <select
-                value={axisSelection.yIndex}
-                onChange={(e) => setAxisSelection({ ...axisSelection, yIndex: Number(e.target.value) })}
-              >
-                {Array.from({ length: maxDimensions }, (_, i) => (
-                  <option key={`y-${i}`} value={i}>Axis {i + 1}</option>
-                ))}
-              </select>
-            </label>
+                X-Y
+              </button>
+              {maxDimensions > 2 && (
+                <>
+                  <button
+                    className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
+                    onClick={() => setAxisSelection({ xIndex: 0, yIndex: 2 })}
+                    title="View X-Z plane"
+                  >
+                    X-Z
+                  </button>
+                  <button
+                    className={`btn ${axisSelection.xIndex === 1 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
+                    onClick={() => setAxisSelection({ xIndex: 1, yIndex: 2 })}
+                    title="View Y-Z plane"
+                  >
+                    Y-Z
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="axis-selectors">
+              <label>
+                Horizontal (X)
+                <select
+                  value={axisSelection.xIndex}
+                  onChange={(e) => setAxisSelection({ ...axisSelection, xIndex: Number(e.target.value) })}
+                >
+                  {Array.from({ length: maxDimensions }, (_, i) => (
+                    <option key={`x-${i}`} value={i}>
+                      {i === 0 ? 'X' : i === 1 ? 'Y' : i === 2 ? 'Z' : `Axis ${i + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Vertical (Y)
+                <select
+                  value={axisSelection.yIndex}
+                  onChange={(e) => setAxisSelection({ ...axisSelection, yIndex: Number(e.target.value) })}
+                >
+                  {Array.from({ length: maxDimensions }, (_, i) => (
+                    <option key={`y-${i}`} value={i}>
+                      {i === 0 ? 'X' : i === 1 ? 'Y' : i === 2 ? 'Z' : `Axis ${i + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
         )}
         <div className="control-actions">

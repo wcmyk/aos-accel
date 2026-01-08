@@ -654,7 +654,7 @@ export const SpreadsheetGrid: React.FC = () => {
   }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting]);
 
   // Helper function to get cell state (computed on-demand, not stored)
-  // Memoized with version to only update when cells actually change
+  // Memoized with dirty tracking to only update when cells actually change
   const getCellDisplayData = useCallback((row: number, col: number) => {
     const cellObj = getCellObject(row, col);
     const value = getCell(row, col);
@@ -664,7 +664,7 @@ export const SpreadsheetGrid: React.FC = () => {
       isParameter: cellObj?.isParameter || false,
       format: cellObj?.format,
     };
-  }, [getCellObject, getCell, formatCellValue, version]);
+  }, [getCellObject, getCell, formatCellValue, dirtyValues, dirtyFormulas]);
 
   // Helper function to get cell state (computed on-demand, not stored)
   const getCellStateData = useCallback((row: number, col: number) => {

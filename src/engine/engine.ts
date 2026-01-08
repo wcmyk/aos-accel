@@ -612,6 +612,29 @@ export class AccelEngine {
   }
 
   /**
+   * Get all cells that depend on the given cell (for dirty tracking)
+   */
+  getDependents(row: number, col: number, sheetName?: string): Array<{ row: number; col: number }> {
+    const worksheet = this.getWorksheet(sheetName);
+    const cellKey = this.cellKey(row, col);
+    const cell = worksheet.cells.get(cellKey);
+
+    if (!cell) {
+      return [];
+    }
+
+    const dependents: Array<{ row: number; col: number }> = [];
+    cell.dependents.forEach(depKey => {
+      const depCell = worksheet.cells.get(depKey);
+      if (depCell) {
+        dependents.push({ row: depCell.address.row, col: depCell.address.col });
+      }
+    });
+
+    return dependents;
+  }
+
+  /**
    * Export workbook state
    */
   export(): Workbook {

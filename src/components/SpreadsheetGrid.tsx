@@ -106,13 +106,16 @@ export const SpreadsheetGrid: React.FC = () => {
   const fillRange = useAccelStore((state) => state.fillRange);
   const selectionRange = useAccelStore((state) => state.selectionRange);
   const isSelecting = useAccelStore((state) => state.isSelecting);
-  const version = useAccelStore((state) => state.version);
+  // Dirty cell tracking (Excel-grade optimization)
+  const dirtyValues = useAccelStore((state) => state.dirtyValues);
+  const dirtyFormulas = useAccelStore((state) => state.dirtyFormulas);
 
   // Actions - stable references, don't cause re-renders
   const setCell = useAccelStore((state) => state.setCell);
   const getCell = useAccelStore((state) => state.getCell);
   const getCellObject = useAccelStore((state) => state.getCellObject);
   const selectCell = useAccelStore((state) => state.selectCell);
+  const clearDirty = useAccelStore((state) => state.clearDirty);
   const startSelection = useAccelStore((state) => state.startSelection);
   const updateSelection = useAccelStore((state) => state.updateSelection);
   const endSelection = useAccelStore((state) => state.endSelection);
@@ -368,6 +371,13 @@ export const SpreadsheetGrid: React.FC = () => {
       return () => document.removeEventListener('mouseup', handleMouseUp);
     }
   }, [isDraggingFill, handleMouseUp]);
+
+  // Clear dirty tracking after render (Excel-grade optimization)
+  useLayoutEffect(() => {
+    if (dirtyValues.size > 0 || dirtyFormulas.size > 0) {
+      clearDirty();
+    }
+  }, [dirtyValues, dirtyFormulas, clearDirty]);
 
   // Grid keyboard navigation
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {

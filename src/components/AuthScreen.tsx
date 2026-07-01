@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
 
 export function AuthScreen() {
@@ -25,7 +26,7 @@ export function AuthScreen() {
   return (
     <div className="auth-screen">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1>Radix</h1>
+        <Link to="/" className="auth-back">← Radix</Link>
         <p className="auth-subtitle">
           {mode === 'sign-in' ? 'Sign in to your workbooks' : 'Create an account'}
         </p>

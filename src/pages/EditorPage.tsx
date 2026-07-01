@@ -44,7 +44,11 @@ export function EditorPage({ mode }: { mode: Mode }) {
     return (
       <div className="loading-screen">
         <p>{error}</p>
-        <Link to="/">Back to My workbooks</Link>
+        {mode === 'owner' ? (
+          <Link to="/dashboard">Back to My workbooks</Link>
+        ) : (
+          <Link to="/">Back to Radix</Link>
+        )}
       </div>
     );
   }

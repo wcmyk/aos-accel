@@ -56,8 +56,8 @@ export function EditorShell() {
         </div>
         <div className="title-bar__right">
           {canEditTitle && <ShareButton workbookId={workbookId as string} />}
-          {isCloudEnabled && (
-            <button className="link-button" onClick={() => navigate('/')}>My workbooks</button>
+          {isCloudEnabled && !isReadOnly && (
+            <button className="link-button" onClick={() => navigate('/dashboard')}>My workbooks</button>
           )}
           <span className={`status-dot ${saveStatus === 'error' ? 'status-dot--error' : ''}`} />
           {saveStatusLabel(saveStatus, isReadOnly)}

@@ -299,6 +299,26 @@ npm run build
 
 Visit `http://localhost:3000` to use Accel.
 
+By default this runs in **local-only mode**: no accounts, nothing persists
+across reloads. To enable accounts, save/load, and shareable read-only links:
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Run [`supabase/schema.sql`](./supabase/schema.sql) in that project's SQL editor.
+3. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` /
+   `VITE_SUPABASE_ANON_KEY` from Project Settings → API.
+4. Restart `npm run dev`.
+
+Once configured, signed-in users get a workbook dashboard, autosave, and a
+"Share" button that generates a read-only `/#/share/:token` link. Sharing a
+workbook does not grant edit access, and revoking a share link (via
+"Revoke link" in the Share panel) immediately invalidates previously shared
+URLs without affecting the workbook's normal `/w/:id` URL.
+
+To enable cloud features on the deployed GitHub Pages build, add
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository secrets
+(Settings → Secrets and variables → Actions) — `.github/workflows/deploy.yml`
+already passes them through to the build.
+
 ## Example Usage
 
 See [EXAMPLES.md](./EXAMPLES.md) for 10 detailed examples demonstrating:
@@ -358,7 +378,7 @@ Tests verify:
 - [ ] 3D graphing
 - [ ] Touch/gesture support for mobile
 - [ ] Graph export (PNG, SVG)
-- [ ] Workbook save/load
+- [x] Workbook save/load (optional Supabase-backed cloud mode; see "Running the Project")
 - [ ] Collaborative editing
 
 ---

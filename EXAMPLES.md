@@ -1,6 +1,6 @@
-# Accel Examples
+# Radix Examples
 
-This document demonstrates Accel's unified spreadsheet + graphing capabilities.
+This document demonstrates Radix's unified spreadsheet + graphing capabilities.
 
 ## Example 1: Linear Function with Interactive Parameters
 
@@ -190,6 +190,6 @@ All examples show that:
 2. **No mode switching** - formulas and graphs use the same syntax
 3. **Parameters are live** - sliders update everything in real-time
 4. **Automation works** - can script complex scenarios
-5. **Excel + Desmos = Accel** - best of both worlds
+5. **Excel + Desmos = Radix** - best of both worlds
 
 This is the **unified computational environment** as specified in the positioning document.

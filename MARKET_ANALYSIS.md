@@ -1,7 +1,7 @@
 # Market Analysis & Billion-Dollar Strategy
 
 ## Executive Summary
-**AOS-Accel** is uniquely positioned at the intersection of **spreadsheets**, **computational notebooks**, and **scientific computing**. The billion-dollar opportunity: **"Figma for Data Science"** - real-time collaborative computational workspaces that replace Jupyter, Excel, and MATLAB.
+**Radix** is uniquely positioned at the intersection of **spreadsheets**, **computational notebooks**, and **scientific computing**. The billion-dollar opportunity: **"Figma for Data Science"** - real-time collaborative computational workspaces that replace Jupyter, Excel, and MATLAB.
 
 ---
 
@@ -248,7 +248,7 @@
 
 **Market impact:**
 - **Massive addressable market:** 8M+ Python users
-- **Workflow replacement:** Jupyter → AOS-Accel
+- **Workflow replacement:** Jupyter → Radix
 - **Pricing:** $20/mo for code execution
 
 **Estimated effort:** 8-12 weeks
@@ -611,7 +611,7 @@
 - Teams struggle to collaborate on computational work
 
 **Solution:**
-- **AOS-Accel:** Real-time collaborative computational workspace
+- **Radix:** Real-time collaborative computational workspace
 - Spreadsheets + code + visualizations in one beautiful interface
 - Parameter sliders for interactive exploration
 - AI copilot for non-technical users
@@ -678,7 +678,7 @@
 
 ## Conclusion
 
-**AOS-Accel has the foundation to be a billion-dollar company.**
+**Radix has the foundation to be a billion-dollar company.**
 
 The unique combination of:
 - ✅ Parameter sliders (interactive exploration)

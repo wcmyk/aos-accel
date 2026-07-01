@@ -1,10 +1,10 @@
-# Accel Advanced Features Roadmap
+# Radix Advanced Features Roadmap
 
-> Transforming Accel from "Excel + Desmos" into a **scientific computing platform**
+> Transforming Radix from "Excel + Desmos" into a **scientific computing platform**
 
 ## Vision
 
-Accel becomes a **unified computational environment** for:
+Radix becomes a **unified computational environment** for:
 - Mathematics (calculus, linear algebra, numerical methods)
 - Physics (classical, quantum, waves, thermo)
 - Statistics (inference, uncertainty propagation, distributions)
@@ -236,4 +236,4 @@ Then iterate through phases 2-6.
 
 ---
 
-This roadmap maintains Accel's core vision while expanding it into a **true scientific computing platform**.
+This roadmap maintains Radix's core vision while expanding it into a **true scientific computing platform**.

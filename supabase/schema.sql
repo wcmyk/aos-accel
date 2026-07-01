@@ -1,4 +1,4 @@
--- Accel Phase 0: persistence + sharing schema.
+-- Radix Phase 0: persistence + sharing schema.
 -- Run this once in the Supabase SQL editor for your project.
 
 create extension if not exists "pgcrypto";

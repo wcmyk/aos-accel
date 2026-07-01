@@ -49,7 +49,7 @@ export function EditorShell() {
                 onChange={(e) => setWorkbookTitle(e.target.value)}
               />
             ) : (
-              <strong>{workbookTitle || 'Accel.xlsx'}</strong>
+              <strong>{workbookTitle || 'Radix.xlsx'}</strong>
             )}
             <span>Professional Spreadsheet Application</span>
           </div>

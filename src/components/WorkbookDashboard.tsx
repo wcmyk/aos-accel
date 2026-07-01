@@ -45,7 +45,7 @@ export function WorkbookDashboard() {
   return (
     <div className="dashboard">
       <header className="dashboard__header">
-        <h1>Accel</h1>
+        <h1>Radix</h1>
         <div className="dashboard__user">
           <span>{user?.email}</span>
           <button onClick={() => signOut()}>Sign out</button>

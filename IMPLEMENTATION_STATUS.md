@@ -1,11 +1,11 @@
-# Accel Implementation Status
+# Radix Implementation Status
 
 ## Overview
-Accel has evolved from a simple "Excel + Desmos" spreadsheet/graphing tool into a comprehensive **scientific computing platform**. This document tracks implementation progress.
+Radix has evolved from a simple "Excel + Desmos" spreadsheet/graphing tool into a comprehensive **scientific computing platform**. This document tracks implementation progress.
 
 ---
 
-## ✅ Core Accel System (Complete)
+## ✅ Core Radix System (Complete)
 
 ### Spreadsheet Engine
 - ✅ Formula parser (converts Excel formulas to AST)
@@ -297,7 +297,7 @@ Accel has evolved from a simple "Excel + Desmos" spreadsheet/graphing tool into 
 ## 📊 Implementation Statistics
 
 ### Lines of Code (Estimated)
-- **Core Accel:** ~3,000 LOC
+- **Core Radix:** ~3,000 LOC
 - **Phase 1 (Scientific Computing):** ~4,500 LOC
 - **Phase 2 (Physics):** ~2,100 LOC
 - **Solvers:** ~1,100 LOC
@@ -319,7 +319,7 @@ Accel has evolved from a simple "Excel + Desmos" spreadsheet/graphing tool into 
 
 ## 🎯 Current State
 
-Accel is now a **fully functional scientific computing platform** with:
+Radix is now a **fully functional scientific computing platform** with:
 
 1. **Spreadsheet + Graphing** (original vision) ✅
 2. **Statistical Analysis** (distributions, inference, uncertainty) ✅

@@ -1,7 +1,7 @@
 {
-  "name": "accel",
+  "name": "radix",
   "version": "0.1.0",
-  "description": "Unified spreadsheet + graphing environment (Excel + Desmos replacement)",
+  "description": "Radix: unified spreadsheet + graphing environment (Excel + Desmos replacement)",
   "type": "module",
   "scripts": {
     "dev": "vite",

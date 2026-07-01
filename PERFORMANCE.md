@@ -667,4 +667,4 @@ Offload calculations to Web Workers:
 
 ---
 
-This keeps Accel = Excel + Desmos, NOT Deccel!
+This keeps Radix = Excel + Desmos, NOT Deccel!

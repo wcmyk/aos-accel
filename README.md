@@ -1,17 +1,17 @@
-# Accel
+# Radix
 
 ## Project Overview
 
-Accel is a next-generation computational environment that unifies spreadsheet capabilities with native graphing functionality. Unlike traditional tools that treat charts as visual outputs or graphing as a separate mode, Accel provides a single, coherent calculation engine where data, formulas, and graphs are synchronized representations of the same computational state.
+Radix is a next-generation computational environment that unifies spreadsheet capabilities with native graphing functionality. Unlike traditional tools that treat charts as visual outputs or graphing as a separate mode, Radix provides a single, coherent calculation engine where data, formulas, and graphs are synchronized representations of the same computational state.
 
 ---
 
-# 🧮 Accel — Unified Spreadsheet + Graphing Environment
+# 🧮 Radix — Unified Spreadsheet + Graphing Environment
 
 ## Core Definition (Authoritative)
 
-**Accel is not "Excel with charts."**
-**Accel is a unified computational environment that fully replaces both Excel *and* Desmos.**
+**Radix is not "Excel with charts."**
+**Radix is a unified computational environment that fully replaces both Excel *and* Desmos.**
 
 There is **no separation** between:
 
@@ -27,7 +27,7 @@ They are all **first-class views of the same calculation engine**.
 
 ## Non-Negotiable Product Principle
 
-> **If something can be expressed numerically in Accel, it must be both:**
+> **If something can be expressed numerically in Radix, it must be both:**
 >
 > 1. **Tabular (Excel-like)**
 > 2. **Graphable (Desmos-like)**
@@ -37,9 +37,9 @@ They are synchronized representations of the same state.
 
 ---
 
-## What Accel Replaces
+## What Radix Replaces
 
-| Existing Tool | How Accel Replaces It                                          |
+| Existing Tool | How Radix Replaces It                                          |
 | ------------- | -------------------------------------------------------------- |
 | Excel         | Full spreadsheet functionality, formulas, tables, automation   |
 | Desmos        | Native, reactive, parametric graphing tied directly to cells   |
@@ -49,7 +49,7 @@ They are synchronized representations of the same state.
 
 ## Unified Engine Model
 
-Accel has **one** engine, not two:
+Radix has **one** engine, not two:
 
 ```
 Single Calculation Engine
@@ -161,7 +161,7 @@ Example automation use cases:
 
 ## Engineering Rule (Must Be Followed)
 
-> **There must be no value in Accel that can be calculated but not graphed.
+> **There must be no value in Radix that can be calculated but not graphed.
 > There must be no graph that is not backed by the calculation engine.**
 
 This rule governs architecture decisions.
@@ -170,7 +170,7 @@ This rule governs architecture decisions.
 
 ## Summary (for SWE Alignment)
 
-Accel is:
+Radix is:
 
 * A **spreadsheet**
 * A **graphing calculator**
@@ -192,7 +192,7 @@ Without ever leaving the same environment.
 
 # Implementation
 
-This repository contains the **full implementation** of Accel as specified above.
+This repository contains the **full implementation** of Radix as specified above.
 
 ## Architecture
 
@@ -204,7 +204,7 @@ This repository contains the **full implementation** of Accel as specified above
 - `evaluator.ts` - AST evaluator (executes formulas AND graphs)
 - `formulas.ts` - Excel formula library (~50+ functions implemented, extensible to 350-400)
 - `dependency-graph.ts` - Dependency tracking for efficient recalculation
-- `engine.ts` - Main Accel engine coordinating everything
+- `engine.ts` - Main Radix engine coordinating everything
 - `graph-renderer.ts` - Graph rendering using shared AST (NO duplicate parsing)
 - `automation.ts` - Automation runtime for scripted scenarios
 
@@ -297,7 +297,7 @@ npm test
 npm run build
 ```
 
-Visit `http://localhost:3000` to use Accel.
+Visit `http://localhost:3000` to use Radix.
 
 By default this runs in **local-only mode**: no accounts, nothing persists
 across reloads. To enable accounts, save/load, and shareable read-only links:

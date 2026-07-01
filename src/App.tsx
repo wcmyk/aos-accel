@@ -3,57 +3,55 @@
  * Full-featured Excel replacement
  */
 
-import { SpreadsheetGrid } from './components/SpreadsheetGrid';
-import { Ribbon } from './components/Ribbon';
-import { GraphCanvas } from './components/GraphCanvas';
-import { SheetTabs } from './components/SheetTabs';
-import { useAccelStore } from './store/accel-store';
+import { useEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { isCloudEnabled } from './lib/supabase';
+import { useAuthStore } from './store/auth-store';
+import { AuthScreen } from './components/AuthScreen';
+import { WorkbookDashboard } from './components/WorkbookDashboard';
+import { EditorPage } from './pages/EditorPage';
 import './App.css';
 
-function App() {
-  const activeSheet = useAccelStore((state) => state.activeSheet);
+function CloudApp() {
+  const user = useAuthStore((state) => state.user);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const init = useAuthStore((state) => state.init);
+
+  useEffect(() => {
+    init();
+  }, [init]);
+
+  if (isLoading) {
+    return <div className="loading-screen">Loading…</div>;
+  }
 
   return (
-    <div className="excel-shell">
-      <div className="title-bar">
-        <div className="title-bar__left">
-          <div className="traffic-lights">
-            <span className="light red" />
-            <span className="light yellow" />
-            <span className="light green" />
-          </div>
-          <div className="title">
-            <strong>Accel.xlsx</strong>
-            <span>Professional Spreadsheet Application</span>
-          </div>
-        </div>
-        <div className="title-bar__right">
-          <span className="status-dot" />
-          AutoSave Off
-        </div>
-      </div>
+    <Routes>
+      <Route path="/share/:token" element={<EditorPage mode="share" />} />
+      {!user ? (
+        <Route path="*" element={<AuthScreen />} />
+      ) : (
+        <>
+          <Route path="/" element={<WorkbookDashboard />} />
+          <Route path="/w/:id" element={<EditorPage mode="owner" />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </>
+      )}
+    </Routes>
+  );
+}
 
-      <Ribbon />
+function App() {
+  if (!isCloudEnabled) {
+    return <EditorPage mode="local" />;
+  }
 
-      <div className="workspace">
-        <div className="sheet-panel">
-          <SpreadsheetGrid />
-        </div>
-        <div className="insight-panel">
-          <div className="card">
-            <GraphCanvas />
-          </div>
-        </div>
-      </div>
-
-      <SheetTabs />
-
-      <footer className="status-bar">
-        <span>Ready</span>
-        <span>{activeSheet}</span>
-        <span>Average: - | Count: - | Sum: -</span>
-      </footer>
-    </div>
+  return (
+    // HashRouter avoids needing a server-side rewrite rule for deep links
+    // like /w/:id, which plain GitHub Pages static hosting can't do.
+    <HashRouter>
+      <CloudApp />
+    </HashRouter>
   );
 }
 

@@ -5,9 +5,14 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { enableMapSet } from 'immer';
 import { AccelEngine } from '../engine/engine';
 import { CellValue, Cell, GraphDefinition } from '../engine/types';
 import { GraphRenderer } from '../engine/graph-renderer';
+import { deserializeEngine, SerializedWorkbook } from '../engine/serialization';
+
+// dirtyValues/dirtyFormulas are Sets mutated inside immer producers below.
+enableMapSet();
 
 export type Theme = 'default' | 'pastel-yellow' | 'pastel-blue' | 'pastel-brown' | 'pastel-red' | 'pastel-pink' | 'pastel-green' | 'pastel-purple' | 'dark' | 'dark-blue' | 'dark-green' | 'dark-purple';
 
@@ -162,6 +167,17 @@ interface AccelState {
   } | null;
   isSelecting: boolean;
 
+  // Cloud persistence (Phase 0)
+  workbookId: string | null;
+  workbookTitle: string;
+  isReadOnly: boolean;
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  lastSavedAt: number | null;
+  docVersion: number;
+  loadWorkbook: (data: SerializedWorkbook, meta: { id: string | null; title: string; readOnly: boolean }) => void;
+  setWorkbookTitle: (title: string) => void;
+  setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', savedAt?: number) => void;
+
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
   getCell: (row: number, col: number) => CellValue;
@@ -238,7 +254,52 @@ export const useAccelStore = create<AccelState>()(
     selectionRange: null,
     isSelecting: false,
 
+    workbookId: null,
+    workbookTitle: 'Untitled workbook',
+    isReadOnly: false,
+    saveStatus: 'idle',
+    lastSavedAt: null,
+    docVersion: 0,
+
+    loadWorkbook: (data, meta) => {
+      const engine = deserializeEngine(data);
+      set((state) => {
+        state.engine = engine;
+        state.activeSheet = engine.getActiveSheetName();
+        state.sheetNames = engine.getSheetNames();
+        state.selectedCell = null;
+        state.selectionRange = null;
+        state.fillRange = null;
+        state.graphRenderer = null;
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
+        state.workbookId = meta.id;
+        state.workbookTitle = meta.title;
+        state.isReadOnly = meta.readOnly;
+        state.saveStatus = 'saved';
+        state.lastSavedAt = Date.now();
+        state.docVersion = 0;
+      });
+    },
+
+    setWorkbookTitle: (title) => {
+      set((state) => {
+        state.workbookTitle = title;
+        state.docVersion += 1;
+      });
+    },
+
+    setSaveStatus: (status, savedAt) => {
+      set((state) => {
+        state.saveStatus = status;
+        if (savedAt !== undefined) {
+          state.lastSavedAt = savedAt;
+        }
+      });
+    },
+
     setCell: (row, col, value) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       const cellKey = `${col},${row}`;
 
@@ -256,6 +317,7 @@ export const useAccelStore = create<AccelState>()(
         dependents.forEach(dep => {
           state.dirtyFormulas.add(`${dep.col},${dep.row}`);
         });
+        state.docVersion += 1;
       });
     },
 
@@ -325,6 +387,7 @@ export const useAccelStore = create<AccelState>()(
     },
 
     cutCell: (row, col) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       const cell = engine.getCellObject(row, col);
       const cellValue = cell?.value ?? null;
@@ -338,10 +401,12 @@ export const useAccelStore = create<AccelState>()(
       engine.setCell(row, col, '');
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     pasteCell: (row, col) => {
+      if (get().isReadOnly) return;
       const { clipboard, engine } = get();
       if (!clipboard) return;
 
@@ -356,6 +421,7 @@ export const useAccelStore = create<AccelState>()(
         if (clipboard.isCut) {
           state.clipboard = null;
         }
+        state.docVersion += 1;
       });
     },
 
@@ -372,6 +438,7 @@ export const useAccelStore = create<AccelState>()(
     },
 
     executeFill: () => {
+      if (get().isReadOnly) return;
       const { selectedCell, fillRange, engine } = get();
       if (!selectedCell || !fillRange) return;
 
@@ -432,86 +499,107 @@ export const useAccelStore = create<AccelState>()(
             state.dirtyValues.add(targetKey);
           }
         }
+        state.docVersion += 1;
       });
     },
 
     formatCell: (row, col, format) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.formatCell(row, col, format);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     sortColumn: (col, ascending) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.sortColumn(col, ascending);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     insertRow: (row) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.insertRow(row);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     deleteRow: (row) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.deleteRow(row);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     insertColumn: (col) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.insertColumn(col);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     deleteColumn: (col) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.deleteColumn(col);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     setParameter: (row, col, min, max, step) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.setParameter(row, col, min, max, step);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     updateParameter: (row, col, value) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.updateParameter(row, col, value);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     addGraph: (id, formula) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.addGraph(id, formula);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
     removeGraph: (id) => {
+      if (get().isReadOnly) return;
       const { engine } = get();
       engine.removeGraph(id);
       set((state) => {
         state.engine = engine;
+        state.docVersion += 1;
       });
     },
 
@@ -543,6 +631,7 @@ export const useAccelStore = create<AccelState>()(
     },
 
     addSheet: () => {
+      if (get().isReadOnly) return;
       const { engine, sheetNames } = get();
       let suffix = sheetNames.length + 1;
       let name = `Sheet${suffix}`;
@@ -563,10 +652,12 @@ export const useAccelStore = create<AccelState>()(
         // New sheet - clear dirty tracking
         state.dirtyValues.clear();
         state.dirtyFormulas.clear();
+        state.docVersion += 1;
       });
     },
 
     deleteSheet: (name) => {
+      if (get().isReadOnly) return;
       const { engine, sheetNames, activeSheet } = get();
       if (sheetNames.length === 1) {
         return;
@@ -587,6 +678,7 @@ export const useAccelStore = create<AccelState>()(
         // Sheet deleted - clear dirty tracking
         state.dirtyValues.clear();
         state.dirtyFormulas.clear();
+        state.docVersion += 1;
       });
     },
 

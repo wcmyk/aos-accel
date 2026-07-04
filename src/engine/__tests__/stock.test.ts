@@ -72,3 +72,23 @@ describe('STOCK formula', () => {
     expect(affected).toContain('1,1');
   });
 });
+
+describe('MARKETDAYS bridge', () => {
+  it('exposes the market timeframe to formulas and recalculates on change', async () => {
+    const { setMarketTimeframeDays } = await import('../stock-data');
+    __setTickerData('TEST', bars([10, 20, 30, 40]));
+
+    setMarketTimeframeDays(2);
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, '=MARKETDAYS()');
+    engine.setCell(2, 1, '=AVERAGE(STOCK("TEST", "close", MARKETDAYS()))');
+    expect(engine.getCell(1, 1)).toBe(2);
+    expect(engine.getCell(2, 1)).toBe(35); // last 2 closes: 30, 40
+
+    // Chart timeframe changes → engine-visible state changes → recalc
+    setMarketTimeframeDays(4);
+    engine.recalculateStockCells();
+    expect(engine.getCell(1, 1)).toBe(4);
+    expect(engine.getCell(2, 1)).toBe(25); // all 4 closes
+  });
+});

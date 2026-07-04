@@ -10,7 +10,7 @@ import { AccelEngine } from '../engine/engine';
 import { CellValue, Cell, GraphDefinition } from '../engine/types';
 import { GraphRenderer } from '../engine/graph-renderer';
 import { deserializeEngine, SerializedWorkbook } from '../engine/serialization';
-import { onStockData } from '../engine/stock-data';
+import { onStockData, setMarketTimeframeDays, TIMEFRAME_BARS } from '../engine/stock-data';
 
 // dirtyValues/dirtyFormulas are Sets mutated inside immer producers below.
 enableMapSet();
@@ -227,7 +227,7 @@ interface AccelState {
   updateParameter: (row: number, col: number, value: number) => void;
 
   // Graphs
-  addGraph: (id: string, formula: string) => void;
+  addGraph: (id: string, formula: string, type?: 'function' | 'plot') => void;
   removeGraph: (id: string) => void;
   getGraphs: () => GraphDefinition[];
   getGraphRenderer: () => GraphRenderer;
@@ -326,6 +326,16 @@ export const useAccelStore = create<AccelState>()(
       const cellKey = `${col},${row}`;
 
       engine.setCell(row, col, value);
+
+      // Sheet -> Market bridge: any ticker referenced literally in a STOCK()
+      // formula joins the watchlist, so the Market chart is always a live
+      // view of the symbols the workbook actually uses.
+      if (typeof value === 'string' && /\bSTOCK\s*\(/i.test(value)) {
+        const tickerLiterals = value.matchAll(/\bSTOCK\s*\(\s*"([A-Za-z.\-:]{1,10})"/gi);
+        for (const match of tickerLiterals) {
+          get().addWatchedTicker(match[1]);
+        }
+      }
 
       // Invalidate graph cache for changed cell
       get().invalidateGraphCache([cellKey]);
@@ -609,10 +619,10 @@ export const useAccelStore = create<AccelState>()(
       });
     },
 
-    addGraph: (id, formula) => {
+    addGraph: (id, formula, type = 'function') => {
       if (get().isReadOnly) return;
       const { engine } = get();
-      engine.addGraph(id, formula);
+      engine.addGraph(id, formula, type);
       set((state) => {
         state.engine = engine;
         state.docVersion += 1;
@@ -781,6 +791,13 @@ export const useAccelStore = create<AccelState>()(
       set((state) => {
         state.marketTimeframe = label;
       });
+      // The chart's timeframe is engine state too: cells using MARKETDAYS()
+      // (e.g. =AVERAGE(STOCK("AAPL","close",MARKETDAYS()))) follow along.
+      const days = label === 'Custom'
+        ? get().marketCustomRange?.days ?? 63
+        : TIMEFRAME_BARS[label] ?? 63;
+      setMarketTimeframeDays(days);
+      get().refreshStockData();
     },
 
     setMarketCustomRange: (startMs, days) => {
@@ -788,6 +805,8 @@ export const useAccelStore = create<AccelState>()(
         state.marketCustomRange = { startMs, days };
         state.marketTimeframe = 'Custom';
       });
+      setMarketTimeframeDays(days);
+      get().refreshStockData();
     },
 
     stockPickerOpen: false,

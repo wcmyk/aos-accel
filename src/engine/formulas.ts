@@ -125,6 +125,14 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return StockData.getStockSeries(t, f, d) ?? 'Loading…';
   },
 
+  /**
+   * MARKETDAYS() — the Market chart's active timeframe, in trading days.
+   * Cells written against it recalculate whenever the user switches the
+   * chart's timeframe (1M/3M/1Y/…), keeping grid statistics and the chart
+   * in lockstep:  =AVERAGE(STOCK("AAPL", "close", MARKETDAYS()))
+   */
+  MARKETDAYS: () => StockData.getMarketTimeframeDays(),
+
   // ===== TRIGONOMETRIC FUNCTIONS =====
   SIN: (value) => Math.sin(toNumber(value)),
 

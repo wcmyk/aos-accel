@@ -202,30 +202,30 @@ export class FormulaParser {
       return this.parseFunction(ident);
     }
 
-    // Check if it's a cell reference (e.g., A1, B10)
-    const cellMatch = ident.match(/^([A-Z]+)([0-9]+)$/);
+    // Check if it's a cell reference (e.g., A1, B10 — case-insensitive).
+    // The range check MUST happen before returning the cell: bailing out
+    // early here left "A1:A5" parsed as just "A1", making every ranged
+    // function call (SUM(A1:A10), PLOT(A1:A5), …) a parse error.
+    const cellMatch = ident.match(/^([A-Za-z]+)([0-9]+)$/);
     if (cellMatch) {
-      const col = this.columnToNumber(cellMatch[1]);
+      const col = this.columnToNumber(cellMatch[1].toUpperCase());
       const row = parseInt(cellMatch[2], 10);
-      return { type: 'cell', ref: { row, col } };
-    }
 
-    // Check for range (e.g., A1:B10)
-    if (this.peek() === ':') {
-      this.consume(); // ':'
-      const endCell = this.parseIdentifier();
-      if (endCell.type === 'cell') {
-        const startMatch = ident.match(/^([A-Z]+)([0-9]+)$/);
-        if (startMatch) {
-          const startCol = this.columnToNumber(startMatch[1]);
-          const startRow = parseInt(startMatch[2], 10);
-          return {
-            type: 'range',
-            start: { row: startRow, col: startCol },
-            end: endCell.ref,
-          };
+      if (this.peek() === ':') {
+        this.consume(); // ':'
+        this.skipWhitespace();
+        const endCell = this.parseIdentifier();
+        if (endCell.type !== 'cell') {
+          throw new Error(`Invalid range end after ${ident}:`);
         }
+        return {
+          type: 'range',
+          start: { row, col },
+          end: endCell.ref,
+        };
       }
+
+      return { type: 'cell', ref: { row, col } };
     }
 
     // Otherwise, treat as variable (for graphing: x, y, etc.)

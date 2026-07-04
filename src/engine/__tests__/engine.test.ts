@@ -273,3 +273,26 @@ describe('Math Shortcuts', () => {
     expect(engine.getCell(2, 1)).toBe('pi e^^ inside a string');
   });
 });
+
+describe('Range References', () => {
+  it('parses ranges inside function calls', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, 10);
+    engine.setCell(2, 1, 20);
+    engine.setCell(3, 1, 30);
+    engine.setCell(1, 2, '=SUM(A1:A3)');
+    engine.setCell(2, 2, '=AVERAGE(a1:a3)'); // lowercase refs too
+    expect(engine.getCell(1, 2)).toBe(60);
+    expect(engine.getCell(2, 2)).toBe(20);
+  });
+
+  it('recalculates ranged formulas when a cell in the range changes', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, 1);
+    engine.setCell(2, 1, 2);
+    engine.setCell(1, 2, '=SUM(A1:A2)');
+    expect(engine.getCell(1, 2)).toBe(3);
+    engine.setCell(2, 1, 10);
+    expect(engine.getCell(1, 2)).toBe(11);
+  });
+});

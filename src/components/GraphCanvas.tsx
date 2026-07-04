@@ -24,6 +24,12 @@ export const GraphCanvas: React.FC = React.memo(() => {
   // Once the user zooms/pans/resets we stop auto-fitting to plot data.
   const userAdjustedViewportRef = useRef(false);
   const lastPlotBoundsRef = useRef<{ xMin: number; xMax: number; yMin: number; yMax: number } | null>(null);
+  // Cursor tracing: nearest point per visible series at the hovered x.
+  const [trace, setTrace] = useState<{
+    cssX: number;
+    dataX: number;
+    entries: Array<{ color: string; label: string; x: number; y: number }>;
+  } | null>(null);
 
   const graphs = getGraphs();
   const plotDimensions = graphs
@@ -140,11 +146,33 @@ export const GraphCanvas: React.FC = React.memo(() => {
       ctx.stroke();
     }
 
-    // Labels — reflect the currently selected axes (e.g. Z when viewing X-Z)
+    // Numeric tick labels along the edges. These stay visible no matter
+    // where the viewport is — previously only the zero-axis lines were
+    // drawn, so panning/fitting to data far from the origin left the chart
+    // with no readable scale at all.
+    const fmtTick = (v: number) =>
+      Math.abs(v) >= 1e5 || (v !== 0 && Math.abs(v) < 1e-3)
+        ? v.toExponential(1)
+        : String(parseFloat(v.toFixed(2)));
+
     ctx.fillStyle = axisColor;
-    ctx.font = '12px sans-serif';
-    ctx.fillText(`${axisLabel(axisSelection.xIndex)}: [${vp.xMin.toFixed(1)}, ${vp.xMax.toFixed(1)}]`, 10, height - 10);
-    ctx.fillText(`${axisLabel(axisSelection.yIndex)}: [${vp.yMin.toFixed(1)}, ${vp.yMax.toFixed(1)}]`, 10, 20);
+    ctx.font = `${Math.round(11 * (window.devicePixelRatio || 1))}px sans-serif`;
+    for (let i = 0; i <= 10; i += 2) {
+      const xVal = vp.xMin + (i * (vp.xMax - vp.xMin)) / 10;
+      const screenX = mapToScreen(xVal, vp.xMin, vp.xMax, 0, width);
+      ctx.textAlign = i === 0 ? 'left' : i === 10 ? 'right' : 'center';
+      ctx.fillText(fmtTick(xVal), screenX, height - 8);
+
+      const yVal = vp.yMin + (i * (vp.yMax - vp.yMin)) / 10;
+      const screenY = mapToScreen(yVal, vp.yMin, vp.yMax, height, 0);
+      ctx.textAlign = 'left';
+      ctx.fillText(fmtTick(yVal), 8, Math.min(height - 22, Math.max(30, screenY + 4)));
+    }
+    ctx.textAlign = 'left';
+
+    // Axis names in the corners
+    ctx.fillText(axisLabel(axisSelection.xIndex), width - 18, height - 26);
+    ctx.fillText(axisLabel(axisSelection.yIndex), 8, 14);
   };
 
   /**
@@ -234,6 +262,29 @@ export const GraphCanvas: React.FC = React.memo(() => {
 
         ctx.stroke();
       }
+
+      // Cursor trace: dashed vertical at the hovered x plus a marker dot on
+      // each series at its nearest sampled point.
+      if (trace) {
+        const isDark = document.documentElement.getAttribute('data-theme')?.includes('dark');
+        const lineX = mapToScreen(trace.dataX, viewport.xMin, viewport.xMax, 0, canvas.width);
+        ctx.strokeStyle = isDark ? 'rgba(148,163,184,0.55)' : 'rgba(100,116,139,0.55)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(lineX, 0);
+        ctx.lineTo(lineX, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        for (const entry of trace.entries) {
+          const px = mapToScreen(entry.x, viewport.xMin, viewport.xMax, 0, canvas.width);
+          const py = mapToScreen(entry.y, viewport.yMin, viewport.yMax, canvas.height, 0);
+          ctx.fillStyle = entry.color;
+          ctx.beginPath();
+          ctx.arc(px, py, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     });
 
     return () => {
@@ -241,7 +292,38 @@ export const GraphCanvas: React.FC = React.memo(() => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [viewport, getGraphRenderer, canvasSize, axisSelection, docVersion]);
+  }, [viewport, getGraphRenderer, canvasSize, axisSelection, docVersion, trace]);
+
+  const handleTraceMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const frac = (e.clientX - rect.left) / Math.max(1, rect.width);
+    const dataX = viewport.xMin + frac * (viewport.xMax - viewport.xMin);
+
+    const graphsData = getGraphRenderer().renderAll(1000, axisSelection);
+    const formulas = new Map(getGraphs().map((g) => [g.id, g.formula]));
+    const entries: Array<{ color: string; label: string; x: number; y: number }> = [];
+    for (const g of graphsData) {
+      if (!g.visible || g.points.length === 0) continue;
+      let best = g.points[0];
+      let bestDist = Math.abs(best.x - dataX);
+      for (const p of g.points) {
+        const d = Math.abs(p.x - dataX);
+        if (d < bestDist) {
+          best = p;
+          bestDist = d;
+        }
+      }
+      entries.push({ color: g.color, label: formulas.get(g.id) || g.id, x: best.x, y: best.y });
+    }
+
+    if (entries.length > 0) {
+      setTrace({ cssX: e.clientX - rect.left, dataX, entries });
+    } else if (trace) {
+      setTrace(null);
+    }
+  };
 
   const handleZoom = (delta: number) => {
     userAdjustedViewportRef.current = true;
@@ -350,7 +432,26 @@ export const GraphCanvas: React.FC = React.memo(() => {
             e.preventDefault();
             handleZoom(e.deltaY);
           }}
+          onMouseMove={handleTraceMove}
+          onMouseLeave={() => setTrace(null)}
         />
+        {trace && (
+          <div
+            className="graph-trace-tooltip"
+            style={{ left: Math.max(8, Math.min(trace.cssX + 14, canvasSize.width / (window.devicePixelRatio || 1) - 170)), top: 8 }}
+          >
+            <div className="graph-trace-tooltip__x">
+              {axisLabel(axisSelection.xIndex)} = {trace.dataX.toFixed(3)}
+            </div>
+            {trace.entries.map((entry, i) => (
+              <div key={i} className="graph-trace-tooltip__row">
+                <span className="stock-chip__dot" style={{ background: entry.color }} />
+                <span className="graph-trace-tooltip__label">{entry.label}</span>
+                <strong>{entry.y.toFixed(4)}</strong>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

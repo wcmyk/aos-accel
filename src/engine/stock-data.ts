@@ -107,6 +107,81 @@ export function getStockBars(ticker: string, count: number): StockBar[] | undefi
   return entry.bars.slice(-count);
 }
 
+/**
+ * Bars for a custom window: the first `days` trading days starting at
+ * `startMs` (inclusive). Returns whatever overlaps the cached history.
+ */
+export function getStockBarsFrom(ticker: string, startMs: number, days: number): StockBar[] | undefined {
+  const entry = cache.get(normalizeTicker(ticker));
+  if (!entry) return undefined;
+  const from = entry.bars.filter((b) => b.t >= startMs);
+  return from.slice(0, Math.max(1, days));
+}
+
+export interface TickerMatch {
+  symbol: string;
+  name: string;
+}
+
+const POPULAR_TICKERS: TickerMatch[] = [
+  { symbol: 'AAPL', name: 'Apple Inc.' },
+  { symbol: 'MSFT', name: 'Microsoft Corporation' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.' },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation' },
+  { symbol: 'META', name: 'Meta Platforms Inc.' },
+  { symbol: 'TSLA', name: 'Tesla Inc.' },
+  { symbol: 'NFLX', name: 'Netflix Inc.' },
+  { symbol: 'AMD', name: 'Advanced Micro Devices' },
+  { symbol: 'INTC', name: 'Intel Corporation' },
+  { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
+  { symbol: 'V', name: 'Visa Inc.' },
+  { symbol: 'DIS', name: 'The Walt Disney Company' },
+  { symbol: 'KO', name: 'The Coca-Cola Company' },
+  { symbol: 'WMT', name: 'Walmart Inc.' },
+  { symbol: 'BA', name: 'The Boeing Company' },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF' },
+  { symbol: 'QQQ', name: 'Invesco QQQ (Nasdaq-100 ETF)' },
+];
+
+/**
+ * Instant, synchronous search over the curated list — shown immediately
+ * while the (optional) provider search is in flight, so the picker never
+ * feels dead. Any symbol can always be added directly regardless of
+ * search results.
+ */
+export function searchTickersLocal(query: string): TickerMatch[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return POPULAR_TICKERS;
+  return POPULAR_TICKERS.filter(
+    (t) => t.symbol.toLowerCase().startsWith(q) || t.name.toLowerCase().includes(q)
+  );
+}
+
+/**
+ * Full-universe search via the provider's reference API. Resolves to null
+ * when no key is configured or the request fails — callers keep whatever
+ * local results they already show.
+ */
+export async function searchTickersRemote(query: string): Promise<TickerMatch[] | null> {
+  const q = query.trim();
+  const apiKey = getApiKey();
+  if (!q || !apiKey) return null;
+
+  try {
+    const url =
+      `https://api.polygon.io/v3/reference/tickers?search=${encodeURIComponent(q)}` +
+      `&market=stocks&active=true&limit=10&apiKey=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const results = (json?.results ?? []) as Array<{ ticker: string; name: string }>;
+    return results.map((r) => ({ symbol: r.ticker, name: r.name }));
+  } catch {
+    return null;
+  }
+}
+
 /** Last close as a single number (for =STOCK("AAPL", "price")). */
 export function getLastPrice(ticker: string): number | undefined {
   const entry = cache.get(normalizeTicker(ticker));

@@ -9,8 +9,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { StockPickerDialog } from './StockPickerDialog';
 import {
   getStockBars,
+  getStockBarsFrom,
   requestTicker,
   isTickerLoaded,
   didTickerFail,
@@ -64,8 +66,11 @@ export const StockPanel: React.FC = React.memo(() => {
   const toggleWatchedTicker = useAccelStore((s) => s.toggleWatchedTicker);
   // Bumped whenever async market data lands, so the chart redraws itself.
   const docVersion = useAccelStore((s) => s.docVersion);
+  const timeframe = useAccelStore((s) => s.marketTimeframe);
+  const setTimeframe = useAccelStore((s) => s.setMarketTimeframe);
+  const customRange = useAccelStore((s) => s.marketCustomRange);
+  const setStockPickerOpen = useAccelStore((s) => s.setStockPickerOpen);
 
-  const [timeframe, setTimeframe] = useState('3M');
   const [tickerInput, setTickerInput] = useState('');
   const [hover, setHover] = useState<{ index: number; px: number; py: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -100,7 +105,10 @@ export const StockPanel: React.FC = React.memo(() => {
     void docVersion; // re-derive when data arrives
     const out: SeriesData[] = [];
     for (const w of visible) {
-      const bars = getStockBars(w.symbol, barCount);
+      const bars =
+        timeframe === 'Custom' && customRange
+          ? getStockBarsFrom(w.symbol, customRange.startMs, customRange.days)
+          : getStockBars(w.symbol, barCount);
       if (!bars || bars.length === 0) continue;
       const closes = bars.map((b) => b.close);
       const values = compareMode
@@ -110,7 +118,7 @@ export const StockPanel: React.FC = React.memo(() => {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchlist, barCount, compareMode, docVersion]);
+  }, [watchlist, barCount, compareMode, docVersion, timeframe, customRange]);
 
   // Single-ticker charts color by period performance, like trading apps.
   const singleTrendColor = useMemo(() => {
@@ -344,6 +352,13 @@ export const StockPanel: React.FC = React.memo(() => {
             aria-label="Add ticker to watchlist"
           />
           <button className="btn ghost" onClick={handleAdd}>+</button>
+          <button
+            className="btn ghost"
+            onClick={() => setStockPickerOpen(true)}
+            title="Search stocks and pick a date range"
+          >
+            Browse…
+          </button>
         </div>
       </div>
 
@@ -357,6 +372,15 @@ export const StockPanel: React.FC = React.memo(() => {
             {t.label}
           </button>
         ))}
+        {customRange && (
+          <button
+            className={`stock-tf ${timeframe === 'Custom' ? 'active' : ''}`}
+            onClick={() => setTimeframe('Custom')}
+            title={`${new Date(customRange.startMs).toLocaleDateString()} + ${customRange.days} trading days`}
+          >
+            Custom
+          </button>
+        )}
         {compareMode && <span className="stock-mode-note">% change comparison</span>}
         {anySynthetic && (
           <span className="stock-demo-note" title="No API key configured or the market data API was unreachable — showing generated placeholder data.">
@@ -404,6 +428,8 @@ export const StockPanel: React.FC = React.memo(() => {
           </div>
         )}
       </div>
+
+      <StockPickerDialog />
     </div>
   );
 });

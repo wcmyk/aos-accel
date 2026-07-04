@@ -234,3 +234,42 @@ describe('Value Coercion', () => {
     expect(engine.getCell(3, 1)).toBe('hello');
   });
 });
+
+describe('Math Shortcuts', () => {
+  it('e^^ becomes Euler\'s number', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, '=e^^');
+    expect(engine.getCell(1, 1)).toBeCloseTo(Math.E, 10);
+  });
+
+  it('e^^^5 means e to the 5th power', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, '=e^^^5');
+    expect(engine.getCell(1, 1)).toBeCloseTo(Math.pow(Math.E, 5), 8);
+  });
+
+  it('ln() computes the natural log (case-insensitive)', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, '=ln(e^^)');
+    engine.setCell(2, 1, '=LN(1)');
+    expect(engine.getCell(1, 1)).toBeCloseTo(1, 10);
+    expect(engine.getCell(2, 1)).toBe(0);
+  });
+
+  it('bare pi is π but PI() still works', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, '=pi * 2');
+    engine.setCell(2, 1, '=PI() * 2');
+    expect(engine.getCell(1, 1)).toBeCloseTo(Math.PI * 2, 10);
+    expect(engine.getCell(2, 1)).toBeCloseTo(Math.PI * 2, 10);
+  });
+
+  it('does not mangle cell references or strings', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 5, 7); // E1
+    engine.setCell(1, 1, '=E1 * 2');
+    engine.setCell(2, 1, '="pi e^^ inside a string"');
+    expect(engine.getCell(1, 1)).toBe(14);
+    expect(engine.getCell(2, 1)).toBe('pi e^^ inside a string');
+  });
+});

@@ -336,8 +336,8 @@ Because STOCK is an ordinary formula, the series can be summed, averaged,
 plotted, and bound to slider parameters — mark the day-count cell as a
 parameter and dragging the slider re-slices the cached series with **zero
 extra API calls**, updating cells and charts from the same recalculation.
-The **Graphing → Insert Stock Demo** ribbon button drops in a ready-made
-template (ticker cell, timeframe slider, summary stats, live chart).
+The **Graphing → Insert Stock Template** ribbon button drops in a ready-made
+worksheet (ticker cell, timeframe slider, summary stats, live chart).
 
 Setup: get a free API key at [polygon.io](https://polygon.io), copy
 `.env.example` to `.env`, and set `VITE_STOCK_API_KEY=your_key`. To rotate

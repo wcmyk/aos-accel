@@ -239,6 +239,12 @@ interface AccelState {
   addWatchedTicker: (symbol: string) => void;
   removeWatchedTicker: (symbol: string) => void;
   toggleWatchedTicker: (symbol: string) => void;
+  marketTimeframe: string; // '1M' | '3M' | ... | 'Custom'
+  marketCustomRange: { startMs: number; days: number } | null;
+  setMarketTimeframe: (label: string) => void;
+  setMarketCustomRange: (startMs: number, days: number) => void;
+  stockPickerOpen: boolean;
+  setStockPickerOpen: (open: boolean) => void;
 
   // Batch operations
   batchUpdate: (operations: Array<() => void>) => void;
@@ -765,6 +771,30 @@ export const useAccelStore = create<AccelState>()(
       set((state) => {
         const entry = state.watchlist.find((w) => w.symbol === symbol);
         if (entry) entry.visible = !entry.visible;
+      });
+    },
+
+    marketTimeframe: '3M',
+    marketCustomRange: null,
+
+    setMarketTimeframe: (label) => {
+      set((state) => {
+        state.marketTimeframe = label;
+      });
+    },
+
+    setMarketCustomRange: (startMs, days) => {
+      set((state) => {
+        state.marketCustomRange = { startMs, days };
+        state.marketTimeframe = 'Custom';
+      });
+    },
+
+    stockPickerOpen: false,
+
+    setStockPickerOpen: (open) => {
+      set((state) => {
+        state.stockPickerOpen = open;
       });
     },
 

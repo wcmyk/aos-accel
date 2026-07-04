@@ -9,11 +9,11 @@ import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
 import { IconButton } from './Icons';
 
-type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Automation' | 'Graphing' | 'Review' | 'View';
+type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Market' | 'Automation' | 'Graphing' | 'Review' | 'View';
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs, setCell } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs, setCell, watchlist, removeWatchedTicker, toggleWatchedTicker, setStockPickerOpen } = useAccelStore();
 
   // Theme is managed locally to avoid triggering re-renders across the entire app
   const [localTheme, setLocalTheme] = useState<string>(() => {
@@ -413,10 +413,6 @@ export const Ribbon: React.FC = () => {
         <AutomationPanel />
       </div>
 
-      <div className="ribbon-group">
-        <p className="ribbon-title">Parameters</p>
-        <ParameterPanel />
-      </div>
     </>
   );
 
@@ -436,6 +432,48 @@ export const Ribbon: React.FC = () => {
     setCell(5, 1, 'Chart');
     setCell(5, 2, '=PLOT(STOCK(B1, "close", B2))');
   }, [setCell, setParameter]);
+
+  const renderMarketTab = () => (
+    <>
+      <div className="ribbon-group">
+        <p className="ribbon-title">Stocks</p>
+        <div className="ribbon-controls">
+          <button className="btn" onClick={() => setStockPickerOpen(true)}>
+            Choose Stock & Date Range…
+          </button>
+        </div>
+      </div>
+
+      <div className="ribbon-group">
+        <p className="ribbon-title">Watchlist</p>
+        <div className="ribbon-watchlist">
+          {watchlist.length === 0 && <span className="dim-note">No stocks yet — add one on the left.</span>}
+          {watchlist.map((w) => (
+            <div key={w.symbol} className={`ribbon-watch-row ${w.visible ? '' : 'off'}`}>
+              <span className="stock-chip__dot" style={{ background: w.color }} />
+              <button className="ribbon-watch-name" onClick={() => toggleWatchedTicker(w.symbol)} title={w.visible ? 'Click to hide from chart' : 'Click to show on chart'}>
+                {w.symbol}
+              </button>
+              <button className="ribbon-btn" onClick={() => removeWatchedTicker(w.symbol)} title={`Remove ${w.symbol}`}>×</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="ribbon-group">
+        <p className="ribbon-title">Templates</p>
+        <div className="ribbon-controls">
+          <button
+            className="btn"
+            onClick={handleInsertStockTemplate}
+            title="Insert a ready-made live stock worksheet: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))"
+          >
+            Insert Stock Template
+          </button>
+        </div>
+      </div>
+    </>
+  );
 
   const renderGraphingTab = () => {
     const graphs = getGraphs();
@@ -476,20 +514,9 @@ export const Ribbon: React.FC = () => {
               Make Parameter from Selection
             </button>
           </div>
+          <ParameterPanel />
         </div>
 
-        <div className="ribbon-group">
-          <p className="ribbon-title">Market Data</p>
-          <div className="ribbon-controls">
-            <button
-              className="btn"
-              onClick={handleInsertStockTemplate}
-              title="Insert a ready-made live stock worksheet: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))"
-            >
-              Insert Stock Template
-            </button>
-          </div>
-        </div>
       </>
     );
   };
@@ -608,6 +635,8 @@ export const Ribbon: React.FC = () => {
         return renderFormulasTab();
       case 'Data':
         return renderDataTab();
+      case 'Market':
+        return renderMarketTab();
       case 'Automation':
         return renderAutomationTab();
       case 'Graphing':
@@ -624,7 +653,7 @@ export const Ribbon: React.FC = () => {
   return (
     <>
       <div className="ribbon-tabs">
-        {(['Home', 'Insert', 'Page Layout', 'Formulas', 'Data', 'Automation', 'Graphing', 'Review', 'View'] as TabName[]).map((tab) => (
+        {(['Home', 'Insert', 'Page Layout', 'Formulas', 'Data', 'Market', 'Automation', 'Graphing', 'Review', 'View'] as TabName[]).map((tab) => (
           <button
             key={tab}
             className={`tab ${activeTab === tab ? 'active' : ''}`}

@@ -13,6 +13,7 @@ export interface Point {
 
 export interface GraphData {
   id: string;
+  type: GraphDefinition['type'];
   points: Point[];
   color: string;
   visible: boolean;
@@ -45,6 +46,16 @@ export class GraphRenderer {
       const currentVersion = this.cellVersions.get(key) || 0;
       this.cellVersions.set(key, currentVersion + 1);
     }
+  }
+
+  /**
+   * Drop every cached point series. Needed when data arrives from outside
+   * the cell graph (e.g. async STOCK() market data): graphs whose formulas
+   * use only literal arguments have no cellBindings, so version bumps can
+   * never invalidate them.
+   */
+  clearCache(): void {
+    this.cache.clear();
   }
 
   /**
@@ -335,6 +346,7 @@ export class GraphRenderer {
 
       graphsData.push({
         id: graph.id,
+        type: graph.type,
         points,
         color: graph.color,
         visible: graph.visible,

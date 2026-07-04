@@ -10,6 +10,7 @@ import { AccelEngine } from '../engine/engine';
 import { CellValue, Cell, GraphDefinition } from '../engine/types';
 import { GraphRenderer } from '../engine/graph-renderer';
 import { deserializeEngine, SerializedWorkbook } from '../engine/serialization';
+import { onStockData } from '../engine/stock-data';
 
 // dirtyValues/dirtyFormulas are Sets mutated inside immer producers below.
 enableMapSet();
@@ -223,6 +224,7 @@ interface AccelState {
   getGraphs: () => GraphDefinition[];
   getGraphRenderer: () => GraphRenderer;
   invalidateGraphCache: (cellKeys: string[]) => void;
+  refreshStockData: () => void;
 
   // Batch operations
   batchUpdate: (operations: Array<() => void>) => void;
@@ -577,8 +579,12 @@ export const useAccelStore = create<AccelState>()(
       if (get().isReadOnly) return;
       const { engine } = get();
       engine.updateParameter(row, col, value);
+      // Bump cached graph point versions for this cell, exactly like setCell
+      // does — otherwise plots bound to the parameter repaint stale points.
+      get().invalidateGraphCache([`${col},${row}`]);
       set((state) => {
         state.engine = engine;
+        state.dirtyValues.add(`${col},${row}`);
         state.docVersion += 1;
       });
     },
@@ -722,6 +728,21 @@ export const useAccelStore = create<AccelState>()(
       }
     },
 
+    refreshStockData: () => {
+      const { engine, graphRenderer } = get();
+      // Re-evaluate every STOCK() cell (and its dependents) now that the
+      // async market data is in the cache, then drop cached graph points so
+      // plots re-sample from the same, freshly evaluated AST.
+      const affected = engine.recalculateStockCells();
+      if (graphRenderer) {
+        graphRenderer.clearCache();
+      }
+      set((state) => {
+        affected.forEach((key) => state.dirtyValues.add(key));
+        state.docVersion += 1;
+      });
+    },
+
     batchUpdate: (operations) => {
       // Execute all operations
       operations.forEach(op => op());
@@ -730,3 +751,7 @@ export const useAccelStore = create<AccelState>()(
     },
   }))
 );
+
+// When asynchronously fetched market data lands, resolve every "Loading…"
+// STOCK() cell and repaint dependent graphs — one recalculation, same engine.
+onStockData(() => useAccelStore.getState().refreshStockData());

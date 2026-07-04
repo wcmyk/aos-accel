@@ -16,6 +16,7 @@ import * as Stats from './stats/distributions';
 import * as Inference from './stats/inference';
 import * as Models from './ml/models';
 import { createVector, createMatrix } from './math/linalg';
+import * as StockData from './stock-data';
 
 type FormulaFunction = (...args: CellValue[]) => CellValue;
 
@@ -91,6 +92,38 @@ export const FORMULAS: Record<string, FormulaFunction> = {
    * Graph rendering logic reads the AST directly to build plots.
    */
   PLOT: (..._args) => 'PLOT',
+
+  /**
+   * STOCK(ticker, [field], [days]) — live market data as a first-class series.
+   *
+   *   =STOCK("AAPL")                 → last 90 daily closes (array)
+   *   =STOCK("AAPL", "close", A1)    → closes for the last A1 days (slider-friendly)
+   *   =STOCK("AAPL", "price")        → latest close as a single number
+   *   =PLOT(STOCK(B1, "close", A1))  → live chart driven by cells B1 and A1
+   *
+   * Fields: close (default), open, high, low, volume, price.
+   * Data loads asynchronously: on first reference the cell shows "Loading…",
+   * then every dependent cell AND graph recalculates when the data arrives —
+   * same AST, same engine, no separate chart binding.
+   */
+  STOCK: (ticker, field = 'close', days = 90) => {
+    const t = String(ticker ?? '').trim().toUpperCase();
+    if (!t) return '#ERROR: STOCK requires a ticker symbol';
+
+    const f = String(field ?? 'close').trim().toLowerCase();
+    const d = Math.max(1, Math.min(3650, Math.round(toNumber(days) || 90)));
+
+    if (!StockData.isTickerLoaded(t)) {
+      StockData.requestTicker(t);
+      return 'Loading…';
+    }
+
+    if (f === 'price' || f === 'last') {
+      return StockData.getLastPrice(t) ?? 'Loading…';
+    }
+
+    return StockData.getStockSeries(t, f, d) ?? 'Loading…';
+  },
 
   // ===== TRIGONOMETRIC FUNCTIONS =====
   SIN: (value) => Math.sin(toNumber(value)),

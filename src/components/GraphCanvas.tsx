@@ -9,6 +9,10 @@ export const GraphCanvas: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
   const { getGraphs, getGraphRenderer } = useAccelStore();
+  // Any engine mutation (cell edit, slider drag, async STOCK() data arrival)
+  // bumps docVersion — the draw effect keys off it so the canvas actually
+  // repaints. Without this the effect deps never change on recalculation.
+  const docVersion = useAccelStore((state) => state.docVersion);
   const [viewport, setViewport] = useState({
     xMin: -10,
     xMax: 10,
@@ -17,6 +21,9 @@ export const GraphCanvas: React.FC = React.memo(() => {
   });
   const [canvasSize, setCanvasSize] = useState({ width: 900, height: 540 });
   const [axisSelection, setAxisSelection] = useState({ xIndex: 0, yIndex: 1 });
+  // Once the user zooms/pans/resets we stop auto-fitting to plot data.
+  const userAdjustedViewportRef = useRef(false);
+  const lastPlotBoundsRef = useRef<{ xMin: number; xMax: number; yMin: number; yMax: number } | null>(null);
 
   const graphs = getGraphs();
   const plotDimensions = graphs
@@ -140,6 +147,31 @@ export const GraphCanvas: React.FC = React.memo(() => {
     ctx.fillText(`${axisLabel(axisSelection.yIndex)}: [${vp.yMin.toFixed(1)}, ${vp.yMax.toFixed(1)}]`, 10, 20);
   };
 
+  /**
+   * Bounds of all visible data-driven (plot) points, padded 10%.
+   * Function graphs are excluded: they sample across whatever viewport is
+   * active, so "fitting" to them is circular.
+   */
+  const plotBounds = (graphsData: { type: string; visible: boolean; points: { x: number; y: number }[] }[]) => {
+    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+    let found = false;
+    for (const g of graphsData) {
+      if (!g.visible || g.type !== 'plot') continue;
+      for (const p of g.points) {
+        if (!isFinite(p.x) || !isFinite(p.y)) continue;
+        found = true;
+        if (p.x < xMin) xMin = p.x;
+        if (p.x > xMax) xMax = p.x;
+        if (p.y < yMin) yMin = p.y;
+        if (p.y > yMax) yMax = p.y;
+      }
+    }
+    if (!found) return null;
+    const xPad = (xMax - xMin) * 0.1 || 1;
+    const yPad = (yMax - yMin) * 0.1 || 1;
+    return { xMin: xMin - xPad, xMax: xMax + xPad, yMin: yMin - yPad, yMax: yMax + yPad };
+  };
+
   useEffect(() => {
     // Cancel previous RAF if exists
     if (rafRef.current) {
@@ -153,15 +185,32 @@ export const GraphCanvas: React.FC = React.memo(() => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
+      // Get cached renderer from store
+      const graphRenderer = getGraphRenderer();
+      const graphsData = graphRenderer.renderAll(1000, axisSelection);
+
+      // Auto-fit data plots (e.g. stock series living at y≈200, x≈1..90)
+      // that would otherwise be invisible in the default ±10 viewport.
+      // Only until the user takes over the viewport themselves; setViewport
+      // re-runs this effect once with the fitted bounds, which then contain
+      // the data, so this cannot loop.
+      lastPlotBoundsRef.current = plotBounds(graphsData);
+      if (!userAdjustedViewportRef.current && lastPlotBoundsRef.current) {
+        const b = lastPlotBoundsRef.current;
+        const outside =
+          b.xMin < viewport.xMin || b.xMax > viewport.xMax ||
+          b.yMin < viewport.yMin || b.yMax > viewport.yMax;
+        if (outside) {
+          setViewport(b);
+          return;
+        }
+      }
+
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Draw axes
       drawAxes(ctx, canvas.width, canvas.height, viewport);
-
-      // Get cached renderer from store
-      const graphRenderer = getGraphRenderer();
-      const graphsData = graphRenderer.renderAll(1000, axisSelection);
 
       for (const graphData of graphsData) {
         if (!graphData.visible || graphData.points.length === 0) continue;
@@ -192,9 +241,10 @@ export const GraphCanvas: React.FC = React.memo(() => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [viewport, getGraphRenderer, canvasSize, axisSelection]);
+  }, [viewport, getGraphRenderer, canvasSize, axisSelection, docVersion]);
 
   const handleZoom = (delta: number) => {
+    userAdjustedViewportRef.current = true;
     setViewport((prev) => {
       const zoomFactor = delta > 0 ? 0.9 : 1.1;
       const xRange = (prev.xMax - prev.xMin) * zoomFactor;
@@ -212,12 +262,19 @@ export const GraphCanvas: React.FC = React.memo(() => {
   };
 
   const handleReset = () => {
+    userAdjustedViewportRef.current = true;
     setViewport({
       xMin: -10,
       xMax: 10,
       yMin: -10,
       yMax: 10,
     });
+  };
+
+  const handleFitData = () => {
+    if (lastPlotBoundsRef.current) {
+      setViewport(lastPlotBoundsRef.current);
+    }
   };
 
   return (
@@ -281,6 +338,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
         <div className="control-actions">
           <button className="btn" onClick={() => handleZoom(1)}>Zoom In</button>
           <button className="btn ghost" onClick={() => handleZoom(-1)}>Zoom Out</button>
+          <button className="btn ghost" onClick={handleFitData} title="Fit the viewport to the plotted data">Fit Data</button>
           <button className="btn ghost" onClick={handleReset}>Reset</button>
         </div>
       </div>

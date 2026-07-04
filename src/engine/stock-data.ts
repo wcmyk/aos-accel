@@ -96,6 +96,17 @@ export function getStockSeries(
   }
 }
 
+/**
+ * Raw daily bars (with timestamps) for the last `count` trading days.
+ * Used by the Market panel chart; returns undefined on a cache miss.
+ */
+export function getStockBars(ticker: string, count: number): StockBar[] | undefined {
+  const entry = cache.get(normalizeTicker(ticker));
+  if (!entry) return undefined;
+  if (count <= 0 || count >= entry.bars.length) return entry.bars;
+  return entry.bars.slice(-count);
+}
+
 /** Last close as a single number (for =STOCK("AAPL", "price")). */
 export function getLastPrice(ticker: string): number | undefined {
   const entry = cache.get(normalizeTicker(ticker));

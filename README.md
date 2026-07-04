@@ -319,6 +319,19 @@ To enable cloud features on the deployed GitHub Pages build, add
 (Settings → Secrets and variables → Actions) — `.github/workflows/deploy.yml`
 already passes them through to the build.
 
+## Market Panel
+
+The side panel includes a stock-app style **Market** chart backed by the same
+data layer as the `STOCK()` formula:
+
+- **Watchlist** — add any tickers, toggle them on/off, remove them; each chip
+  shows the latest price and day change.
+- **Timeframes** — 1M / 3M / 6M / 1Y / 5Y / All (served from the per-ticker
+  cache; switching costs no API calls).
+- **Chart** — date axis, price axis, hover crosshair with a dated tooltip,
+  trend-colored line with area fill for a single ticker, and automatic
+  %-change comparison mode when multiple tickers are visible.
+
 ## Live Stock Data (STOCK formula)
 
 Radix can pull daily market data straight into the engine:
@@ -336,8 +349,8 @@ Because STOCK is an ordinary formula, the series can be summed, averaged,
 plotted, and bound to slider parameters — mark the day-count cell as a
 parameter and dragging the slider re-slices the cached series with **zero
 extra API calls**, updating cells and charts from the same recalculation.
-The **Graphing → Insert Stock Demo** ribbon button drops in a ready-made
-template (ticker cell, timeframe slider, summary stats, live chart).
+The **Graphing → Insert Stock Template** ribbon button drops in a ready-made
+worksheet (ticker cell, timeframe slider, summary stats, live chart).
 
 Setup: get a free API key at [polygon.io](https://polygon.io), copy
 `.env.example` to `.env`, and set `VITE_STOCK_API_KEY=your_key`. To rotate

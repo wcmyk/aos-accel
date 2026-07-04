@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SpreadsheetGrid } from './SpreadsheetGrid';
 import { Ribbon } from './Ribbon';
 import { GraphCanvas } from './GraphCanvas';
+import { StockPanel } from './StockPanel';
 import { SheetTabs } from './SheetTabs';
 import { ShareButton } from './ShareButton';
 import { useAccelStore } from '../store/accel-store';
@@ -33,6 +34,52 @@ export function EditorShell() {
   const workbookId = useAccelStore((state) => state.workbookId);
   const canEditTitle = isCloudEnabled && Boolean(workbookId) && !isReadOnly;
   const [graphCollapsed, setGraphCollapsed] = useState(false);
+
+  // Live selection statistics for the status bar, like Excel's.
+  const selectedCell = useAccelStore((state) => state.selectedCell);
+  const selectionRange = useAccelStore((state) => state.selectionRange);
+  const docVersion = useAccelStore((state) => state.docVersion);
+  const getCell = useAccelStore((state) => state.getCell);
+
+  const selectionStats = useMemo(() => {
+    void docVersion; // recompute when any cell changes
+    const range = selectionRange
+      ? selectionRange
+      : selectedCell
+        ? { start: selectedCell, end: selectedCell }
+        : null;
+    if (!range) return null;
+
+    const r1 = Math.min(range.start.row, range.end.row);
+    const r2 = Math.max(range.start.row, range.end.row);
+    const c1 = Math.min(range.start.col, range.end.col);
+    const c2 = Math.max(range.start.col, range.end.col);
+    if ((r2 - r1 + 1) * (c2 - c1 + 1) > 20000) return null; // keep the UI snappy
+
+    let sum = 0;
+    let numeric = 0;
+    let count = 0;
+    for (let r = r1; r <= r2; r++) {
+      for (let c = c1; c <= c2; c++) {
+        const v = getCell(r, c);
+        if (v === null || v === undefined || v === '') continue;
+        count++;
+        const n = typeof v === 'number' ? v : Number(v);
+        if (typeof v !== 'boolean' && !Array.isArray(v) && isFinite(n)) {
+          sum += n;
+          numeric++;
+        }
+      }
+    }
+    if (count === 0) return null;
+    return { sum, count, average: numeric > 0 ? sum / numeric : null };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCell, selectionRange, docVersion, getCell]);
+
+  const fmt = (n: number) =>
+    Math.abs(n) >= 1e12 || (Math.abs(n) < 1e-6 && n !== 0)
+      ? n.toExponential(4)
+      : Number(n.toFixed(6)).toLocaleString('en-US', { maximumFractionDigits: 6 });
 
   return (
     <div className="excel-shell">
@@ -91,15 +138,21 @@ export function EditorShell() {
           <div className="insight-panel">
             <div className="card">
               <div className="card__header">
-                <span className="label">Graph</span>
+                <span className="label">Market</span>
                 <button
                   className="icon-btn"
                   onClick={() => setGraphCollapsed(true)}
-                  title="Hide graph panel"
-                  aria-label="Hide graph panel"
+                  title="Hide side panel"
+                  aria-label="Hide side panel"
                 >
                   ›
                 </button>
+              </div>
+              <StockPanel />
+            </div>
+            <div className="card">
+              <div className="card__header">
+                <span className="label">Graph</span>
               </div>
               <GraphCanvas />
             </div>
@@ -112,7 +165,11 @@ export function EditorShell() {
       <footer className="status-bar">
         <span>Ready</span>
         <span>{activeSheet}</span>
-        <span>Average: - | Count: - | Sum: -</span>
+        <span>
+          {selectionStats
+            ? `Average: ${selectionStats.average !== null ? fmt(selectionStats.average) : '-'} | Count: ${selectionStats.count} | Sum: ${fmt(selectionStats.sum)}`
+            : 'Average: - | Count: - | Sum: -'}
+        </span>
       </footer>
     </div>
   );

@@ -135,10 +135,16 @@ export class AccelEngine {
         cell.value = `#ERROR: ${(error as Error).message}`;
       }
     } else {
-      // Direct value
+      // Direct value. Numeric-looking strings become numbers, like Excel:
+      // the grid submits everything as text, and storing "42" as a string
+      // silently breaks sorting, comparisons, and numeric aggregation.
       cell.formula = undefined;
       cell.ast = undefined;
-      cell.value = input;
+      if (typeof input === 'string' && input.trim() !== '' && Number.isFinite(Number(input))) {
+        cell.value = Number(input);
+      } else {
+        cell.value = input;
+      }
       cell.dependencies.clear();
 
       // Update dependents

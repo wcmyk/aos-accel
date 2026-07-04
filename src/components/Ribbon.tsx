@@ -446,7 +446,6 @@ export const Ribbon: React.FC = () => {
           <p className="ribbon-title">Graph Settings</p>
           <div className="ribbon-controls">
             <button className="btn" onClick={() => setShowGraphDialog(true)}>Add Graph</button>
-            <button className="btn" disabled={graphs.length === 0}>Edit Graph</button>
           </div>
           {graphs.length > 0 && (
             <div style={{ maxHeight: '100px', overflowY: 'auto', marginTop: '8px' }}>
@@ -464,16 +463,6 @@ export const Ribbon: React.FC = () => {
               ))}
             </div>
           )}
-        </div>
-
-        <div className="ribbon-group">
-          <p className="ribbon-title">Graph Types</p>
-          <div className="ribbon-controls">
-            <button className="btn">Function</button>
-            <button className="btn">Parametric</button>
-            <button className="btn">Implicit</button>
-            <button className="btn">Scatter</button>
-          </div>
         </div>
 
         <div className="ribbon-group">

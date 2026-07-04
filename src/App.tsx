@@ -42,13 +42,20 @@ function CloudApp() {
 }
 
 function App() {
+  // HashRouter avoids needing a server-side rewrite rule for deep links
+  // like /w/:id, which plain GitHub Pages static hosting can't do.
+  // Local mode still needs the Router: EditorPage/EditorShell call router
+  // hooks (useParams, useNavigate, <Link>), which throw without a Router
+  // ancestor and would crash the whole app to a blank page.
   if (!isCloudEnabled) {
-    return <EditorPage mode="local" />;
+    return (
+      <HashRouter>
+        <EditorPage mode="local" />
+      </HashRouter>
+    );
   }
 
   return (
-    // HashRouter avoids needing a server-side rewrite rule for deep links
-    // like /w/:id, which plain GitHub Pages static hosting can't do.
     <HashRouter>
       <CloudApp />
     </HashRouter>

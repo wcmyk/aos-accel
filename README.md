@@ -319,6 +319,38 @@ To enable cloud features on the deployed GitHub Pages build, add
 (Settings → Secrets and variables → Actions) — `.github/workflows/deploy.yml`
 already passes them through to the build.
 
+## Live Stock Data (STOCK formula)
+
+Radix can pull daily market data straight into the engine:
+
+```text
+=STOCK("AAPL")                  → last 90 daily closes (array)
+=STOCK("AAPL", "close", B2)     → closes for the last B2 days
+=STOCK("AAPL", "price")         → latest close (single number)
+=PLOT(STOCK(B1, "close", B2))   → live chart driven by cells B1 and B2
+```
+
+Fields: `close` (default), `open`, `high`, `low`, `volume`, `price`.
+
+Because STOCK is an ordinary formula, the series can be summed, averaged,
+plotted, and bound to slider parameters — mark the day-count cell as a
+parameter and dragging the slider re-slices the cached series with **zero
+extra API calls**, updating cells and charts from the same recalculation.
+The **Graphing → Insert Stock Demo** ribbon button drops in a ready-made
+template (ticker cell, timeframe slider, summary stats, live chart).
+
+Setup: get a free API key at [polygon.io](https://polygon.io), copy
+`.env.example` to `.env`, and set `VITE_STOCK_API_KEY=your_key`. To rotate
+or replace the key later, edit that one line in `.env` and restart the dev
+server. For the deployed GitHub Pages build, add `VITE_STOCK_API_KEY` as a
+repository secret alongside the Supabase ones. Never commit `.env` — it is
+gitignored. Note that any key shipped in a client-side bundle is visible to
+visitors, so use a free-tier key you can rotate, or proxy requests through
+your own backend for production use.
+
+Without a key (or if the API is unreachable) STOCK falls back to
+deterministic synthetic demo data so workbooks stay functional offline.
+
 ## Example Usage
 
 See [EXAMPLES.md](./EXAMPLES.md) for 10 detailed examples demonstrating:

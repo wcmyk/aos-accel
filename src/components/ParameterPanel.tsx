@@ -75,9 +75,18 @@ const ParameterSlider: React.FC<{
   const [localValue, setLocalValue] = useState(value);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Update local value immediately for smooth slider
+  // Update local value immediately for smooth slider. During a mouse/touch
+  // drag we defer the engine update to release (see handleMouseUp) to avoid
+  // a recalculation storm; for any other change source (keyboard arrows,
+  // programmatic set) there is no release event, so commit right away —
+  // otherwise those changes silently never reach the engine.
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalValue(parseFloat(e.target.value));
+    const next = parseFloat(e.target.value);
+    setLocalValue(next);
+    if (!isDragging && next !== value) {
+      updateParameter(cell.address.row, cell.address.col, next);
+      refresh();
+    }
   };
 
   // Only update engine when user releases slider (debounced)

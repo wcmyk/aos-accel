@@ -13,7 +13,7 @@ type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Automa
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs, setCell } = useAccelStore();
 
   // Theme is managed locally to avoid triggering re-renders across the entire app
   const [localTheme, setLocalTheme] = useState<string>(() => {
@@ -420,6 +420,23 @@ export const Ribbon: React.FC = () => {
     </>
   );
 
+  const handleInsertStockDemo = useCallback(() => {
+    // Live market data template: a ticker cell, a timeframe slider, summary
+    // formulas, and a chart — all bound to the same cells, so dragging the
+    // slider re-slices the series and updates every view at once.
+    setCell(1, 1, 'Ticker');
+    setCell(1, 2, 'AAPL');
+    setCell(2, 1, 'Days');
+    setCell(2, 2, 90);
+    setParameter(2, 2, 5, 365, 1);
+    setCell(3, 1, 'Last price');
+    setCell(3, 2, '=STOCK(B1, "price")');
+    setCell(4, 1, 'Avg close');
+    setCell(4, 2, '=AVERAGE(STOCK(B1, "close", B2))');
+    setCell(5, 1, 'Chart');
+    setCell(5, 2, '=PLOT(STOCK(B1, "close", B2))');
+  }, [setCell, setParameter]);
+
   const renderGraphingTab = () => {
     const graphs = getGraphs();
 
@@ -468,6 +485,19 @@ export const Ribbon: React.FC = () => {
               onClick={() => setShowParamDialog(true)}
             >
               Make Parameter from Selection
+            </button>
+          </div>
+        </div>
+
+        <div className="ribbon-group">
+          <p className="ribbon-title">Market Data</p>
+          <div className="ribbon-controls">
+            <button
+              className="btn"
+              onClick={handleInsertStockDemo}
+              title="Insert a live stock chart: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))"
+            >
+              Insert Stock Demo
             </button>
           </div>
         </div>

@@ -337,6 +337,40 @@ export class AccelEngine {
     }
   }
 
+  /**
+   * Recalculate every cell whose formula references STOCK(), plus all of
+   * their dependents. Called when asynchronously fetched market data lands
+   * so that "Loading…" placeholders resolve to real series everywhere at
+   * once. Returns the affected cell keys so callers can invalidate caches
+   * and dirty-mark the grid.
+   */
+  recalculateStockCells(): string[] {
+    const affected: string[] = [];
+
+    for (const worksheet of this.workbook.sheets.values()) {
+      const stockKeys: string[] = [];
+      for (const [key, cell] of worksheet.cells) {
+        if (cell.formula && /\bSTOCK\s*\(/i.test(cell.formula)) {
+          stockKeys.push(key);
+        }
+      }
+
+      for (const key of stockKeys) {
+        this.recalculateCell(key, worksheet);
+        this.recalculateDependents(key, worksheet);
+        affected.push(key);
+        const cell = worksheet.cells.get(key);
+        cell?.dependents.forEach((dep) => affected.push(dep));
+      }
+
+      if (stockKeys.length > 0) {
+        this.syncPlotGraphs(worksheet);
+      }
+    }
+
+    return affected;
+  }
+
   private recalculateDependents(cellKey: string, worksheet: Worksheet): void {
     const depGraph = new DependencyGraph(worksheet.cells);
     const recalcOrder = depGraph.getRecalculationOrder(new Set([cellKey]));

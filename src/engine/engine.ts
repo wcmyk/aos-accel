@@ -344,11 +344,10 @@ export class AccelEngine {
   }
 
   /**
-   * Recalculate every cell whose formula references STOCK(), plus all of
-   * their dependents. Called when asynchronously fetched market data lands
-   * so that "Loading…" placeholders resolve to real series everywhere at
-   * once. Returns the affected cell keys so callers can invalidate caches
-   * and dirty-mark the grid.
+   * Recalculate every cell whose formula depends on external market state —
+   * STOCK() series (async data arrival) or MARKETDAYS() (the Market chart's
+   * timeframe changed) — plus all of their dependents. Returns the affected
+   * cell keys so callers can invalidate caches and dirty-mark the grid.
    */
   recalculateStockCells(): string[] {
     const affected: string[] = [];
@@ -356,7 +355,7 @@ export class AccelEngine {
     for (const worksheet of this.workbook.sheets.values()) {
       const stockKeys: string[] = [];
       for (const [key, cell] of worksheet.cells) {
-        if (cell.formula && /\bSTOCK\s*\(/i.test(cell.formula)) {
+        if (cell.formula && /\b(STOCK|MARKETDAYS)\s*\(/i.test(cell.formula)) {
           stockKeys.push(key);
         }
       }

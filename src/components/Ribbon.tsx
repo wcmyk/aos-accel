@@ -13,7 +13,7 @@ type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Market
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs, setCell, watchlist, removeWatchedTicker, toggleWatchedTicker, setStockPickerOpen } = useAccelStore();
+  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs, setCell, watchlist, removeWatchedTicker, toggleWatchedTicker, setStockPickerOpen, selectionRange } = useAccelStore();
 
   // Theme is managed locally to avoid triggering re-renders across the entire app
   const [localTheme, setLocalTheme] = useState<string>(() => {
@@ -433,6 +433,63 @@ export const Ribbon: React.FC = () => {
     setCell(5, 2, '=PLOT(STOCK(B1, "close", B2))');
   }, [setCell, setParameter]);
 
+  const colToLetter = (col: number): string => {
+    let letter = '';
+    let c = col;
+    while (c > 0) {
+      const remainder = (c - 1) % 26;
+      letter = String.fromCharCode(65 + remainder) + letter;
+      c = Math.floor((c - 1) / 26);
+    }
+    return letter;
+  };
+
+  // Selection -> Graph bridge: turn the selected cells into a live plot.
+  // One column (or row) plots as a single series; exactly two columns plot
+  // as x/y pairs. The graph stays bound to the cells - edit them and the
+  // plot follows, like everything else in the engine.
+  const handlePlotSelection = useCallback(() => {
+    const range = selectionRange
+      ? selectionRange
+      : selectedCell
+        ? { start: selectedCell, end: selectedCell }
+        : null;
+    if (!range) return;
+
+    const r1 = Math.min(range.start.row, range.end.row);
+    const r2 = Math.max(range.start.row, range.end.row);
+    const c1 = Math.min(range.start.col, range.end.col);
+    const c2 = Math.max(range.start.col, range.end.col);
+
+    let formula: string;
+    if (c2 - c1 === 1) {
+      // Two columns: first is x, second is y
+      formula = `PLOT(${colToLetter(c1)}${r1}:${colToLetter(c1)}${r2}, ${colToLetter(c2)}${r1}:${colToLetter(c2)}${r2})`;
+    } else {
+      formula = `PLOT(${colToLetter(c1)}${r1}:${colToLetter(c2)}${r2})`;
+    }
+    addGraph(`graph_${Date.now()}`, formula, 'plot');
+  }, [selectionRange, selectedCell, addGraph]);
+
+  // Market -> Sheet bridge: drop a live stats block for a watched ticker.
+  // Every formula uses MARKETDAYS(), so the block recalculates when the
+  // Market chart's timeframe buttons change.
+  const handleInsertTickerBlock = useCallback((symbol: string) => {
+    const anchor = selectedCell ?? { row: 1, col: 1 };
+    const r = anchor.row;
+    const c = anchor.col;
+    setCell(r, c, symbol);
+    setCell(r, c + 1, `=STOCK("${symbol}", "price")`);
+    setCell(r + 1, c, 'Average');
+    setCell(r + 1, c + 1, `=AVERAGE(STOCK("${symbol}", "close", MARKETDAYS()))`);
+    setCell(r + 2, c, 'High');
+    setCell(r + 2, c + 1, `=MAX(STOCK("${symbol}", "high", MARKETDAYS()))`);
+    setCell(r + 3, c, 'Low');
+    setCell(r + 3, c + 1, `=MIN(STOCK("${symbol}", "low", MARKETDAYS()))`);
+    setCell(r + 4, c, 'Chart');
+    setCell(r + 4, c + 1, `=PLOT(STOCK("${symbol}", "close", MARKETDAYS()))`);
+  }, [selectedCell, setCell]);
+
   const renderMarketTab = () => (
     <>
       <div className="ribbon-group">
@@ -454,6 +511,7 @@ export const Ribbon: React.FC = () => {
               <button className="ribbon-watch-name" onClick={() => toggleWatchedTicker(w.symbol)} title={w.visible ? 'Click to hide from chart' : 'Click to show on chart'}>
                 {w.symbol}
               </button>
+              <button className="ribbon-btn" onClick={() => handleInsertTickerBlock(w.symbol)} title={`Insert a live ${w.symbol} stats block at the selected cell — it follows the chart's timeframe`}>→Sheet</button>
               <button className="ribbon-btn" onClick={() => removeWatchedTicker(w.symbol)} title={`Remove ${w.symbol}`}>×</button>
             </div>
           ))}
@@ -484,6 +542,14 @@ export const Ribbon: React.FC = () => {
           <p className="ribbon-title">Graph Settings</p>
           <div className="ribbon-controls">
             <button className="btn" onClick={() => setShowGraphDialog(true)}>Add Graph</button>
+            <button
+              className="btn"
+              disabled={!selectionRange && !selectedCell}
+              onClick={handlePlotSelection}
+              title="Plot the selected cells as a live graph (two columns = x/y pairs)"
+            >
+              Plot Selection
+            </button>
           </div>
           {graphs.length > 0 && (
             <div style={{ maxHeight: '100px', overflowY: 'auto', marginTop: '8px' }}>

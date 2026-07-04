@@ -23,6 +23,14 @@ interface ClipboardCell {
   isCut: boolean;
 }
 
+export interface WatchedTicker {
+  symbol: string;
+  color: string;
+  visible: boolean;
+}
+
+const WATCH_COLORS = ['#3b82f6', '#f59e0b', '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#ec4899'];
+
 /**
  * Adjust cell references in formulas for fill operations
  * Example: A1 → A2, A3, etc. when filling down
@@ -225,6 +233,12 @@ interface AccelState {
   getGraphRenderer: () => GraphRenderer;
   invalidateGraphCache: (cellKeys: string[]) => void;
   refreshStockData: () => void;
+
+  // Market watchlist (drives the Market panel chart)
+  watchlist: WatchedTicker[];
+  addWatchedTicker: (symbol: string) => void;
+  removeWatchedTicker: (symbol: string) => void;
+  toggleWatchedTicker: (symbol: string) => void;
 
   // Batch operations
   batchUpdate: (operations: Array<() => void>) => void;
@@ -726,6 +740,32 @@ export const useAccelStore = create<AccelState>()(
       if (graphRenderer) {
         graphRenderer.invalidateCache(cellKeys);
       }
+    },
+
+    watchlist: [{ symbol: 'AAPL', color: WATCH_COLORS[0], visible: true }],
+
+    addWatchedTicker: (symbol) => {
+      const sym = symbol.trim().toUpperCase();
+      if (!sym || !/^[A-Z.\-:]{1,10}$/.test(sym)) return;
+      if (get().watchlist.some((w) => w.symbol === sym)) return;
+      set((state) => {
+        const used = new Set(state.watchlist.map((w) => w.color));
+        const color = WATCH_COLORS.find((c) => !used.has(c)) || WATCH_COLORS[state.watchlist.length % WATCH_COLORS.length];
+        state.watchlist.push({ symbol: sym, color, visible: true });
+      });
+    },
+
+    removeWatchedTicker: (symbol) => {
+      set((state) => {
+        state.watchlist = state.watchlist.filter((w) => w.symbol !== symbol);
+      });
+    },
+
+    toggleWatchedTicker: (symbol) => {
+      set((state) => {
+        const entry = state.watchlist.find((w) => w.symbol === symbol);
+        if (entry) entry.visible = !entry.visible;
+      });
     },
 
     refreshStockData: () => {

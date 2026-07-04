@@ -222,3 +222,15 @@ describe('AccelEngine', () => {
     });
   });
 });
+
+describe('Value Coercion', () => {
+  it('stores numeric-looking strings as numbers, like Excel', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, '42');
+    engine.setCell(2, 1, '3.14');
+    engine.setCell(3, 1, 'hello');
+    expect(engine.getCell(1, 1)).toBe(42);
+    expect(engine.getCell(2, 1)).toBe(3.14);
+    expect(engine.getCell(3, 1)).toBe('hello');
+  });
+});

@@ -43,6 +43,32 @@ const pending = new Set<string>();
 const failed = new Set<string>();
 const listeners = new Set<() => void>();
 
+/**
+ * The Market chart's active timeframe, exposed to the formula engine as
+ * MARKETDAYS(). This is the bridge that makes the chart's timeframe buttons
+ * and the grid two views of the same state: cells written against
+ * MARKETDAYS() recalculate whenever the user clicks 1M/3M/1Y/etc.
+ */
+let marketTimeframeDays = 63; // matches the default '3M'
+
+export function setMarketTimeframeDays(days: number): void {
+  marketTimeframeDays = Math.max(1, Math.round(days));
+}
+
+export function getMarketTimeframeDays(): number {
+  return marketTimeframeDays;
+}
+
+/** Trading-day counts for the Market panel timeframe buttons. */
+export const TIMEFRAME_BARS: Record<string, number> = {
+  '1M': 21,
+  '3M': 63,
+  '6M': 126,
+  '1Y': 252,
+  '5Y': 1260,
+  'All': 3650,
+};
+
 /** Register a callback fired whenever new stock data arrives. */
 export function onStockData(listener: () => void): () => void {
   listeners.add(listener);

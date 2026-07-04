@@ -319,6 +319,23 @@ To enable cloud features on the deployed GitHub Pages build, add
 (Settings → Secrets and variables → Actions) — `.github/workflows/deploy.yml`
 already passes them through to the build.
 
+## How It All Connects
+
+Radix is one engine with several synchronized views. The bridges:
+
+- **Sheet → Market**: type `=STOCK("TSLA", …)` in any cell and TSLA joins the
+  Market chart's watchlist automatically — the chart is a live view of the
+  symbols your workbook uses.
+- **Market → Sheet**: `MARKETDAYS()` is the chart's active timeframe as a
+  formula. Click 1M/1Y on the chart and every cell built on it recalculates.
+  Each watchlist ticker has a **→Sheet** button that inserts a live stats
+  block (last, average, high, low, chart) wired to that timeframe.
+- **Selection → Graph**: select cells and hit **Plot Selection** (Graphing
+  tab) for a live-bound plot; two columns plot as x/y pairs. Edit the cells
+  and the plot follows.
+- **Parameters ↔ everything**: sliders live in the side panel next to the
+  graphs; dragging one recalculates cells, stats, and plots in one pass.
+
 ## Market Panel
 
 The side panel includes a stock-app style **Market** chart backed by the same

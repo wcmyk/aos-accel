@@ -4,6 +4,7 @@ import { SpreadsheetGrid } from './SpreadsheetGrid';
 import { Ribbon } from './Ribbon';
 import { GraphCanvas } from './GraphCanvas';
 import { StockPanel } from './StockPanel';
+import { ParameterPanel } from './ParameterPanel';
 import { SheetTabs } from './SheetTabs';
 import { ShareButton } from './ShareButton';
 import { useAccelStore } from '../store/accel-store';
@@ -155,6 +156,9 @@ export function EditorShell() {
                 <span className="label">Graph</span>
               </div>
               <GraphCanvas />
+            </div>
+            <div className="card">
+              <ParameterPanel />
             </div>
           </div>
         )}

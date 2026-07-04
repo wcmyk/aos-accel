@@ -19,9 +19,14 @@ export const GraphCanvas: React.FC = React.memo(() => {
   const [axisSelection, setAxisSelection] = useState({ xIndex: 0, yIndex: 1 });
 
   const graphs = getGraphs();
-  const maxDimensions = graphs
+  const plotDimensions = graphs
     .filter((g) => g.type === 'plot')
     .reduce((max, g) => Math.max(max, g.dimensions || 2), 2);
+  // Always expose at least X, Y and Z so a Z plane can be selected even
+  // before a 3-D PLOT exists; grow further for higher-dimensional plots.
+  const maxDimensions = Math.max(3, plotDimensions);
+  const axisLabel = (i: number) =>
+    i === 0 ? 'X' : i === 1 ? 'Y' : i === 2 ? 'Z' : `Axis ${i + 1}`;
 
   useEffect(() => {
     setAxisSelection((prev) => {
@@ -128,11 +133,11 @@ export const GraphCanvas: React.FC = React.memo(() => {
       ctx.stroke();
     }
 
-    // Labels
+    // Labels — reflect the currently selected axes (e.g. Z when viewing X-Z)
     ctx.fillStyle = axisColor;
     ctx.font = '12px sans-serif';
-    ctx.fillText(`X: [${vp.xMin.toFixed(1)}, ${vp.xMax.toFixed(1)}]`, 10, height - 10);
-    ctx.fillText(`Y: [${vp.yMin.toFixed(1)}, ${vp.yMax.toFixed(1)}]`, 10, 20);
+    ctx.fillText(`${axisLabel(axisSelection.xIndex)}: [${vp.xMin.toFixed(1)}, ${vp.xMax.toFixed(1)}]`, 10, height - 10);
+    ctx.fillText(`${axisLabel(axisSelection.yIndex)}: [${vp.yMin.toFixed(1)}, ${vp.yMax.toFixed(1)}]`, 10, 20);
   };
 
   useEffect(() => {
@@ -220,69 +225,59 @@ export const GraphCanvas: React.FC = React.memo(() => {
       <div className="graph-controls">
         <div className="control-stack">
           <p className="graph-label">Viewport</p>
-          <div className="chip">X: [{viewport.xMin.toFixed(1)}, {viewport.xMax.toFixed(1)}]</div>
-          <div className="chip">Y: [{viewport.yMin.toFixed(1)}, {viewport.yMax.toFixed(1)}]</div>
+          <div className="chip">{axisLabel(axisSelection.xIndex)}: [{viewport.xMin.toFixed(1)}, {viewport.xMax.toFixed(1)}]</div>
+          <div className="chip">{axisLabel(axisSelection.yIndex)}: [{viewport.yMin.toFixed(1)}, {viewport.yMax.toFixed(1)}]</div>
         </div>
-        {maxDimensions > 1 && (
-          <div className="axis-picker">
-            <p className="graph-label">View Plane</p>
-            <div className="plane-buttons">
-              <button
-                className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 1 ? 'active' : 'ghost'}`}
-                onClick={() => setAxisSelection({ xIndex: 0, yIndex: 1 })}
-                title="View X-Y plane"
-              >
-                X-Y
-              </button>
-              {maxDimensions > 2 && (
-                <>
-                  <button
-                    className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
-                    onClick={() => setAxisSelection({ xIndex: 0, yIndex: 2 })}
-                    title="View X-Z plane"
-                  >
-                    X-Z
-                  </button>
-                  <button
-                    className={`btn ${axisSelection.xIndex === 1 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
-                    onClick={() => setAxisSelection({ xIndex: 1, yIndex: 2 })}
-                    title="View Y-Z plane"
-                  >
-                    Y-Z
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="axis-selectors">
-              <label>
-                Horizontal (X)
-                <select
-                  value={axisSelection.xIndex}
-                  onChange={(e) => setAxisSelection({ ...axisSelection, xIndex: Number(e.target.value) })}
-                >
-                  {Array.from({ length: maxDimensions }, (_, i) => (
-                    <option key={`x-${i}`} value={i}>
-                      {i === 0 ? 'X' : i === 1 ? 'Y' : i === 2 ? 'Z' : `Axis ${i + 1}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Vertical (Y)
-                <select
-                  value={axisSelection.yIndex}
-                  onChange={(e) => setAxisSelection({ ...axisSelection, yIndex: Number(e.target.value) })}
-                >
-                  {Array.from({ length: maxDimensions }, (_, i) => (
-                    <option key={`y-${i}`} value={i}>
-                      {i === 0 ? 'X' : i === 1 ? 'Y' : i === 2 ? 'Z' : `Axis ${i + 1}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+        <div className="axis-picker">
+          <p className="graph-label">View Plane</p>
+          <div className="plane-buttons">
+            <button
+              className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 1 ? 'active' : 'ghost'}`}
+              onClick={() => setAxisSelection({ xIndex: 0, yIndex: 1 })}
+              title="View X-Y plane"
+            >
+              X-Y
+            </button>
+            <button
+              className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
+              onClick={() => setAxisSelection({ xIndex: 0, yIndex: 2 })}
+              title="View X-Z plane"
+            >
+              X-Z
+            </button>
+            <button
+              className={`btn ${axisSelection.xIndex === 1 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
+              onClick={() => setAxisSelection({ xIndex: 1, yIndex: 2 })}
+              title="View Y-Z plane"
+            >
+              Y-Z
+            </button>
           </div>
-        )}
+          <div className="axis-selectors">
+            <label>
+              Horizontal
+              <select
+                value={axisSelection.xIndex}
+                onChange={(e) => setAxisSelection({ ...axisSelection, xIndex: Number(e.target.value) })}
+              >
+                {Array.from({ length: maxDimensions }, (_, i) => (
+                  <option key={`x-${i}`} value={i}>{axisLabel(i)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Vertical
+              <select
+                value={axisSelection.yIndex}
+                onChange={(e) => setAxisSelection({ ...axisSelection, yIndex: Number(e.target.value) })}
+              >
+                {Array.from({ length: maxDimensions }, (_, i) => (
+                  <option key={`y-${i}`} value={i}>{axisLabel(i)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
         <div className="control-actions">
           <button className="btn" onClick={() => handleZoom(1)}>Zoom In</button>
           <button className="btn ghost" onClick={() => handleZoom(-1)}>Zoom Out</button>

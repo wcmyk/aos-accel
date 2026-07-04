@@ -420,7 +420,7 @@ export const Ribbon: React.FC = () => {
     </>
   );
 
-  const handleInsertStockDemo = useCallback(() => {
+  const handleInsertStockTemplate = useCallback(() => {
     // Live market data template: a ticker cell, a timeframe slider, summary
     // formulas, and a chart — all bound to the same cells, so dragging the
     // slider re-slices the series and updates every view at once.
@@ -446,7 +446,6 @@ export const Ribbon: React.FC = () => {
           <p className="ribbon-title">Graph Settings</p>
           <div className="ribbon-controls">
             <button className="btn" onClick={() => setShowGraphDialog(true)}>Add Graph</button>
-            <button className="btn" disabled={graphs.length === 0}>Edit Graph</button>
           </div>
           {graphs.length > 0 && (
             <div style={{ maxHeight: '100px', overflowY: 'auto', marginTop: '8px' }}>
@@ -467,16 +466,6 @@ export const Ribbon: React.FC = () => {
         </div>
 
         <div className="ribbon-group">
-          <p className="ribbon-title">Graph Types</p>
-          <div className="ribbon-controls">
-            <button className="btn">Function</button>
-            <button className="btn">Parametric</button>
-            <button className="btn">Implicit</button>
-            <button className="btn">Scatter</button>
-          </div>
-        </div>
-
-        <div className="ribbon-group">
           <p className="ribbon-title">Parameters</p>
           <div className="ribbon-controls">
             <button
@@ -494,10 +483,10 @@ export const Ribbon: React.FC = () => {
           <div className="ribbon-controls">
             <button
               className="btn"
-              onClick={handleInsertStockDemo}
-              title="Insert a live stock chart: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))"
+              onClick={handleInsertStockTemplate}
+              title="Insert a ready-made live stock worksheet: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))"
             >
-              Insert Stock Demo
+              Insert Stock Template
             </button>
           </div>
         </div>

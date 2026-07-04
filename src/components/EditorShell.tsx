@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SpreadsheetGrid } from './SpreadsheetGrid';
 import { Ribbon } from './Ribbon';
@@ -31,6 +32,7 @@ export function EditorShell() {
   const saveStatus = useAccelStore((state) => state.saveStatus);
   const workbookId = useAccelStore((state) => state.workbookId);
   const canEditTitle = isCloudEnabled && Boolean(workbookId) && !isReadOnly;
+  const [graphCollapsed, setGraphCollapsed] = useState(false);
 
   return (
     <div className="excel-shell">
@@ -72,15 +74,37 @@ export function EditorShell() {
 
       <Ribbon />
 
-      <div className="workspace">
+      <div className={`workspace${graphCollapsed ? ' workspace--graph-collapsed' : ''}`}>
         <div className="sheet-panel">
           <SpreadsheetGrid />
         </div>
-        <div className="insight-panel">
-          <div className="card">
-            <GraphCanvas />
+        {graphCollapsed ? (
+          <button
+            className="graph-reopen"
+            onClick={() => setGraphCollapsed(false)}
+            title="Show graph panel"
+          >
+            <span className="graph-reopen__chevron">‹</span>
+            <span className="graph-reopen__text">Graph</span>
+          </button>
+        ) : (
+          <div className="insight-panel">
+            <div className="card">
+              <div className="card__header">
+                <span className="label">Graph</span>
+                <button
+                  className="icon-btn"
+                  onClick={() => setGraphCollapsed(true)}
+                  title="Hide graph panel"
+                  aria-label="Hide graph panel"
+                >
+                  ›
+                </button>
+              </div>
+              <GraphCanvas />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <SheetTabs />

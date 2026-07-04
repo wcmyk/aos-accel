@@ -430,6 +430,45 @@ body {
   grid-template-columns: 3fr 1fr;
 }
 
+/* When the graph panel is collapsed the sheet spans the full width and a
+   slim vertical tab remains so the panel can be reopened. */
+.workspace--graph-collapsed {
+  grid-template-columns: 1fr auto;
+}
+
+.graph-reopen {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 34px;
+  padding: 10px 0;
+  border: 1px solid var(--button-border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.graph-reopen:hover {
+  background: var(--bg-gradient-start);
+}
+
+.graph-reopen__chevron {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.graph-reopen__text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 0.05em;
+  font-size: 13px;
+}
+
 .sheet-panel {
   background: var(--cell-bg);
   border: 1px solid var(--border-color);
@@ -744,7 +783,13 @@ body {
   text-align: left;
   padding: 0.15rem 0.35rem;
   /* Removed transition to prevent lag during theme changes */
-  contain: layout style paint;
+  /*
+   * NOTE: do not add `contain` here. CSS containment (paint OR layout) on
+   * table cells clips the collapsed vertical borders in Chromium, so the
+   * column divider lines disappear (row dividers still paint). Virtualization
+   * — not containment — is what keeps the grid fast, so dropping this has no
+   * measurable perf cost.
+   */
 }
 
 .spreadsheet-grid .row-header,

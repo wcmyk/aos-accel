@@ -17,7 +17,50 @@ export class FormulaParser {
       this.input = this.input.substring(1);
     }
 
+    this.input = FormulaParser.expandMathShortcuts(this.input);
+
     return this.parseExpression();
+  }
+
+  /**
+   * Convenience math notation, expanded before tokenizing:
+   *   e^^      → Euler's number (2.71828…), so  e^^^5  means  e to the 5th
+   *   pi       → π (PI() keeps working; only the bare word is replaced)
+   * Function names are case-insensitive elsewhere in the parser, so ln(x),
+   * log(x), sqrt(x), sin(x)… already work as typed.
+   */
+  private static expandMathShortcuts(input: string): string {
+    let out = '';
+    let inString = false;
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i];
+      if (ch === '"') inString = !inString;
+      if (!inString) {
+        // e^^ → Euler constant (the remaining ^ becomes the power operator)
+        if (
+          (ch === 'e' || ch === 'E') &&
+          input[i + 1] === '^' && input[i + 2] === '^' &&
+          !/[A-Za-z0-9_.]/.test(input[i - 1] || '')
+        ) {
+          out += String(Math.E);
+          i += 2;
+          continue;
+        }
+        // bare pi → π (but leave PI( — the function call — untouched)
+        if (
+          (ch === 'p' || ch === 'P') &&
+          (input[i + 1] === 'i' || input[i + 1] === 'I') &&
+          !/[A-Za-z0-9_.]/.test(input[i - 1] || '') &&
+          !/[A-Za-z0-9_.(]/.test(input[i + 2] || '')
+        ) {
+          out += String(Math.PI);
+          i += 1;
+          continue;
+        }
+      }
+      out += ch;
+    }
+    return out;
   }
 
   private parseExpression(): ASTNode {

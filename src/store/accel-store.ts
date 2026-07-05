@@ -858,7 +858,7 @@ export const useAccelStore = create<AccelState>()(
       const { engine, graphRenderer } = get();
       if (!graphRenderer) {
         const worksheet = engine.getWorksheet();
-        const newRenderer = new GraphRenderer(worksheet);
+        const newRenderer = new GraphRenderer(worksheet, engine.getSheets());
         set((state) => {
           state.graphRenderer = newRenderer;
         });

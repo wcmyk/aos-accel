@@ -204,6 +204,26 @@ export class FormulaParser {
 
     this.skipWhitespace();
 
+    // Sheet-qualified reference: SheetName!A1 or SheetName!A1:B10. The name is
+    // an ordinary identifier (letters, digits, underscores) — generated sheet
+    // names (Sheet1, Graph1, Market1) never contain spaces, so quoting isn't
+    // needed yet. The cell/range that follows is parsed normally, then stamped
+    // with the sheet so the evaluator resolves it against that worksheet.
+    if (this.peek() === '!') {
+      this.consume(); // '!'
+      this.skipWhitespace();
+      const ref = this.parseIdentifier();
+      if (ref.type === 'cell') {
+        ref.ref.sheet = ident;
+      } else if (ref.type === 'range') {
+        ref.start.sheet = ident;
+        ref.end.sheet = ident;
+      } else {
+        throw new Error(`Expected a cell or range after ${ident}!`);
+      }
+      return ref;
+    }
+
     // Check if it's a function call
     if (this.peek() === '(') {
       return this.parseFunction(ident);

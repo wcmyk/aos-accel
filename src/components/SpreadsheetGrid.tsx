@@ -199,6 +199,22 @@ export const SpreadsheetGrid: React.FC = () => {
   const [editValue, setEditValue] = useState('');
   const [isDraggingFill, setIsDraggingFill] = useState(false);
   const [formulaHint, setFormulaHint] = useState<{ func: string; params: string[]; currentParam: number } | null>(null);
+  // Empty-sheet hint: dismissible, and the dismissal sticks across sessions.
+  const [hintDismissed, setHintDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('radix:empty-hint-dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const dismissHint = useCallback(() => {
+    setHintDismissed(true);
+    try {
+      localStorage.setItem('radix:empty-hint-dismissed', '1');
+    } catch {
+      /* storage unavailable — dismiss for this session only */
+    }
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const gridWrapperRef = useRef<HTMLDivElement>(null);
@@ -1005,13 +1021,16 @@ export const SpreadsheetGrid: React.FC = () => {
         ref={gridWrapperRef}
         onScroll={handleGridScroll}
       >
-        {isSheetEmpty && (
-          <div className="grid-empty-hint" aria-hidden="true">
+        {isSheetEmpty && !hintDismissed && (
+          <div className="grid-empty-hint" role="note">
             <div className="grid-empty-title">This sheet is empty</div>
             <div className="grid-empty-sub">
               Click any cell and start typing. Begin a formula with <code>=</code>,
               drag the fill handle to extend a series, and press <kbd>Ctrl</kbd>+<kbd>Z</kbd> to undo.
             </div>
+            <button type="button" className="grid-empty-dismiss" onClick={dismissHint}>
+              Okay
+            </button>
           </div>
         )}
         <table className="spreadsheet-grid">

@@ -104,6 +104,31 @@
   line-height: 1.5;
 }
 
+/* The hint itself passes clicks through to the cells beneath (pointer-events:
+   none); the dismiss button opts back in so it stays clickable. */
+.grid-empty-dismiss {
+  pointer-events: auto;
+  margin-top: 14px;
+  padding: 6px 18px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent, #2f7d4f);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.grid-empty-dismiss:hover {
+  filter: brightness(1.05);
+}
+
+.grid-empty-dismiss:focus-visible {
+  outline: 2px solid var(--accent, #2f7d4f);
+  outline-offset: 2px;
+}
+
 .grid-empty-sub code,
 .grid-empty-sub kbd {
   font-family: 'Consolas', 'SFMono-Regular', ui-monospace, monospace;

@@ -1,0 +1,25 @@
+/* ShareButton-local styling. Global share-widget/share-popover styles live in
+   App.css (owned by the shell agent); these classes cover only the new
+   status/feedback elements this component introduces. */
+
+.share-error {
+  color: #c0392b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.share-status {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.share-popover button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (prefers-color-scheme: dark) {
+  .share-error {
+    color: #ff8a80;
+  }
+}

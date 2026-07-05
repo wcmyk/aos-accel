@@ -15,9 +15,12 @@ import {
   getStockBarsFrom,
   requestTicker,
   isTickerLoaded,
-  didTickerFail,
+  isSyntheticData,
+  getSyntheticReason,
+  getTickerStatus,
   StockBar,
 } from '../engine/stock-data';
+import './StockPanel.css';
 
 const TIMEFRAMES: Array<{ label: string; bars: number }> = [
   { label: '1M', bars: 21 },
@@ -30,6 +33,10 @@ const TIMEFRAMES: Array<{ label: string; bars: number }> = [
 
 const UP = '#16a34a';
 const DOWN = '#dc2626';
+
+// Chart insets. Module-scoped so it is a stable reference (keeps the draw
+// effect's dependency list honest instead of silencing exhaustive-deps).
+const PAD = { left: 10, right: 58, top: 12, bottom: 24 };
 
 interface SeriesData {
   symbol: string;
@@ -114,7 +121,7 @@ export const StockPanel: React.FC = React.memo(() => {
       const values = compareMode
         ? closes.map((c) => (c / closes[0] - 1) * 100)
         : closes;
-      out.push({ symbol: w.symbol, color: w.color, bars, values, synthetic: didTickerFail(w.symbol) });
+      out.push({ symbol: w.symbol, color: w.color, bars, values, synthetic: isSyntheticData(w.symbol) });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,8 +133,6 @@ export const StockPanel: React.FC = React.memo(() => {
     const v = series[0].values;
     return v[v.length - 1] >= v[0] ? UP : DOWN;
   }, [series, compareMode]);
-
-  const PAD = { left: 10, right: 58, top: 12, bottom: 24 };
 
   // Draw
   useEffect(() => {
@@ -152,16 +157,10 @@ export const StockPanel: React.FC = React.memo(() => {
 
     const plotW = size.width - PAD.left - PAD.right;
     const plotH = size.height - PAD.top - PAD.bottom;
+    // Empty / loading / error states are rendered as an accessible HTML
+    // overlay (see below) rather than as canvas text a screen reader can't
+    // reach — here we just leave the canvas cleared.
     if (series.length === 0 || plotW <= 0) {
-      ctx.fillStyle = axisText;
-      ctx.font = '13px sans-serif';
-      ctx.textAlign = 'center';
-      const loading = visible.length > 0;
-      ctx.fillText(
-        loading ? 'Loading market data…' : 'Add a ticker to see its chart',
-        size.width / 2,
-        size.height / 2
-      );
       return;
     }
 
@@ -299,6 +298,35 @@ export const StockPanel: React.FC = React.memo(() => {
   const hoverIndex = hover ? Math.min(hover.index, Math.max(0, maxLen - 1)) : null;
   const anySynthetic = series.some((s) => s.synthetic);
 
+  // Honest demo indicator: distinguish "no API key" (expected) from a real
+  // live-fetch failure so we never silently mislead the user.
+  const demoReason: 'offline' | 'error' | null = anySynthetic
+    ? (series.find((s) => getSyntheticReason(s.symbol) === 'error') ? 'error' : 'offline')
+    : null;
+
+  // Chart status drives the overlay so a data-less card is never blank.
+  const anyLoading = visible.some((w) => {
+    const st = getTickerStatus(w.symbol);
+    return st === 'loading' || st === 'missing';
+  });
+  let chartStatus: 'ok' | 'empty' | 'hidden' | 'loading' | 'norange' = 'ok';
+  if (series.length === 0) {
+    if (watchlist.length === 0) chartStatus = 'empty';
+    else if (visible.length === 0) chartStatus = 'hidden';
+    else if (anyLoading) chartStatus = 'loading';
+    else chartStatus = 'norange';
+  }
+  const overlayMessage =
+    chartStatus === 'empty'
+      ? 'No tickers yet. Add a symbol above to chart its price history.'
+      : chartStatus === 'hidden'
+        ? 'All tickers are hidden. Click a chip to show it on the chart.'
+        : chartStatus === 'loading'
+          ? 'Loading market data…'
+          : chartStatus === 'norange'
+            ? 'No price data in the selected range. Try a different timeframe.'
+            : '';
+
   return (
     <div className="stock-panel">
       <div className="stock-watchlist">
@@ -310,8 +338,20 @@ export const StockPanel: React.FC = React.memo(() => {
           return (
             <div
               key={w.symbol}
+              role="button"
+              tabIndex={0}
+              aria-pressed={w.visible}
+              aria-label={`${w.symbol}${last !== null ? `, ${formatPrice(last)}` : ''}, ${
+                w.visible ? 'shown' : 'hidden'
+              }. Press to ${w.visible ? 'hide' : 'show'} on the chart.`}
               className={`stock-chip ${w.visible ? '' : 'stock-chip--off'}`}
               onClick={() => toggleWatchedTicker(w.symbol)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleWatchedTicker(w.symbol);
+                }
+              }}
               title={w.visible ? 'Click to hide' : 'Click to show'}
             >
               <span className="stock-chip__dot" style={{ background: w.color }} />
@@ -362,11 +402,12 @@ export const StockPanel: React.FC = React.memo(() => {
         </div>
       </div>
 
-      <div className="stock-timeframes">
+      <div className="stock-timeframes" role="group" aria-label="Chart timeframe">
         {TIMEFRAMES.map((t) => (
           <button
             key={t.label}
             className={`stock-tf ${timeframe === t.label ? 'active' : ''}`}
+            aria-pressed={timeframe === t.label}
             onClick={() => setTimeframe(t.label)}
           >
             {t.label}
@@ -375,6 +416,7 @@ export const StockPanel: React.FC = React.memo(() => {
         {customRange && (
           <button
             className={`stock-tf ${timeframe === 'Custom' ? 'active' : ''}`}
+            aria-pressed={timeframe === 'Custom'}
             onClick={() => setTimeframe('Custom')}
             title={`${new Date(customRange.startMs).toLocaleDateString()} + ${customRange.days} trading days`}
           >
@@ -383,8 +425,15 @@ export const StockPanel: React.FC = React.memo(() => {
         )}
         {compareMode && <span className="stock-mode-note">% change comparison</span>}
         {anySynthetic && (
-          <span className="stock-demo-note" title="No API key configured or the market data API was unreachable — showing generated placeholder data.">
-            simulated data
+          <span
+            className={`stock-demo-note ${demoReason === 'error' ? 'is-error' : ''}`}
+            title={
+              demoReason === 'error'
+                ? 'Live market data was unavailable (network, rate limit, or unknown symbol) — showing generated placeholder prices.'
+                : 'No market API key configured — showing generated placeholder prices.'
+            }
+          >
+            demo data
           </span>
         )}
       </div>
@@ -393,9 +442,29 @@ export const StockPanel: React.FC = React.memo(() => {
         <canvas
           ref={canvasRef}
           className="stock-chart"
+          role="img"
+          aria-label={
+            series.length > 0
+              ? `Price chart for ${series.map((s) => s.symbol).join(', ')}`
+              : overlayMessage
+          }
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setHover(null)}
         />
+        {series.length === 0 && (
+          <div className="stock-chart-overlay" role="status" aria-live="polite">
+            {chartStatus === 'loading' && <div className="stock-spinner" aria-hidden="true" />}
+            <div className="stock-chart-overlay__msg">{overlayMessage}</div>
+            {chartStatus === 'empty' && (
+              <button
+                className="btn ghost stock-chart-overlay__cta"
+                onClick={() => setStockPickerOpen(true)}
+              >
+                Browse stocks
+              </button>
+            )}
+          </div>
+        )}
         {hover && hoverIndex !== null && series.length > 0 && (
           <div
             className="stock-tooltip"

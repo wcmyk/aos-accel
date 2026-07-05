@@ -1,0 +1,68 @@
+/* ParameterPanel polish — richer empty state + crisper slider chrome.
+   Co-located; only adds rules, never redefines App.css .parameter-* base. */
+
+.parameter-panel__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.parameter-empty__steps {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.parameter-empty__steps li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.parameter-empty__num {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--cell-selected);
+  color: #fff;
+}
+
+.parameter-empty__steps strong {
+  color: var(--text-primary);
+}
+
+/* Give the value chip and step a monospace, theme-aware read. Overrides the
+   hardcoded light-only colors from App.css so dark mode stays legible. */
+.parameter-value {
+  color: var(--text-primary);
+}
+
+.parameter-range {
+  align-items: baseline;
+  color: var(--text-secondary);
+}
+
+.parameter-range__step {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.parameter-slider:focus-visible {
+  outline: 2px solid var(--cell-selected);
+  outline-offset: 3px;
+  border-radius: 4px;
+}

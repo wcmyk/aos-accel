@@ -7,9 +7,9 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import { AccelEngine } from '../engine/engine';
-import { CellValue, Cell, GraphDefinition } from '../engine/types';
+import { CellValue, Cell, GraphDefinition, CellFormat } from '../engine/types';
 import { GraphRenderer } from '../engine/graph-renderer';
-import { deserializeEngine, SerializedWorkbook } from '../engine/serialization';
+import { deserializeEngine, serializeEngine, SerializedWorkbook } from '../engine/serialization';
 import { onStockData, setMarketTimeframeDays, TIMEFRAME_BARS } from '../engine/stock-data';
 
 // dirtyValues/dirtyFormulas are Sets mutated inside immer producers below.
@@ -30,6 +30,16 @@ export interface WatchedTicker {
 }
 
 const WATCH_COLORS = ['#3b82f6', '#f59e0b', '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#ec4899'];
+
+// Upper bound on retained undo checkpoints. Snapshots are serialized workbooks
+// (plain JSON), so 100 is cheap in memory while covering any realistic session.
+const MAX_HISTORY = 100;
+
+// Tracks the originating action of the most recent undo checkpoint so that a
+// burst of same-target edits (e.g. dragging a parameter slider) collapses into
+// a single undo step instead of flooding the stack. Module-level (not store
+// state) because it never needs to drive a re-render.
+let lastCoalesceKey: string | null = null;
 
 /**
  * Adjust cell references in formulas for fill operations
@@ -210,8 +220,16 @@ interface AccelState {
   clearFillRange: () => void;
   executeFill: () => void;
 
+  // Undo / redo (snapshot-based history over workbook content)
+  undoStack: SerializedWorkbook[];
+  redoStack: SerializedWorkbook[];
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: () => void;
+  redo: () => void;
+
   // Formatting
-  formatCell: (row: number, col: number, format: any) => void;
+  formatCell: (row: number, col: number, format: Partial<CellFormat>) => void;
 
   // Sorting
   sortColumn: (col: number, ascending: boolean) => void;
@@ -263,7 +281,25 @@ interface AccelState {
 }
 
 export const useAccelStore = create<AccelState>()(
-  immer((set, get) => ({
+  immer((set, get) => {
+    // Capture the CURRENT workbook as an undo checkpoint. Must be called
+    // BEFORE the mutating engine call so the snapshot reflects the pre-edit
+    // state. Passing a coalesceKey collapses consecutive same-key edits into
+    // one step (e.g. a slider drag); omit it for discrete edits.
+    const recordHistory = (coalesceKey?: string) => {
+      if (coalesceKey && lastCoalesceKey === coalesceKey) return;
+      const snapshot = serializeEngine(get().engine);
+      lastCoalesceKey = coalesceKey ?? null;
+      set((state) => {
+        state.undoStack.push(snapshot);
+        if (state.undoStack.length > MAX_HISTORY) state.undoStack.shift();
+        state.redoStack.length = 0;
+        state.canUndo = true;
+        state.canRedo = false;
+      });
+    };
+
+    return {
     engine: new AccelEngine(),
     selectedCell: null,
     clipboard: null,
@@ -275,6 +311,11 @@ export const useAccelStore = create<AccelState>()(
     sheetNames: ['Sheet1'],
     selectionRange: null,
     isSelecting: false,
+
+    undoStack: [],
+    redoStack: [],
+    canUndo: false,
+    canRedo: false,
 
     workbookId: null,
     workbookTitle: 'Untitled workbook',
@@ -301,6 +342,66 @@ export const useAccelStore = create<AccelState>()(
         state.saveStatus = 'saved';
         state.lastSavedAt = Date.now();
         state.docVersion = 0;
+        // A freshly loaded workbook starts with a clean history.
+        state.undoStack.length = 0;
+        state.redoStack.length = 0;
+        state.canUndo = false;
+        state.canRedo = false;
+      });
+      lastCoalesceKey = null;
+    },
+
+    undo: () => {
+      const { undoStack, engine, isReadOnly } = get();
+      if (isReadOnly || undoStack.length === 0) return;
+      const current = serializeEngine(engine);
+      const previous = undoStack[undoStack.length - 1];
+      const restored = deserializeEngine(previous);
+      lastCoalesceKey = null;
+      set((state) => {
+        state.undoStack.pop();
+        state.redoStack.push(current);
+        if (state.redoStack.length > MAX_HISTORY) state.redoStack.shift();
+        state.engine = restored;
+        state.activeSheet = restored.getActiveSheetName();
+        state.sheetNames = restored.getSheetNames();
+        state.graphRenderer = null;
+        state.selectedCell = null;
+        state.selectionRange = null;
+        state.fillRange = null;
+        state.isSelecting = false;
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
+        state.canUndo = state.undoStack.length > 0;
+        state.canRedo = true;
+        state.docVersion += 1;
+      });
+    },
+
+    redo: () => {
+      const { redoStack, engine, isReadOnly } = get();
+      if (isReadOnly || redoStack.length === 0) return;
+      const current = serializeEngine(engine);
+      const next = redoStack[redoStack.length - 1];
+      const restored = deserializeEngine(next);
+      lastCoalesceKey = null;
+      set((state) => {
+        state.redoStack.pop();
+        state.undoStack.push(current);
+        if (state.undoStack.length > MAX_HISTORY) state.undoStack.shift();
+        state.engine = restored;
+        state.activeSheet = restored.getActiveSheetName();
+        state.sheetNames = restored.getSheetNames();
+        state.graphRenderer = null;
+        state.selectedCell = null;
+        state.selectionRange = null;
+        state.fillRange = null;
+        state.isSelecting = false;
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
+        state.canUndo = true;
+        state.canRedo = state.redoStack.length > 0;
+        state.docVersion += 1;
       });
     },
 
@@ -325,6 +426,7 @@ export const useAccelStore = create<AccelState>()(
       const { engine } = get();
       const cellKey = `${col},${row}`;
 
+      recordHistory();
       engine.setCell(row, col, value);
 
       // Sheet -> Market bridge: any ticker referenced literally in a STOCK()
@@ -430,6 +532,7 @@ export const useAccelStore = create<AccelState>()(
           isCut: true,
         };
       });
+      recordHistory();
       engine.setCell(row, col, '');
       set((state) => {
         state.engine = engine;
@@ -442,6 +545,7 @@ export const useAccelStore = create<AccelState>()(
       const { clipboard, engine } = get();
       if (!clipboard) return;
 
+      recordHistory();
       if (clipboard.formula) {
         engine.setCell(row, col, clipboard.formula);
       } else if (clipboard.value !== null) {
@@ -474,6 +578,7 @@ export const useAccelStore = create<AccelState>()(
       const { selectedCell, fillRange, engine } = get();
       if (!selectedCell || !fillRange) return;
 
+      recordHistory();
       const startRow = selectedCell.row;
       const startCol = selectedCell.col;
       const endRow = fillRange.row;
@@ -538,6 +643,7 @@ export const useAccelStore = create<AccelState>()(
     formatCell: (row, col, format) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.formatCell(row, col, format);
       set((state) => {
         state.engine = engine;
@@ -548,6 +654,7 @@ export const useAccelStore = create<AccelState>()(
     sortColumn: (col, ascending) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.sortColumn(col, ascending);
       set((state) => {
         state.engine = engine;
@@ -558,6 +665,7 @@ export const useAccelStore = create<AccelState>()(
     insertRow: (row) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.insertRow(row);
       set((state) => {
         state.engine = engine;
@@ -568,6 +676,7 @@ export const useAccelStore = create<AccelState>()(
     deleteRow: (row) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.deleteRow(row);
       set((state) => {
         state.engine = engine;
@@ -578,6 +687,7 @@ export const useAccelStore = create<AccelState>()(
     insertColumn: (col) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.insertColumn(col);
       set((state) => {
         state.engine = engine;
@@ -588,6 +698,7 @@ export const useAccelStore = create<AccelState>()(
     deleteColumn: (col) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.deleteColumn(col);
       set((state) => {
         state.engine = engine;
@@ -598,6 +709,7 @@ export const useAccelStore = create<AccelState>()(
     setParameter: (row, col, min, max, step) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.setParameter(row, col, min, max, step);
       set((state) => {
         state.engine = engine;
@@ -608,6 +720,8 @@ export const useAccelStore = create<AccelState>()(
     updateParameter: (row, col, value) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      // Coalesce a continuous drag on one parameter into a single undo step.
+      recordHistory(`param:${col},${row}`);
       engine.updateParameter(row, col, value);
       // Bump cached graph point versions for this cell, exactly like setCell
       // does — otherwise plots bound to the parameter repaint stale points.
@@ -622,6 +736,7 @@ export const useAccelStore = create<AccelState>()(
     addGraph: (id, formula, type = 'function') => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.addGraph(id, formula, type);
       set((state) => {
         state.engine = engine;
@@ -632,6 +747,7 @@ export const useAccelStore = create<AccelState>()(
     removeGraph: (id) => {
       if (get().isReadOnly) return;
       const { engine } = get();
+      recordHistory();
       engine.removeGraph(id);
       set((state) => {
         state.engine = engine;
@@ -838,7 +954,8 @@ export const useAccelStore = create<AccelState>()(
       // Dirty tracking handles state updates automatically
       // No need for manual version increment
     },
-  }))
+    };
+  })
 );
 
 // When asynchronously fetched market data lands, resolve every "Loading…"

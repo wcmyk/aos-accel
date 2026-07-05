@@ -191,7 +191,14 @@ export class FormulaParser {
 
   private parseIdentifier(): ASTNode {
     let ident = '';
-    while (this.pos < this.input.length && (this.isAlpha(this.peek()) || this.isDigit(this.peek()))) {
+    // Allow underscores so multi-word function names (SPEED_OF_LIGHT,
+    // NORMAL_CDF, LINEAR_REGRESSION, T_TEST, KINETIC_ENERGY, …) tokenize as a
+    // single identifier. Without this the lexer stopped at '_', leaving those
+    // registered formulas unreachable ("Unknown variable: SPEED").
+    while (
+      this.pos < this.input.length &&
+      (this.isAlpha(this.peek()) || this.isDigit(this.peek()) || this.peek() === '_')
+    ) {
       ident += this.consume();
     }
 

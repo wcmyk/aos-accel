@@ -37,14 +37,19 @@ export function EditorPage({ mode }: { mode: Mode }) {
   }, [mode, id, token]);
 
   if (status === 'loading') {
-    return <div className="loading-screen">Loading workbook…</div>;
+    return (
+      <div className="loading-screen">
+        <span className="loading-spinner" aria-hidden="true" />
+        <span>Loading workbook…</span>
+      </div>
+    );
   }
 
   if (status === 'error') {
     return (
       <div className="loading-screen">
-        <p>{error}</p>
-        <Link to="/">Back to My workbooks</Link>
+        <p className="loading-error">{error || 'This workbook could not be opened.'}</p>
+        <Link className="loading-link" to="/">Back to My workbooks</Link>
       </div>
     );
   }

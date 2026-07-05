@@ -24,6 +24,16 @@ export const StockPickerDialog: React.FC = () => {
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<number | null>(null);
 
+  // Close on Escape from anywhere in the dialog.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, setOpen]);
+
   // Search as you type. Local curated matches render instantly; the
   // provider's full-universe search (when a key is configured) is debounced
   // and merged in when it lands, so the picker never sits on a spinner.
@@ -56,6 +66,8 @@ export const StockPickerDialog: React.FC = () => {
   const effectiveSymbol = (selected || query).trim().toUpperCase();
   const canAdd = /^[A-Z.\-:]{1,10}$/.test(effectiveSymbol);
 
+  const visibleResults = results.slice(0, 8);
+
   const handleAdd = () => {
     if (!canAdd) return;
     addWatchedTicker(effectiveSymbol);
@@ -73,12 +85,34 @@ export const StockPickerDialog: React.FC = () => {
     setStartDate('');
   };
 
+  // Keyboard: Enter adds the current pick; Up/Down walks the result list.
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAdd();
+      return;
+    }
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && visibleResults.length > 0) {
+      e.preventDefault();
+      const cur = visibleResults.findIndex((r) => r.symbol === selected);
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      const next = (cur + delta + visibleResults.length) % visibleResults.length;
+      setSelected(visibleResults[next].symbol);
+    }
+  };
+
   return (
-    <div className="dialog" onClick={() => setOpen(false)}>
-      <div className="dialog-content stock-picker" onClick={(e) => e.stopPropagation()}>
+    <div className="dialog" role="presentation" onClick={() => setOpen(false)}>
+      <div
+        className="dialog-content stock-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stock-picker-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div>
           <p className="eyebrow">Market Data</p>
-          <h3>Choose a stock & date range</h3>
+          <h3 id="stock-picker-title">Choose a stock &amp; date range</h3>
           <p className="dialog-subtitle">
             {getApiKey()
               ? 'Search any listed symbol, then optionally pick a start date and how many trading days to observe.'
@@ -96,16 +130,24 @@ export const StockPickerDialog: React.FC = () => {
               setQuery(e.target.value);
               setSelected('');
             }}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            onKeyDown={handleInputKeyDown}
             placeholder="e.g. NVDA or Nvidia"
+            aria-label="Search stock symbol or company name"
           />
         </label>
 
-        <div className="stock-picker__results" role="listbox">
-          {results.length === 0 && !searching && (
-            <div className="stock-picker__hint">No matches — you can still add “{effectiveSymbol}” directly.</div>
+        <div className="stock-picker__results" role="listbox" aria-label="Matching stocks">
+          {results.length === 0 && searching && (
+            <div className="stock-picker__hint">Searching…</div>
           )}
-          {results.slice(0, 8).map((r) => (
+          {results.length === 0 && !searching && (
+            <div className="stock-picker__hint">
+              {effectiveSymbol
+                ? <>No matches — you can still add “{effectiveSymbol}” directly.</>
+                : 'Type a symbol or company name to search.'}
+            </div>
+          )}
+          {visibleResults.map((r) => (
               <button
                 key={r.symbol}
                 role="option"

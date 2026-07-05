@@ -1,0 +1,118 @@
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.inspector--empty {
+  padding: 4px 2px;
+}
+
+.inspector__hint {
+  margin: 0;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.5;
+}
+
+.inspector__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--button-border, #e6e6ea);
+}
+
+.inspector__ref {
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-primary, #1c1c1e);
+}
+
+.inspector__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #1c1c1e);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.inspector__row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.inspector__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #8a8a8e);
+}
+
+.inspector__formula {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-secondary, #f5f5f7);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.inspector__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.inspector__chip {
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border: 1px solid var(--button-border, #d8d8dd);
+  border-radius: 999px;
+  background: var(--panel-bg, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.inspector__chip:hover {
+  border-color: var(--accent, #2f7d4f);
+  color: var(--accent, #2f7d4f);
+}
+
+.inspector__chip:focus-visible {
+  outline: 2px solid var(--accent, #2f7d4f);
+  outline-offset: 1px;
+}
+
+.inspector__muted {
+  color: var(--text-secondary, #8a8a8e);
+}
+
+.inspector__slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inspector__slider input[type='range'] {
+  width: 100%;
+}
+
+.inspector__slider-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-secondary, #8a8a8e);
+}
+
+.inspector__actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 2px;
+}

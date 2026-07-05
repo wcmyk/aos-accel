@@ -9,6 +9,8 @@ import { SheetTabs } from './SheetTabs';
 import { GraphSheetView } from './GraphSheetView';
 import { ShareButton } from './ShareButton';
 import { StartScreen } from './StartScreen';
+import { Inspector } from './Inspector';
+import './EditorShell.css';
 import { useAccelStore } from '../store/accel-store';
 import { isCloudEnabled } from '../lib/supabase';
 import radixLogo from '../assets/radix-logo.png';
@@ -40,10 +42,14 @@ export function EditorShell() {
   const saveStatus = useAccelStore((state) => state.saveStatus);
   const workbookId = useAccelStore((state) => state.workbookId);
   const canEditTitle = isCloudEnabled && Boolean(workbookId) && !isReadOnly;
+  // Workspace mode: Spreadsheet (grid only), Split (grid + panel), or Analysis
+  // (the panel — charts, inspector, controls — leads; the grid is a narrow
+  // strip). The grid stays the transparent engine behind the analysis.
+  const [viewMode, setViewMode] = useState<'spreadsheet' | 'split' | 'analysis'>('split');
   // Side panel: each view hides independently; the survivor fills the space.
   const [showMarket, setShowMarket] = useState(true);
   const [showGraph, setShowGraph] = useState(true);
-  const panelHidden = !showMarket && !showGraph;
+  const panelCollapsed = viewMode === 'spreadsheet' || (!showMarket && !showGraph);
 
   // Drag the divider to resize the side panel.
   const [panelWidth, setPanelWidth] = useState(440);
@@ -140,6 +146,27 @@ export function EditorShell() {
           </div>
         </div>
         <div className="title-bar__right">
+          {!activeIsGraph && (
+            <div className="view-mode" role="group" aria-label="Workspace mode">
+              {(['spreadsheet', 'split', 'analysis'] as const).map((m) => (
+                <button
+                  key={m}
+                  className={`view-mode__btn${viewMode === m ? ' is-active' : ''}`}
+                  aria-pressed={viewMode === m}
+                  onClick={() => setViewMode(m)}
+                  title={
+                    m === 'spreadsheet'
+                      ? 'Spreadsheet — the full grid'
+                      : m === 'split'
+                        ? 'Split — grid and analysis together'
+                        : 'Analysis — charts, inspector and controls lead'
+                  }
+                >
+                  {m === 'spreadsheet' ? 'Sheet' : m === 'split' ? 'Split' : 'Analysis'}
+                </button>
+              ))}
+            </div>
+          )}
           {canEditTitle && <ShareButton workbookId={workbookId as string} />}
           {isCloudEnabled && (
             <button className="link-button" onClick={() => navigate('/')}>My workbooks</button>
@@ -163,24 +190,35 @@ export function EditorShell() {
         </div>
       ) : (
       <div
-        className={`workspace${panelHidden ? ' workspace--graph-collapsed' : ''}`}
-        style={panelHidden ? undefined : { gridTemplateColumns: `1fr 6px ${panelWidth}px` }}
+        className={`workspace${panelCollapsed ? ' workspace--graph-collapsed' : ''}`}
+        style={
+          panelCollapsed
+            ? undefined
+            : {
+                gridTemplateColumns:
+                  viewMode === 'analysis'
+                    ? 'minmax(280px, 340px) 6px 1fr'
+                    : `1fr 6px ${panelWidth}px`,
+              }
+        }
       >
         <div className="sheet-panel">
           <SpreadsheetGrid />
         </div>
-        {panelHidden ? (
-          <button
-            className="graph-reopen"
-            onClick={() => {
-              setShowMarket(true);
-              setShowGraph(true);
-            }}
-            title="Show side panel"
-          >
-            <span className="graph-reopen__chevron">‹</span>
-            <span className="graph-reopen__text">Market & Graph</span>
-          </button>
+        {panelCollapsed ? (
+          viewMode === 'spreadsheet' ? null : (
+            <button
+              className="graph-reopen"
+              onClick={() => {
+                setShowMarket(true);
+                setShowGraph(true);
+              }}
+              title="Show side panel"
+            >
+              <span className="graph-reopen__chevron">‹</span>
+              <span className="graph-reopen__text">Market & Graph</span>
+            </button>
+          )
         ) : (
           <>
             <div
@@ -189,6 +227,12 @@ export function EditorShell() {
               title="Drag to resize the side panel"
             />
             <div className="insight-panel">
+              <div className="card">
+                <div className="card__header">
+                  <span className="label">Inspector</span>
+                </div>
+                <Inspector />
+              </div>
               {showMarket && (
                 <div className={`card${!showGraph ? ' card--fill' : ''}`}>
                   <div className="card__header">

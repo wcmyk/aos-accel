@@ -36,6 +36,20 @@ function getErrorInfo(value: string): ErrorInfo | null {
   return null;
 }
 
+// Whether a cell reference is grammatically valid at the caret — i.e. the
+// nearest non-space character before it is an operator, an open paren, a
+// comma, a colon, or the leading '='. This is what distinguishes "point mode"
+// (clicking a cell to insert its reference while building a formula) from a
+// plain click meant to leave the formula: after a completed token like ')' or
+// a digit ("=1+2"), a click should commit and navigate, not splice in "D11".
+function formulaExpectsReference(text: string, caret: number): boolean {
+  if (!text.startsWith('=')) return false;
+  let i = Math.min(caret, text.length) - 1;
+  while (i >= 0 && text[i] === ' ') i--;
+  if (i < 0) return false; // nothing before the caret yet
+  return '=+-*/^(,:<>&%'.includes(text[i]);
+}
+
 // Left edge (x) of a 1-based column given a cumulative-offset table. colLeft[c]
 // is the pixel offset of column c; returns the last column whose left edge is at
 // or before scrollLeft (the first column that should render). Only 52 columns,
@@ -210,6 +224,12 @@ export const SpreadsheetGrid: React.FC = () => {
   const scrollRaf = useRef<number | null>(null);
   const caretPositionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const lastInsertedRef = useRef<{ start: number; end: number } | null>(null);
+  // The target a reference was last pointed at during the current gesture. A
+  // single click updates selectedCell, selectionRange and isSelecting in turn,
+  // re-running the point-mode effect several times; without this the same cell
+  // gets spliced in repeatedly ("D11D11D11"). Reset when the user types or the
+  // edit ends.
+  const lastPointedKeyRef = useRef<string | null>(null);
 
   // Formula signatures for parameter hints
   const formulaSignatures: Record<string, string[]> = useMemo(() => ({
@@ -303,6 +323,7 @@ export const SpreadsheetGrid: React.FC = () => {
     const value = initialValue || cellObj?.formula || String(cellObj?.value ?? '');
     setEditValue(value);
     lastInsertedRef.current = null;
+    lastPointedKeyRef.current = null;
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
@@ -358,6 +379,7 @@ export const SpreadsheetGrid: React.FC = () => {
       setEditingCell(null);
       setEditValue('');
       lastInsertedRef.current = null;
+      lastPointedKeyRef.current = null;
       gridRef.current?.focus();
     }
   }, [editingCell, editValue, setCell]);
@@ -837,6 +859,7 @@ export const SpreadsheetGrid: React.FC = () => {
   useEffect(() => {
     if (!editingCell) {
       lastInsertedRef.current = null;
+      lastPointedKeyRef.current = null;
     }
   }, [editingCell]);
 
@@ -848,8 +871,7 @@ export const SpreadsheetGrid: React.FC = () => {
 
     if (targetRow === editingCell.row && targetCol === editingCell.col) return;
 
-    // Only insert references when actively selecting (not during passive scrolling)
-    // This prevents unwanted L#:L# insertions when just scrolling the sheet
+    // Only react to deliberate selection gestures, not passive scrolling.
     if (!isSelecting && !selectionRange && !lastInsertedRef.current) return;
 
     // Reference insertion is a FORMULA-building affordance. Without this
@@ -857,10 +879,28 @@ export const SpreadsheetGrid: React.FC = () => {
     // active spliced raw references into the value ("C4:C4B2:B2…").
     if (!editValue.startsWith('=')) return;
 
-    // Pass range start if there's a selection range
+    // "Point mode" is active only while a reference is grammatically expected
+    // at the caret (after =, an operator, '(' or ',') OR we're already mid-point
+    // (lastInsertedRef set, so a follow-up click re-targets the same ref). If
+    // neither holds, the click means "leave this formula and go to that cell":
+    // commit the edit rather than appending a stray reference. This is what
+    // stops "=1+2" from becoming "=1+2D11" when you click around.
+    const inPointMode = lastInsertedRef.current !== null;
+    if (!inPointMode && !formulaExpectsReference(editValue, caretPositionRef.current.start)) {
+      handleCellSubmit();
+      return;
+    }
+
+    // A single click bumps selectedCell, selectionRange and isSelecting one
+    // after another, re-running this effect; dedupe so the same target isn't
+    // spliced in several times.
     const rangeStart = selectionRange ? selectionRange.start : undefined;
-    applyReferenceToFormula(targetRow, targetCol, Boolean(selectionRange) || Boolean(lastInsertedRef.current), rangeStart);
-  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting, editValue]);
+    const pointKey = `${rangeStart ? `${rangeStart.col},${rangeStart.row}:` : ''}${targetCol},${targetRow}`;
+    if (lastPointedKeyRef.current === pointKey) return;
+    lastPointedKeyRef.current = pointKey;
+
+    applyReferenceToFormula(targetRow, targetCol, inPointMode || Boolean(selectionRange), rangeStart);
+  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting, editValue, handleCellSubmit]);
 
   // Helper function to get cell state (computed on-demand, not stored)
   // Memoized with dirty tracking to only update when cells actually change
@@ -929,6 +969,7 @@ export const SpreadsheetGrid: React.FC = () => {
               end: e.target.selectionEnd ?? 0,
             };
             lastInsertedRef.current = null;
+            lastPointedKeyRef.current = null;
             updateFormulaHint(value, caretPos);
           }}
           onSelect={(e) => {

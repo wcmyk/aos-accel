@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SpreadsheetGrid } from './SpreadsheetGrid';
 import { Ribbon } from './Ribbon';
@@ -10,6 +10,7 @@ import { ShareButton } from './ShareButton';
 import { WelcomeOverlay } from './WelcomeOverlay';
 import { useAccelStore } from '../store/accel-store';
 import { isCloudEnabled } from '../lib/supabase';
+import radixLogo from '../assets/radix-logo.png';
 
 function saveStatusLabel(status: 'idle' | 'saving' | 'saved' | 'error', isReadOnly: boolean): string {
   if (isReadOnly) return 'Read-only (shared view)';
@@ -35,7 +36,35 @@ export function EditorShell() {
   const saveStatus = useAccelStore((state) => state.saveStatus);
   const workbookId = useAccelStore((state) => state.workbookId);
   const canEditTitle = isCloudEnabled && Boolean(workbookId) && !isReadOnly;
-  const [graphCollapsed, setGraphCollapsed] = useState(false);
+  // Side panel: each view hides independently; the survivor fills the space.
+  const [showMarket, setShowMarket] = useState(true);
+  const [showGraph, setShowGraph] = useState(true);
+  const panelHidden = !showMarket && !showGraph;
+
+  // Drag the divider to resize the side panel.
+  const [panelWidth, setPanelWidth] = useState(440);
+  const draggingRef = useRef(false);
+
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    const onMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const width = Math.max(300, Math.min(window.innerWidth * 0.65, window.innerWidth - ev.clientX - 20));
+      setPanelWidth(width);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, []);
 
   // Live selection statistics for the status bar, like Excel's.
   const selectedCell = useAccelStore((state) => state.selectedCell);
@@ -92,6 +121,7 @@ export function EditorShell() {
             <span className="light yellow" />
             <span className="light green" />
           </div>
+          <img className="brand-logo" src={radixLogo} alt="Radix" />
           <div className="title">
             {canEditTitle ? (
               <input
@@ -123,45 +153,74 @@ export function EditorShell() {
 
       <Ribbon />
 
-      <div className={`workspace${graphCollapsed ? ' workspace--graph-collapsed' : ''}`}>
+      <div
+        className={`workspace${panelHidden ? ' workspace--graph-collapsed' : ''}`}
+        style={panelHidden ? undefined : { gridTemplateColumns: `1fr 6px ${panelWidth}px` }}
+      >
         <div className="sheet-panel">
           <SpreadsheetGrid />
         </div>
-        {graphCollapsed ? (
+        {panelHidden ? (
           <button
             className="graph-reopen"
-            onClick={() => setGraphCollapsed(false)}
-            title="Show graph panel"
+            onClick={() => {
+              setShowMarket(true);
+              setShowGraph(true);
+            }}
+            title="Show side panel"
           >
             <span className="graph-reopen__chevron">‹</span>
-            <span className="graph-reopen__text">Graph</span>
+            <span className="graph-reopen__text">Market & Graph</span>
           </button>
         ) : (
-          <div className="insight-panel">
-            <div className="card">
-              <div className="card__header">
-                <span className="label">Market</span>
-                <button
-                  className="icon-btn"
-                  onClick={() => setGraphCollapsed(true)}
-                  title="Hide side panel"
-                  aria-label="Hide side panel"
-                >
-                  ›
-                </button>
+          <>
+            <div
+              className="panel-divider"
+              onMouseDown={handleDividerMouseDown}
+              title="Drag to resize the side panel"
+            />
+            <div className="insight-panel">
+              {showMarket && (
+                <div className={`card${!showGraph ? ' card--fill' : ''}`}>
+                  <div className="card__header">
+                    <span className="label">Market</span>
+                    <span className="card__actions">
+                      {!showGraph && (
+                        <button className="icon-btn" onClick={() => setShowGraph(true)} title="Show graph view">
+                          + Graph
+                        </button>
+                      )}
+                      <button className="icon-btn" onClick={() => setShowMarket(false)} title="Hide market view" aria-label="Hide market view">
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+                  <StockPanel />
+                </div>
+              )}
+              {showGraph && (
+                <div className={`card${!showMarket ? ' card--fill' : ''}`}>
+                  <div className="card__header">
+                    <span className="label">Graph</span>
+                    <span className="card__actions">
+                      {!showMarket && (
+                        <button className="icon-btn" onClick={() => setShowMarket(true)} title="Show market view">
+                          + Market
+                        </button>
+                      )}
+                      <button className="icon-btn" onClick={() => setShowGraph(false)} title="Hide graph view" aria-label="Hide graph view">
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+                  <GraphCanvas />
+                </div>
+              )}
+              <div className="card">
+                <ParameterPanel />
               </div>
-              <StockPanel />
             </div>
-            <div className="card">
-              <div className="card__header">
-                <span className="label">Graph</span>
-              </div>
-              <GraphCanvas />
-            </div>
-            <div className="card">
-              <ParameterPanel />
-            </div>
-          </div>
+          </>
         )}
       </div>
 

@@ -425,6 +425,10 @@ body {
 .workspace {
   display: grid;
   grid-template-columns: 2fr 1fr;
+  /* Pin the single row to the workspace's own height so percentage heights
+     inside grid items resolve; with the default auto row, the side panel's
+     flex children collapse to content height. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   padding: 14px 16px;
   flex: 1;
@@ -490,10 +494,12 @@ body {
   overflow: auto;
 }
 
+/* Cards size to content; a hidden sibling's space goes to .card--fill.
+   (height: 100% here predates multiple cards and starved the fill card.) */
 .insight-panel .card {
-  height: 100%;
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
 }
 
 .insight-panel .graph-container {
@@ -986,6 +992,19 @@ body {
   color: #fff;
 }
 
+.stock-vmode {
+  margin-left: 10px;
+  display: inline-flex;
+  border: 1px solid var(--button-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.stock-vmode .stock-tf {
+  border-radius: 0;
+  padding: 3px 8px;
+}
+
 .stock-mode-note,
 .stock-demo-note {
   margin-left: auto;
@@ -1037,6 +1056,55 @@ body {
 
 .stock-tooltip__row strong {
   margin-left: auto;
+}
+
+.brand-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  margin: 0 4px;
+}
+
+/* Resizable divider between the sheet and the side panel */
+.panel-divider {
+  cursor: col-resize;
+  border-radius: 3px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.panel-divider:hover,
+.panel-divider:active {
+  background: var(--cell-selected);
+  opacity: 0.5;
+}
+
+/* A card that should absorb the space freed by its hidden sibling */
+.insight-panel .card--fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.card--fill .stock-panel,
+.card--fill .graph-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.card--fill .stock-chart-shell,
+.card--fill .graph-canvas-shell {
+  flex: 1;
+  min-height: 240px;
+}
+
+.card__actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
 }
 
 /* Cursor trace tooltip on the main graph */

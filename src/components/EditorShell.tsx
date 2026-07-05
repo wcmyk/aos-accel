@@ -8,7 +8,7 @@ import { ParameterPanel } from './ParameterPanel';
 import { SheetTabs } from './SheetTabs';
 import { GraphSheetView } from './GraphSheetView';
 import { ShareButton } from './ShareButton';
-import { WelcomeOverlay } from './WelcomeOverlay';
+import { StartScreen } from './StartScreen';
 import { useAccelStore } from '../store/accel-store';
 import { isCloudEnabled } from '../lib/supabase';
 import radixLogo from '../assets/radix-logo.png';
@@ -117,7 +117,7 @@ export function EditorShell() {
 
   return (
     <div className="excel-shell">
-      {!isReadOnly && <WelcomeOverlay />}
+      {!isReadOnly && <StartScreen />}
       <div className="title-bar">
         <div className="title-bar__left">
           <div className="traffic-lights">

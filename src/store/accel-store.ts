@@ -294,6 +294,11 @@ interface AccelState {
   // Worksheets
   addSheet: () => void;
   addGraphSheet: (seedFromActive?: boolean) => string;
+  // Guided templates (used by the start screen and the ribbon).
+  insertMonteCarloModel: () => void;
+  insertStockTemplate: () => void;
+  insertEngineeringModel: () => void;
+  insertDataExploration: () => void;
   deleteSheet: (name: string) => void;
   setActiveSheet: (name: string) => void;
   getSheetNames: () => string[];
@@ -872,6 +877,77 @@ export const useAccelStore = create<AccelState>()(
         state.docVersion += 1;
       });
       return name;
+    },
+
+    // ---- Guided templates ----
+    // Each writes a ready-to-explore model onto the active sheet, wiring inputs
+    // (as slider parameters), formulas, and a chart so the result is live the
+    // moment it lands. Shared by the start screen and the ribbon.
+
+    insertMonteCarloModel: () => {
+      const s = get();
+      if (s.isReadOnly) return;
+      s.setCell(1, 1, 'Monte Carlo Stock Model');
+      s.setCell(2, 1, 'Ticker'); s.setCell(2, 2, 'AAPL');
+      s.setCell(3, 1, 'Start price'); s.setCell(3, 2, '=STOCK(B2, "price")');
+      s.setCell(4, 1, 'Horizon (days)'); s.setCell(4, 2, 252); s.setParameter(4, 2, 5, 504, 1);
+      s.setCell(5, 1, 'Expected return (annual)'); s.setCell(5, 2, 0.08); s.setParameter(5, 2, -0.5, 0.5, 0.01);
+      s.setCell(6, 1, 'Volatility (annual)'); s.setCell(6, 2, 0.25); s.setParameter(6, 2, 0.05, 1, 0.01);
+      s.setCell(7, 1, 'Simulations'); s.setCell(7, 2, 5000); s.setParameter(7, 2, 500, 20000, 500);
+      s.setCell(9, 1, 'Simulated prices'); s.setCell(9, 2, '=MC_TERMINAL(B3, B5, B6, B4, B7)');
+      s.setCell(11, 1, 'Expected value'); s.setCell(11, 2, '=AVERAGE(B9)');
+      s.setCell(12, 1, 'Median'); s.setCell(12, 2, '=MEDIAN(B9)');
+      s.setCell(13, 1, 'Probability of loss'); s.setCell(13, 2, '=PROB_BELOW(B9, B3)');
+      s.setCell(14, 1, '5th percentile'); s.setCell(14, 2, '=PERCENTILE(B9, 0.05)');
+      s.setCell(15, 1, '95th percentile'); s.setCell(15, 2, '=PERCENTILE(B9, 0.95)');
+      s.setCell(16, 1, 'Value at Risk (95%)'); s.setCell(16, 2, '=VALUE_AT_RISK(B9, B3, 0.95)');
+      s.setCell(17, 1, 'Expected shortfall (5%)'); s.setCell(17, 2, '=EXPECTED_SHORTFALL(B9, 0.05)');
+      s.addGraph(`mc_hist_${Date.now()}`, 'PLOT(HISTOGRAM(B9, 40))', 'plot');
+    },
+
+    insertStockTemplate: () => {
+      const s = get();
+      if (s.isReadOnly) return;
+      s.setCell(1, 1, 'Ticker'); s.setCell(1, 2, 'AAPL');
+      s.setCell(2, 1, 'Days'); s.setCell(2, 2, 90); s.setParameter(2, 2, 5, 365, 1);
+      s.setCell(3, 1, 'Last price'); s.setCell(3, 2, '=STOCK(B1, "price")');
+      s.setCell(4, 1, 'Avg close'); s.setCell(4, 2, '=AVERAGE(STOCK(B1, "close", B2))');
+      s.setCell(5, 1, 'Chart'); s.setCell(5, 2, '=PLOT(STOCK(B1, "close", B2))');
+    },
+
+    insertEngineeringModel: () => {
+      const s = get();
+      if (s.isReadOnly) return;
+      s.setCell(1, 1, 'Projectile Motion');
+      s.setCell(2, 1, 'Launch speed (m/s)'); s.setCell(2, 2, 30); s.setParameter(2, 2, 1, 100, 1);
+      s.setCell(3, 1, 'Launch angle (deg)'); s.setCell(3, 2, 45); s.setParameter(3, 2, 0, 90, 1);
+      s.setCell(4, 1, 'Gravity (m/s^2)'); s.setCell(4, 2, 9.81);
+      s.setCell(6, 1, 'Range (m)'); s.setCell(6, 2, '=B2^2 * SIN(2*B3*PI()/180) / B4');
+      s.setCell(7, 1, 'Max height (m)'); s.setCell(7, 2, '=(B2*SIN(B3*PI()/180))^2 / (2*B4)');
+      s.setCell(8, 1, 'Flight time (s)'); s.setCell(8, 2, '=2*B2*SIN(B3*PI()/180)/B4');
+      // Trajectory y(x); a function graph that reshapes as the sliders move.
+      s.addGraph(
+        `traj_${Date.now()}`,
+        'TAN(B3*PI()/180)*x - B4*x^2/(2*(B2*COS(B3*PI()/180))^2)',
+        'function'
+      );
+    },
+
+    insertDataExploration: () => {
+      const s = get();
+      if (s.isReadOnly) return;
+      s.setCell(1, 1, 'Data Exploration');
+      s.setCell(1, 4, 'Sample');
+      // Deterministic sample series in D2:D21 (bell-ish spread around 50).
+      const sample = [42, 55, 48, 61, 50, 47, 58, 53, 44, 62, 49, 51, 46, 57, 52, 45, 60, 54, 43, 56];
+      sample.forEach((v, i) => s.setCell(2 + i, 4, v));
+      s.setCell(2, 1, 'Count'); s.setCell(2, 2, '=COUNT(D2:D21)');
+      s.setCell(3, 1, 'Average'); s.setCell(3, 2, '=AVERAGE(D2:D21)');
+      s.setCell(4, 1, 'Std dev'); s.setCell(4, 2, '=STDEV(D2:D21)');
+      s.setCell(5, 1, 'Min'); s.setCell(5, 2, '=MIN(D2:D21)');
+      s.setCell(6, 1, 'Max'); s.setCell(6, 2, '=MAX(D2:D21)');
+      s.setCell(7, 1, 'Median'); s.setCell(7, 2, '=MEDIAN(D2:D21)');
+      s.addGraph(`data_hist_${Date.now()}`, 'PLOT(HISTOGRAM(D2:D21, 12))', 'plot');
     },
 
     deleteSheet: (name) => {

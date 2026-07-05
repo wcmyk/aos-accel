@@ -52,6 +52,8 @@ export const Ribbon: React.FC = () => {
     addGraph,
     removeGraph,
     getGraphs,
+    insertStockTemplate,
+    insertMonteCarloModel,
     watchlist,
     removeWatchedTicker,
     toggleWatchedTicker,
@@ -164,50 +166,9 @@ export const Ribbon: React.FC = () => {
     }
   }, [selectionRange, selectedCell, setCell]);
 
-  const handleInsertStockTemplate = useCallback(() => {
-    // Live market data template: a ticker cell, a timeframe slider, summary
-    // formulas, and a chart — all bound to the same cells, so dragging the
-    // slider re-slices the series and updates every view at once.
-    setCell(1, 1, 'Ticker');
-    setCell(1, 2, 'AAPL');
-    setCell(2, 1, 'Days');
-    setCell(2, 2, 90);
-    setParameter(2, 2, 5, 365, 1);
-    setCell(3, 1, 'Last price');
-    setCell(3, 2, '=STOCK(B1, "price")');
-    setCell(4, 1, 'Avg close');
-    setCell(4, 2, '=AVERAGE(STOCK(B1, "close", B2))');
-    setCell(5, 1, 'Chart');
-    setCell(5, 2, '=PLOT(STOCK(B1, "close", B2))');
-  }, [setCell, setParameter]);
-
-  // Monte Carlo stock model: the flagship "answer-first" workflow. Inputs are
-  // slider parameters; a single GBM simulation feeds every risk metric; a
-  // histogram of the terminal-price distribution renders in the side panel.
-  // Drag any slider and the metrics AND the distribution update together —
-  // the whole point of Radix in one screen.
-  const handleInsertMonteCarloModel = useCallback(() => {
-    setCell(1, 1, 'Monte Carlo Stock Model');
-    // Inputs
-    setCell(2, 1, 'Ticker'); setCell(2, 2, 'AAPL');
-    setCell(3, 1, 'Start price'); setCell(3, 2, '=STOCK(B2, "price")');
-    setCell(4, 1, 'Horizon (days)'); setCell(4, 2, 252); setParameter(4, 2, 5, 504, 1);
-    setCell(5, 1, 'Expected return (annual)'); setCell(5, 2, 0.08); setParameter(5, 2, -0.5, 0.5, 0.01);
-    setCell(6, 1, 'Volatility (annual)'); setCell(6, 2, 0.25); setParameter(6, 2, 0.05, 1, 0.01);
-    setCell(7, 1, 'Simulations'); setCell(7, 2, 5000); setParameter(7, 2, 500, 20000, 500);
-    // One simulation feeds every metric (fixed seed -> stable, consistent cloud)
-    setCell(9, 1, 'Simulated prices'); setCell(9, 2, '=MC_TERMINAL(B3, B5, B6, B4, B7)');
-    // Risk metrics
-    setCell(11, 1, 'Expected value'); setCell(11, 2, '=AVERAGE(B9)');
-    setCell(12, 1, 'Median'); setCell(12, 2, '=MEDIAN(B9)');
-    setCell(13, 1, 'Probability of loss'); setCell(13, 2, '=PROB_BELOW(B9, B3)');
-    setCell(14, 1, '5th percentile'); setCell(14, 2, '=PERCENTILE(B9, 0.05)');
-    setCell(15, 1, '95th percentile'); setCell(15, 2, '=PERCENTILE(B9, 0.95)');
-    setCell(16, 1, 'Value at Risk (95%)'); setCell(16, 2, '=VALUE_AT_RISK(B9, B3, 0.95)');
-    setCell(17, 1, 'Expected shortfall (5%)'); setCell(17, 2, '=EXPECTED_SHORTFALL(B9, 0.05)');
-    // Terminal-price distribution in the side-panel graph
-    addGraph(`mc_hist_${Date.now()}`, 'PLOT(HISTOGRAM(B9, 40))', 'plot');
-  }, [setCell, setParameter, addGraph]);
+  // Template builders live in the store (shared with the start screen).
+  const handleInsertStockTemplate = insertStockTemplate;
+  const handleInsertMonteCarloModel = insertMonteCarloModel;
 
   // Selection -> Graph bridge: turn the selected cells into a live plot.
   // One column (or row) plots as a single series; exactly two columns plot

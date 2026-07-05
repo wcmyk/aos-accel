@@ -3,7 +3,7 @@
  * Uses the same AST as spreadsheet formulas - NO duplicate parsing!
  */
 
-import { GraphDefinition, Worksheet } from './types';
+import { GraphDefinition, Worksheet, CellValue } from './types';
 import { Evaluator } from './evaluator';
 
 export interface Point {
@@ -89,8 +89,8 @@ export class GraphRenderer {
       return this.cache.get(cacheKey)!.points;
     }
 
-    // Cache miss - compute points
-    const points: Point[] = [];
+    // Cache miss - compute points (null marks a discontinuity / break in the line)
+    const points: (Point | null)[] = [];
     const { min, max } = graph.domain || { min: -10, max: 10 };
     const step = (max - min) / resolution;
 
@@ -109,17 +109,17 @@ export class GraphRenderer {
           if (points.length > 0 && !points[points.length - 1]) {
             continue;
           }
-          points.push(null as any); // Mark discontinuity
+          points.push(null); // Mark discontinuity
         }
       } catch {
         // Evaluation error - skip point
         if (points.length > 0 && points[points.length - 1] !== null) {
-          points.push(null as any);
+          points.push(null);
         }
       }
     }
 
-    const filteredPoints = points.filter((p) => p !== null);
+    const filteredPoints = points.filter((p): p is Point => p !== null);
 
     // Store in cache
     const cellVersions = new Map<string, number>();
@@ -182,7 +182,7 @@ export class GraphRenderer {
     return points;
   }
 
-  private flattenValues(value: any): number[] {
+  private flattenValues(value: CellValue): number[] {
     if (Array.isArray(value)) {
       const result: number[] = [];
       for (const v of value) {

@@ -40,19 +40,31 @@ export const useAuthStore = create<AuthState>()((set) => ({
   signUp: async (email, password) => {
     if (!supabase) return;
     set({ error: null });
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) set({ error: error.message });
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) set({ error: error.message });
+    } catch (e) {
+      set({ error: (e as Error).message || 'Sign up failed. Please try again.' });
+    }
   },
 
   signIn: async (email, password) => {
     if (!supabase) return;
     set({ error: null });
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) set({ error: error.message });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) set({ error: error.message });
+    } catch (e) {
+      set({ error: (e as Error).message || 'Sign in failed. Please try again.' });
+    }
   },
 
   signOut: async () => {
     if (!supabase) return;
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Best-effort: local session is cleared regardless.
+    }
   },
 }));

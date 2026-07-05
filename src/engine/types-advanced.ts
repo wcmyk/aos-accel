@@ -3,7 +3,7 @@
  * Extends core types with vector/matrix support, value typing, and blocks
  */
 
-import { CellAddress, CellValue, ASTNode } from './types';
+import { CellAddress, ASTNode } from './types';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // VALUE TYPING SYSTEM (Critical)
@@ -193,7 +193,7 @@ export interface TableBlock extends Block {
   metadata: ValueMetadata & {
     experimentId?: string;
     timestamp?: number;
-    parameters?: Record<string, any>;
+    parameters?: Record<string, unknown>;
   };
 }
 
@@ -227,7 +227,7 @@ export type Constraint =
   | { type: 'normalized' }                    // Sum to 1
   | { type: 'orthogonal' }                    // For vectors
   | { type: 'positive-definite' }             // For matrices
-  | { type: 'custom'; check: (value: any) => boolean };
+  | { type: 'custom'; check: (value: unknown) => boolean };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // DAG NODE (Enhanced for dirty tracking)
@@ -335,7 +335,7 @@ export interface LossFunction {
 export interface ModelIR {
   intent: 'physics' | 'math' | 'stats' | 'ml';
   template: string;
-  variables: Record<string, { type: ValueType; unit?: string; default?: any }>;
+  variables: Record<string, { type: ValueType; unit?: string; default?: unknown }>;
   equations: string[];
   parameters: string[];
   outputs: string[];

@@ -8,9 +8,8 @@
  * - Oscillations
  */
 
-import { Vector, Matrix } from '../types-advanced';
+import { Vector } from '../types-advanced';
 import { createVector, dotProduct, crossProduct, magnitude } from '../math/linalg';
-import { derivative, secondDerivative } from '../math/calculus';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // KINEMATICS (1D & 3D)

@@ -1,0 +1,140 @@
+/* GraphCanvas polish — legend, empty state, hover affordances.
+   Co-located so the shell agent keeps sole ownership of App.css.
+   Only adds new .graph-legend / .graph-empty rules; never redefines
+   the existing .graph-* base rules. */
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.graph-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--button-bg);
+  border: 1px solid var(--button-border);
+  border-radius: 14px;
+  padding: 2px 4px 2px 2px;
+  max-width: 100%;
+}
+
+.graph-legend__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  max-width: 220px;
+}
+
+.graph-legend__toggle:hover {
+  background: var(--bg-gradient-start);
+}
+
+.graph-legend__toggle:focus-visible {
+  outline: 2px solid var(--cell-selected);
+  outline-offset: 1px;
+}
+
+.graph-legend__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12) inset;
+}
+
+.graph-legend__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.graph-legend__item.is-hidden .graph-legend__label {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.graph-legend__item.is-hidden .graph-legend__dot {
+  opacity: 0.35;
+}
+
+.graph-legend__remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.graph-legend__remove:hover {
+  color: #ef4444;
+  background: var(--bg-gradient-start);
+}
+
+.graph-legend__remove:focus-visible {
+  outline: 2px solid var(--cell-selected);
+  outline-offset: 1px;
+}
+
+/* Empty state overlay — invites a first plot instead of a blank grid. */
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  padding: 16px;
+}
+
+.graph-empty__card {
+  pointer-events: none;
+  max-width: 340px;
+  text-align: center;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.graph-empty__title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+.graph-empty__body {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.graph-empty__body code {
+  font-family: 'Consolas', 'SFMono-Regular', ui-monospace, monospace;
+  background: var(--button-bg);
+  border: 1px solid var(--button-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.graph-canvas {
+  cursor: crosshair;
+}

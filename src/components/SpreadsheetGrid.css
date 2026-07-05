@@ -1,0 +1,116 @@
+/**
+ * SpreadsheetGrid.css
+ * Co-located polish for the grid: trustworthy error cells, an empty-sheet hint,
+ * column-resize affordances, and a clearer active-cell focus ring.
+ *
+ * Owns only NEW rules. Never redefines the base .cell / .col-header / .grid-wrapper
+ * geometry that lives in src/App.css (shell agent's file).
+ */
+
+/* ===== Error cells ===== */
+/* A failed formula renders a compact "#ERROR!" badge (full message in title=),
+ * never a raw exception. Red reads clearly on every (light) theme background. */
+.cell-content.cell-error {
+  color: #c0392b;
+  font-weight: 600;
+  cursor: help;
+}
+
+/* ===== Column resize handle ===== */
+.spreadsheet-grid .col-header {
+  /* keep label and handle on one line; th is already position: sticky, which
+   * is a positioned containing block for the absolute handle below. */
+  white-space: nowrap;
+}
+
+.col-label {
+  pointer-events: none;
+}
+
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 4;
+  /* invisible until hovered so the header stays clean */
+  background: transparent;
+  touch-action: none;
+}
+
+.col-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  right: 3px;
+  width: 2px;
+  height: 70%;
+  background: transparent;
+  border-radius: 1px;
+  transition: background-color 0.12s ease;
+}
+
+.col-resize-handle:hover::after,
+.spreadsheet-grid .col-header.resizing .col-resize-handle::after {
+  background: var(--cell-selected);
+}
+
+/* While a drag is in flight, force the resize cursor everywhere and stop the
+ * pointer from selecting text as it sweeps across the sheet. */
+.spreadsheet-container.resizing-col,
+.spreadsheet-container.resizing-col * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+/* ===== Active-cell focus ring ===== */
+/* The container holds keyboard focus; surface that on the selected cell so a
+ * keyboard user can always see where input will land. Additive box-shadow —
+ * does not fight the existing .cell.selected outline in App.css. */
+.spreadsheet-container:focus-visible .cell.selected {
+  box-shadow: 0 0 0 2px var(--cell-selected), 0 0 0 4px rgba(33, 115, 70, 0.25);
+}
+
+/* ===== Empty-sheet hint ===== */
+.grid-empty-hint {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 420px;
+  padding: 18px 22px;
+  text-align: center;
+  border: 1px dashed var(--button-border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.9;
+}
+
+.grid-empty-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.grid-empty-sub {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.grid-empty-sub code,
+.grid-empty-sub kbd {
+  font-family: 'Consolas', 'SFMono-Regular', ui-monospace, monospace;
+  font-size: 0.8rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--button-bg, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--button-border);
+  color: var(--text-primary);
+}

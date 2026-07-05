@@ -1,0 +1,192 @@
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(2px);
+  animation: welcome-fade 160ms ease-out;
+}
+
+@keyframes welcome-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.welcome-card {
+  position: relative;
+  width: min(540px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px;
+  background: var(--bg-secondary, #fff);
+  border: 1px solid var(--border-color, #d9d9d9);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  color: var(--text-primary, #202124);
+  animation: welcome-rise 200ms ease-out;
+}
+
+@keyframes welcome-rise {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.welcome-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #5f6368);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.welcome-close:hover {
+  background: var(--button-hover, #e5e5e5);
+}
+
+.welcome-close:focus-visible {
+  outline: 2px solid var(--cell-selected, #217346);
+  outline-offset: 2px;
+}
+
+.welcome-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.welcome-badge {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--cell-selected, #217346);
+  color: #fff;
+  font-weight: 800;
+  font-size: 22px;
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.welcome-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary, #5f6368);
+}
+
+.welcome-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-primary, #f3f3f3);
+  border: 1px solid var(--border-color, #d9d9d9);
+  border-radius: 10px;
+}
+
+.welcome-step__icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--bg-secondary, #fff);
+  border: 1px solid var(--border-color, #d9d9d9);
+  font-size: 16px;
+}
+
+.welcome-step__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.welcome-step__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.welcome-step__num {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cell-selected, #217346);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.welcome-step__body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary, #5f6368);
+}
+
+.welcome-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.welcome-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--button-border, #d0d0d0);
+  background: var(--button-bg, #fff);
+  color: var(--text-primary, #202124);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 120ms ease, filter 120ms ease;
+}
+
+.welcome-btn--primary {
+  background: var(--cell-selected, #217346);
+  border-color: var(--cell-selected, #217346);
+  color: #fff;
+}
+
+.welcome-btn--primary:hover {
+  filter: brightness(1.06);
+}
+
+.welcome-btn:focus-visible {
+  outline: 2px solid var(--cell-selected, #217346);
+  outline-offset: 2px;
+}

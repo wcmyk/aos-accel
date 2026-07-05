@@ -5,21 +5,55 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { useAccelStore } from '../store/accel-store';
-import { useShallow } from 'zustand/react/shallow';
 import { CellValue, CellFormat } from '../engine/types';
+import './SpreadsheetGrid.css';
 
 const ROWS = 1000;
 const COLS = 52; // A-AZ (52 columns)
 const ROW_HEIGHT = 24;
-const COL_WIDTH = 120; // Width of each column in pixels (matches CSS)
+const COL_WIDTH = 120; // Default column width in pixels (matches CSS)
+const MIN_COL_WIDTH = 48; // Smallest a column can be dragged
 const OVERSCAN = 10; // Increased significantly to prevent cells disappearing during scroll
 const DEFAULT_VIEWPORT_HEIGHT = 600;
 const DEFAULT_VIEWPORT_WIDTH = 1200;
+
+// Recognized formula error markers. A cell whose evaluation failed stores its
+// value as a string starting with one of these tokens; we render a compact,
+// trustworthy badge (never a raw exception) with the full text as a tooltip.
+interface ErrorInfo {
+  label: string;
+  title: string;
+}
+function getErrorInfo(value: string): ErrorInfo | null {
+  if (!value || value[0] !== '#') return null;
+  if (value.startsWith('#ERROR')) {
+    const message = value.replace(/^#ERROR:?\s*/, '').trim();
+    return { label: '#ERROR!', title: message || 'Formula error' };
+  }
+  if (/^#(N\/A|REF|VALUE|DIV\/0|NAME|NULL|NUM|CIRC)\b/i.test(value)) {
+    return { label: value.split(/\s+/)[0], title: value };
+  }
+  return null;
+}
+
+// Left edge (x) of a 1-based column given a cumulative-offset table. colLeft[c]
+// is the pixel offset of column c; returns the last column whose left edge is at
+// or before scrollLeft (the first column that should render). Only 52 columns,
+// so a linear scan is cheaper than the machinery a binary search would need.
+function firstColAt(colLeft: number[], scrollLeft: number): number {
+  let col = 1;
+  for (let c = 1; c <= COLS; c++) {
+    if (colLeft[c] <= scrollLeft) col = c;
+    else break;
+  }
+  return col;
+}
 
 interface GridCellProps {
   row: number;
   col: number;
   displayValue: string;
+  colWidth: number;
   cellFormat?: CellFormat;
   isSelected: boolean;
   isEditing: boolean;
@@ -37,6 +71,7 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
   row,
   col,
   displayValue,
+  colWidth,
   cellFormat,
   isSelected,
   isEditing,
@@ -57,20 +92,33 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
     ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
   }), [cellFormat]);
 
+  const tdStyle: React.CSSProperties = useMemo(() => ({
+    width: colWidth,
+    ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
+  }), [colWidth, cellFormat?.backgroundColor]);
+
+  const errorInfo = getErrorInfo(displayValue);
+
   return (
     <td
       data-row={row}
       data-col={col}
+      role="gridcell"
+      aria-selected={isSelected || undefined}
       className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''} ${isInSelectionRange ? 'in-selection' : ''}`}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
       onMouseDown={onMouseDown}
-      style={cellFormat?.backgroundColor ? { backgroundColor: cellFormat.backgroundColor } : undefined}
+      style={tdStyle}
     >
       {!isEditing && (
-        <div className="cell-content" style={cellStyle}>
-          {displayValue}
+        <div
+          className={`cell-content${errorInfo ? ' cell-error' : ''}`}
+          style={cellStyle}
+          title={errorInfo ? errorInfo.title : undefined}
+        >
+          {errorInfo ? errorInfo.label : displayValue}
         </div>
       )}
       {isSelected && !isEditing && (
@@ -87,6 +135,7 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
     prev.row === next.row &&
     prev.col === next.col &&
     prev.displayValue === next.displayValue &&
+    prev.colWidth === next.colWidth &&
     prev.isSelected === next.isSelected &&
     prev.isEditing === next.isEditing &&
     prev.isParameter === next.isParameter &&
@@ -119,7 +168,6 @@ export const SpreadsheetGrid: React.FC = () => {
   const startSelection = useAccelStore((state) => state.startSelection);
   const updateSelection = useAccelStore((state) => state.updateSelection);
   const endSelection = useAccelStore((state) => state.endSelection);
-  const clearSelection = useAccelStore((state) => state.clearSelection);
   const copyCell = useAccelStore((state) => state.copyCell);
   const pasteCell = useAccelStore((state) => state.pasteCell);
   const cutCell = useAccelStore((state) => state.cutCell);
@@ -128,6 +176,10 @@ export const SpreadsheetGrid: React.FC = () => {
   const executeFill = useAccelStore((state) => state.executeFill);
   const undo = useAccelStore((state) => state.undo);
   const redo = useAccelStore((state) => state.redo);
+  // engine + docVersion power the fresh-sheet empty-state hint; docVersion
+  // bumps on every mutation so the reactive read stays current.
+  const engine = useAccelStore((state) => state.engine);
+  const docVersion = useAccelStore((state) => state.docVersion);
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isDraggingFill, setIsDraggingFill] = useState(false);
@@ -140,6 +192,20 @@ export const SpreadsheetGrid: React.FC = () => {
   const [virtualWindow, setVirtualWindow] = useState({ startRow: 1, startCol: 1 });
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [viewportWidth, setViewportWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
+  // Per-column widths (all default to COL_WIDTH -> geometry is byte-identical to
+  // the fixed-width grid until the user drags a column border).
+  const [colWidths, setColWidths] = useState<number[]>(() => new Array(COLS).fill(COL_WIDTH));
+  const [resizingCol, setResizingCol] = useState<number | null>(null);
+  const colResizeRef = useRef<{ col: number; startX: number; startWidth: number } | null>(null);
+  // Cumulative left-edge offsets (1-based; colLeftRef.current[c] = x of column c,
+  // [COLS+1] = total width). Kept in a ref so the stable scroll/measure callbacks
+  // always read the latest widths without re-subscribing.
+  const colLeftRef = useRef<number[]>((() => {
+    const arr = new Array<number>(COLS + 2);
+    arr[1] = 0;
+    for (let c = 1; c <= COLS; c++) arr[c + 1] = arr[c] + COL_WIDTH;
+    return arr;
+  })());
   const scrollRaf = useRef<number | null>(null);
   const caretPositionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const lastInsertedRef = useRef<{ start: number; end: number } | null>(null);
@@ -207,7 +273,7 @@ export const SpreadsheetGrid: React.FC = () => {
       const scrollTop = gridWrapperRef.current.scrollTop;
       const scrollLeft = gridWrapperRef.current.scrollLeft;
       const nextStartRow = Math.max(1, Math.floor(scrollTop / ROW_HEIGHT) + 1 - OVERSCAN);
-      const nextStartCol = Math.max(1, Math.floor(scrollLeft / COL_WIDTH) + 1 - OVERSCAN);
+      const nextStartCol = Math.max(1, firstColAt(colLeftRef.current, scrollLeft) - OVERSCAN);
       setVirtualWindow((prev) => {
         if (prev.startRow === nextStartRow && prev.startCol === nextStartCol) {
           return prev;
@@ -398,6 +464,24 @@ export const SpreadsheetGrid: React.FC = () => {
 
     const { row, col } = selectedCell;
 
+    // Undo / Redo. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z or Ctrl+Y redoes.
+    // Store actions are no-ops when there is nothing to undo/redo or the
+    // workbook is read-only, so we can call them unconditionally.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+      e.preventDefault();
+      redo();
+      return;
+    }
+
     // Copy/Paste/Cut shortcuts
     if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
       e.preventDefault();
@@ -513,7 +597,7 @@ export const SpreadsheetGrid: React.FC = () => {
       e.preventDefault();
       startEditing(row, col, e.key);
     }
-  }, [selectedCell, editingCell, selectCell, copyCell, pasteCell, cutCell, setCell, startEditing, undo, redo, getCell, clearSelection]);
+  }, [selectedCell, editingCell, selectCell, copyCell, pasteCell, cutCell, setCell, startEditing, undo, redo]);
 
   const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
@@ -522,7 +606,7 @@ export const SpreadsheetGrid: React.FC = () => {
     }
     scrollRaf.current = requestAnimationFrame(() => {
       const nextStartRow = Math.max(1, Math.floor(target.scrollTop / ROW_HEIGHT) + 1 - OVERSCAN);
-      const nextStartCol = Math.max(1, Math.floor(target.scrollLeft / COL_WIDTH) + 1 - OVERSCAN);
+      const nextStartCol = Math.max(1, firstColAt(colLeftRef.current, target.scrollLeft) - OVERSCAN);
       setVirtualWindow((prev) => {
         if (prev.startRow === nextStartRow && prev.startCol === nextStartCol) {
           return prev;
@@ -548,6 +632,53 @@ export const SpreadsheetGrid: React.FC = () => {
     () => Array.from({ length: COLS }, (_, idx) => colToLetter(idx + 1)),
     [colToLetter]
   );
+
+  // Cumulative left-edge offsets for the current column widths. Reduces to the
+  // uniform fixed-width table when no column has been resized. Assigned to the
+  // ref during render so the scroll/measure callbacks always read fresh values.
+  const colLeft = useMemo(() => {
+    const arr = new Array<number>(COLS + 2);
+    arr[1] = 0;
+    for (let c = 1; c <= COLS; c++) arr[c + 1] = arr[c] + colWidths[c - 1];
+    return arr;
+  }, [colWidths]);
+  colLeftRef.current = colLeft;
+
+  // Begin dragging a column border. Global listeners (installed by the effect
+  // below while resizingCol is set) do the actual width tracking.
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent, col: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    colResizeRef.current = { col, startX: e.clientX, startWidth: colWidths[col - 1] };
+    setResizingCol(col);
+  }, [colWidths]);
+
+  useEffect(() => {
+    if (resizingCol === null) return;
+
+    const handleMove = (ev: MouseEvent) => {
+      const state = colResizeRef.current;
+      if (!state) return;
+      const next = Math.max(MIN_COL_WIDTH, Math.round(state.startWidth + (ev.clientX - state.startX)));
+      setColWidths((prev) => {
+        if (prev[state.col - 1] === next) return prev;
+        const copy = prev.slice();
+        copy[state.col - 1] = next;
+        return copy;
+      });
+    };
+    const handleEnd = () => {
+      colResizeRef.current = null;
+      setResizingCol(null);
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+    };
+  }, [resizingCol]);
 
   const formatCellValue = useCallback((value: CellValue): string => {
     if (value === null || value === undefined) return '';
@@ -614,7 +745,7 @@ export const SpreadsheetGrid: React.FC = () => {
   }, [formulaSignatures]);
 
   const totalGridHeight = ROWS * ROW_HEIGHT;
-  const totalGridWidth = COLS * COL_WIDTH;
+  const totalGridWidth = colLeft[COLS + 1];
 
   const estimatedVisibleRowCount = viewportHeight > 0
     ? Math.ceil(viewportHeight / ROW_HEIGHT)
@@ -624,13 +755,17 @@ export const SpreadsheetGrid: React.FC = () => {
   const topSpacerHeight = (startRow - 1) * ROW_HEIGHT;
   const bottomSpacerHeight = Math.max(totalGridHeight - endRow * ROW_HEIGHT, 0);
 
-  const estimatedVisibleColCount = viewportWidth > 0
-    ? Math.ceil(viewportWidth / COL_WIDTH)
-    : COLS;
   const startCol = Math.max(1, Math.min(COLS, virtualWindow.startCol));
-  const endCol = Math.min(COLS, startCol + estimatedVisibleColCount + OVERSCAN * 2 - 1);
-  const leftSpacerWidth = (startCol - 1) * COL_WIDTH;
-  const rightSpacerWidth = Math.max(totalGridWidth - endCol * COL_WIDTH, 0);
+  // startCol already sits OVERSCAN columns behind the true first visible column,
+  // so measure the viewport from that true first column, walk until it is fully
+  // covered, then pad another OVERSCAN so cells never blank out during scroll.
+  const firstVisibleCol = Math.min(COLS, startCol + OVERSCAN);
+  const rightBound = colLeft[firstVisibleCol] + (viewportWidth > 0 ? viewportWidth : DEFAULT_VIEWPORT_WIDTH);
+  let coverCol = firstVisibleCol;
+  while (coverCol < COLS && colLeft[coverCol + 1] < rightBound) coverCol++;
+  const endCol = Math.min(COLS, coverCol + OVERSCAN);
+  const leftSpacerWidth = colLeft[startCol];
+  const rightSpacerWidth = Math.max(totalGridWidth - colLeft[endCol + 1], 0);
 
   const visibleRows = useMemo(
     () => Array.from({ length: endRow - startRow + 1 }, (_, i) => startRow + i),
@@ -639,6 +774,17 @@ export const SpreadsheetGrid: React.FC = () => {
   const visibleColumns = useMemo(
     () => Array.from({ length: endCol - startCol + 1 }, (_, i) => startCol + i),
     [startCol, endCol]
+  );
+
+  // Fresh-sheet hint: a workbook with no populated cells. Empty cells are pruned
+  // from the engine's map, so size === 0 is an exact "nothing typed yet" signal.
+  // docVersion bumps on every mutation, keeping this in sync without polling.
+  // docVersion is an intentional trigger: it bumps on every mutation so the
+  // empty-state check re-runs when cells change (engine ref stays stable).
+  const isSheetEmpty = useMemo(
+    () => engine.getWorksheet().cells.size === 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [engine, docVersion]
   );
 
   // Memoize selected cell data for formula bar to avoid duplicate getCellObject calls
@@ -735,6 +881,9 @@ export const SpreadsheetGrid: React.FC = () => {
       isParameter: cellObj?.isParameter || false,
       format: cellObj?.format,
     };
+    // dirtyValues/dirtyFormulas are intentional triggers: they change identity
+    // when cells recalc, forcing affected cells to repaint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getCellObject, getCell, formatCellValue, dirtyValues, dirtyFormulas]);
 
   // Helper function to get cell state (computed on-demand, not stored)
@@ -760,9 +909,13 @@ export const SpreadsheetGrid: React.FC = () => {
 
   return (
     <div
-      className="spreadsheet-container"
+      className={`spreadsheet-container${resizingCol !== null ? ' resizing-col' : ''}`}
       ref={gridRef}
       tabIndex={0}
+      role="grid"
+      aria-label="Spreadsheet"
+      aria-rowcount={ROWS}
+      aria-colcount={COLS}
       onKeyDown={handleGridKeyDown}
     >
       <div className="formula-bar">
@@ -773,6 +926,7 @@ export const SpreadsheetGrid: React.FC = () => {
           ref={inputRef}
           type="text"
           className="formula-input"
+          aria-label="Formula bar"
           value={formulaBarValue}
           onChange={(e) => {
             const value = e.target.value;
@@ -818,6 +972,15 @@ export const SpreadsheetGrid: React.FC = () => {
         ref={gridWrapperRef}
         onScroll={handleGridScroll}
       >
+        {isSheetEmpty && (
+          <div className="grid-empty-hint" aria-hidden="true">
+            <div className="grid-empty-title">This sheet is empty</div>
+            <div className="grid-empty-sub">
+              Click any cell and start typing. Begin a formula with <code>=</code>,
+              drag the fill handle to extend a series, and press <kbd>Ctrl</kbd>+<kbd>Z</kbd> to undo.
+            </div>
+          </div>
+        )}
         <table className="spreadsheet-grid">
           <thead>
             <tr>
@@ -826,8 +989,21 @@ export const SpreadsheetGrid: React.FC = () => {
                 <th style={{ width: leftSpacerWidth }} />
               )}
               {visibleColumns.map((col) => (
-                <th key={col} className="col-header">
-                  {columnLabels[col - 1] || colToLetter(col)}
+                <th
+                  key={col}
+                  className={`col-header${resizingCol === col ? ' resizing' : ''}`}
+                  style={{ width: colWidths[col - 1] }}
+                >
+                  <span className="col-label">{columnLabels[col - 1] || colToLetter(col)}</span>
+                  <span
+                    className="col-resize-handle"
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={`Resize column ${columnLabels[col - 1] || colToLetter(col)}`}
+                    onMouseDown={(e) => handleResizeMouseDown(e, col)}
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  />
                 </th>
               ))}
               {rightSpacerWidth > 0 && (
@@ -859,6 +1035,7 @@ export const SpreadsheetGrid: React.FC = () => {
                       row={row}
                       col={col}
                       displayValue={cellData.displayValue}
+                      colWidth={colWidths[col - 1]}
                       cellFormat={cellData.format}
                       isSelected={cellState.isSelected}
                       isEditing={cellState.isEditing}

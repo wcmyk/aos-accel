@@ -7,6 +7,7 @@ import { StockPanel } from './StockPanel';
 import { ParameterPanel } from './ParameterPanel';
 import { SheetTabs } from './SheetTabs';
 import { ShareButton } from './ShareButton';
+import { WelcomeOverlay } from './WelcomeOverlay';
 import { useAccelStore } from '../store/accel-store';
 import { isCloudEnabled } from '../lib/supabase';
 import radixLogo from '../assets/radix-logo.png';
@@ -103,7 +104,6 @@ export function EditorShell() {
     }
     if (count === 0) return null;
     return { sum, count, average: numeric > 0 ? sum / numeric : null };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCell, selectionRange, docVersion, getCell]);
 
   const fmt = (n: number) =>
@@ -113,6 +113,7 @@ export function EditorShell() {
 
   return (
     <div className="excel-shell">
+      {!isReadOnly && <WelcomeOverlay />}
       <div className="title-bar">
         <div className="title-bar__left">
           <div className="traffic-lights">

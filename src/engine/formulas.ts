@@ -1,20 +1,19 @@
 /**
- * Excel formula library
- * Implements ~350-400 Excel functions + Scientific Computing
+ * Formula library
+ * ~150 spreadsheet functions: math, stats, text, logic, lookup, finance,
+ * matrix ops, plus a reachable slice of scientific computing (mechanics,
+ * quantum, linear algebra, distributions, inference). Every function
+ * registered here is wired through the evaluator and actually evaluates.
  */
 
 import { CellValue } from './types';
 
-// Scientific Computing Imports
+// Scientific computing (only modules actually surfaced as formulas are imported)
 import * as Mechanics from './physics/mechanics';
 import * as Quantum from './physics/quantum';
-import * as Waves from './physics/waves';
-import * as Thermo from './physics/thermodynamics';
 import * as LinAlg from './math/linalg';
-import * as Calculus from './math/calculus';
 import * as Stats from './stats/distributions';
 import * as Inference from './stats/inference';
-import * as Models from './ml/models';
 import { createVector, createMatrix } from './math/linalg';
 import * as StockData from './stock-data';
 
@@ -91,7 +90,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
    * Returns a placeholder string so cells with PLOT formulas do not error.
    * Graph rendering logic reads the AST directly to build plots.
    */
-  PLOT: (..._args) => 'PLOT',
+  PLOT: () => 'PLOT',
 
   /**
    * STOCK(ticker, [field], [days]) — live market data as a first-class series.
@@ -284,8 +283,8 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return str;
   },
 
-  TEXT: (value, _format?) => {
-    // Basic text formatting
+  TEXT: (value) => {
+    // Basic text formatting (format string not yet applied)
     return String(value);
   },
 
@@ -316,7 +315,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   SECOND: (dateValue) => new Date(toNumber(dateValue)).getSeconds(),
 
   // ===== LOOKUP/REFERENCE FUNCTIONS =====
-  VLOOKUP: (lookupValue, tableArray, colIndexNum, _rangeLookup = true) => {
+  VLOOKUP: (lookupValue, tableArray, colIndexNum) => {
     // Simplified implementation
     if (!Array.isArray(tableArray)) return null;
 
@@ -332,7 +331,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return null;
   },
 
-  HLOOKUP: (lookupValue, tableArray, rowIndexNum, _rangeLookup = true) => {
+  HLOOKUP: (lookupValue, tableArray, rowIndexNum) => {
     if (!Array.isArray(tableArray)) return null;
 
     const rows = tableArray as CellValue[][];
@@ -368,7 +367,7 @@ export const FORMULAS: Record<string, FormulaFunction> = {
     return null;
   },
 
-  MATCH: (lookupValue, lookupArray, _matchType = 1) => {
+  MATCH: (lookupValue, lookupArray) => {
     if (!Array.isArray(lookupArray)) return null;
 
     const index = lookupArray.indexOf(lookupValue);
@@ -905,17 +904,6 @@ export const FORMULAS: Record<string, FormulaFunction> = {
   HBAR: () => Quantum.hbar,
 
   // ===== MATH: CALCULUS =====
-
-  /**
-   * DERIVATIVE - Numerical derivative at a point
-   * Args: formula_reference, x_value, [h=1e-5]
-   * Note: formula_reference should be a cell with a formula
-   */
-  DERIVATIVE: (fx, x, h = 1e-5) => {
-    // Simple numerical derivative for scalar values
-    // In practice, this would need to evaluate a formula at different points
-    return '#N/A'; // Placeholder - requires formula evaluation context
-  },
 
   /**
    * INTEGRATE - Numerical integration using Simpson's rule

@@ -1,6 +1,9 @@
 # Radix Examples
 
-This document demonstrates Radix's unified spreadsheet + graphing capabilities.
+Ten worked walkthroughs of Radix's core loop: put formulas in the grid, mark
+cells as sliders, add a graph, and drag. Every example below uses formulas and
+features that work in the app today. Examples 6–7 use the built-in Automation
+scripts (Automation tab).
 
 ## Example 1: Linear Function with Interactive Parameters
 
@@ -186,10 +189,12 @@ This document demonstrates Radix's unified spreadsheet + graphing capabilities.
 
 All examples show that:
 
-1. **Spreadsheet and graph are ONE thing** - change a cell, graph updates instantly
-2. **No mode switching** - formulas and graphs use the same syntax
-3. **Parameters are live** - sliders update everything in real-time
-4. **Automation works** - can script complex scenarios
-5. **Excel + Desmos = Radix** - best of both worlds
+1. **Spreadsheet and graph are one thing** — change a cell, the graph updates
+   instantly (both consume the same parsed AST).
+2. **No mode switching** — formulas and graphs use the same syntax.
+3. **Parameters are live** — sliders update cells, stats, and graphs together.
+4. **Basic automation works** — the built-in runner can sweep parameters, loop,
+   and animate graphs.
 
-This is the **unified computational environment** as specified in the positioning document.
+For the honest scope of what Radix does and doesn't do, see the
+[README](./README.md#honest-limits).

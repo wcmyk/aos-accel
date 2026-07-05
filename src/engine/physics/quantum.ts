@@ -8,9 +8,7 @@
  * - Quantum harmonic oscillator
  */
 
-import { Vector, Matrix } from '../types-advanced';
-import { createVector, createMatrix, dotProduct, magnitude } from '../math/linalg';
-import { derivative, secondDerivative, simpsonsRule } from '../math/calculus';
+import { simpsonsRule } from '../math/calculus';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // PHYSICAL CONSTANTS

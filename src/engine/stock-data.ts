@@ -30,9 +30,22 @@ export interface StockBar {
   volume: number;
 }
 
+/**
+ * Why a series is synthetic:
+ *  - 'offline': no VITE_STOCK_API_KEY is configured (expected demo mode).
+ *  - 'error':   a key exists but the live request failed (network, rate
+ *               limit, bad symbol, or malformed response).
+ * This lets the UI be honest about *why* it is showing placeholder prices.
+ */
+export type SyntheticReason = 'offline' | 'error';
+
+/** Coarse load state for a single ticker, for status UI. */
+export type TickerStatus = 'missing' | 'loading' | 'live' | 'synthetic';
+
 interface TickerCache {
   bars: StockBar[];
   synthetic: boolean;
+  reason?: SyntheticReason;
 }
 
 const MAX_HISTORY_DAYS = 3650;
@@ -88,6 +101,25 @@ export function isSyntheticData(ticker: string): boolean {
   return cache.get(normalizeTicker(ticker))?.synthetic ?? false;
 }
 
+/**
+ * Why the cached series is synthetic, or null when it is live (or not yet
+ * loaded). Lets the Market panel explain demo mode honestly.
+ */
+export function getSyntheticReason(ticker: string): SyntheticReason | null {
+  const entry = cache.get(normalizeTicker(ticker));
+  if (!entry || !entry.synthetic) return null;
+  return entry.reason ?? 'offline';
+}
+
+/** Coarse load state for status UI: missing, loading, live, or synthetic. */
+export function getTickerStatus(ticker: string): TickerStatus {
+  const t = normalizeTicker(ticker);
+  const entry = cache.get(t);
+  if (entry) return entry.synthetic ? 'synthetic' : 'live';
+  if (pending.has(t)) return 'loading';
+  return 'missing';
+}
+
 function normalizeTicker(ticker: string): string {
   return ticker.trim().toUpperCase();
 }
@@ -105,7 +137,8 @@ export function getStockSeries(
   if (!entry) return undefined;
 
   const f = field.trim().toLowerCase();
-  const bars = entry.bars.slice(-Math.max(1, Math.min(days, entry.bars.length)));
+  const want = Number.isFinite(days) ? days : entry.bars.length;
+  const bars = entry.bars.slice(-Math.max(1, Math.min(want, entry.bars.length)));
 
   switch (f) {
     case 'open':
@@ -200,9 +233,13 @@ export async function searchTickersRemote(query: string): Promise<TickerMatch[] 
       `&market=stocks&active=true&limit=10&apiKey=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const results = (json?.results ?? []) as Array<{ ticker: string; name: string }>;
-    return results.map((r) => ({ symbol: r.ticker, name: r.name }));
+    const json = (await res.json()) as { status?: string; results?: unknown };
+    if (json?.status === 'ERROR') return null;
+    const results = Array.isArray(json?.results) ? json.results : [];
+    return results
+      .map((r) => r as { ticker?: unknown; name?: unknown })
+      .filter((r) => typeof r.ticker === 'string' && r.ticker.length > 0)
+      .map((r) => ({ symbol: String(r.ticker), name: String(r.name ?? r.ticker) }));
   } catch {
     return null;
   }
@@ -235,7 +272,10 @@ export function requestTicker(ticker: string): void {
     })
     .catch(() => {
       failed.add(t);
-      cache.set(t, { bars: syntheticBars(t), synthetic: true });
+      // No key → expected offline demo mode; a key present → a genuine
+      // fetch failure (network, rate limit, bad symbol, malformed data).
+      const reason: SyntheticReason = getApiKey() ? 'error' : 'offline';
+      cache.set(t, { bars: syntheticBars(t), synthetic: true, reason });
     })
     .finally(() => {
       pending.delete(t);
@@ -265,23 +305,55 @@ async function fetchTicker(ticker: string): Promise<StockBar[]> {
 
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Stock API error: HTTP ${res.status}`);
+    // 429 = free-tier rate limit; surface it distinctly for debuggability.
+    const detail = res.status === 429 ? 'rate limited (HTTP 429)' : `HTTP ${res.status}`;
+    throw new Error(`Stock API error: ${detail}`);
   }
 
-  const json = await res.json();
-  const results = json?.results;
-  if (!Array.isArray(results) || results.length === 0) {
-    throw new Error(`No data for ticker ${ticker}`);
+  const json = (await res.json()) as { status?: string; error?: string; results?: unknown };
+  // Polygon can answer 200 with an error envelope (bad symbol, throttling).
+  if (json?.status === 'ERROR') {
+    throw new Error(json.error || `Stock API error for ${ticker}`);
   }
 
-  return results.map((r: Record<string, number>) => ({
-    t: r.t,
-    open: r.o,
-    high: r.h,
-    low: r.l,
-    close: r.c,
-    volume: r.v,
-  }));
+  const bars = sanitizeBars(json?.results);
+  if (bars.length === 0) {
+    throw new Error(`No usable data for ticker ${ticker}`);
+  }
+  return bars;
+}
+
+/**
+ * Coerce a raw provider payload into clean, chronologically ordered bars.
+ * Drops any row with a non-finite timestamp or non-positive close, and
+ * backfills missing OHLC fields from the close so a partial row is still
+ * usable rather than poisoning the series with NaN.
+ */
+function sanitizeBars(raw: unknown): StockBar[] {
+  if (!Array.isArray(raw)) return [];
+  const out: StockBar[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as Record<string, unknown>;
+    const t = Number(rec.t);
+    const close = Number(rec.c);
+    if (!Number.isFinite(t) || !Number.isFinite(close) || close <= 0) continue;
+    const open = Number(rec.o);
+    const high = Number(rec.h);
+    const low = Number(rec.l);
+    const volume = Number(rec.v);
+    out.push({
+      t,
+      open: Number.isFinite(open) && open > 0 ? open : close,
+      high: Number.isFinite(high) && high > 0 ? high : close,
+      low: Number.isFinite(low) && low > 0 ? low : close,
+      close,
+      volume: Number.isFinite(volume) && volume >= 0 ? volume : 0,
+    });
+  }
+  // Defensive: guarantee ascending time order even if the API sort changes.
+  out.sort((a, b) => a.t - b.t);
+  return out;
 }
 
 /**

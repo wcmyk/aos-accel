@@ -5,10 +5,14 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import './GraphCanvas.css';
 export const GraphCanvas: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
-  const { getGraphs, getGraphRenderer } = useAccelStore();
+  const { getGraphs, getGraphRenderer, removeGraph } = useAccelStore();
+  // Per-series visibility toggled from the legend. Kept as local UI state so
+  // we never mutate the store's graph definitions (which stay visible:true).
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   // Any engine mutation (cell edit, slider drag, async STOCK() data arrival)
   // bumps docVersion — the draw effect keys off it so the canvas actually
   // repaints. Without this the effect deps never change on recalculation.
@@ -98,8 +102,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
     height: number,
     vp: { xMin: number; xMax: number; yMin: number; yMax: number }
   ) => {
-    // Get colors from CSS variables for theme support
-    const styles = getComputedStyle(document.documentElement);
+    // Theme-aware colors (dark/light) for axes and gridlines.
     const isDark = document.documentElement.getAttribute('data-theme')?.includes('dark');
     const axisColor = isDark ? '#d4d4d4' : '#333';
     const gridColor = isDark ? '#3e3e42' : '#e0e0e0';
@@ -220,7 +223,9 @@ export const GraphCanvas: React.FC = React.memo(() => {
 
       // Get cached renderer from store
       const graphRenderer = getGraphRenderer();
-      const graphsData = graphRenderer.renderAll(1000, axisSelection);
+      const graphsData = graphRenderer
+        .renderAll(1000, axisSelection)
+        .filter((g) => !hiddenIds.has(g.id));
 
       // Auto-fit data plots (e.g. stock series living at y≈200, x≈1..90)
       // that would otherwise be invisible in the default ±10 viewport.
@@ -297,7 +302,10 @@ export const GraphCanvas: React.FC = React.memo(() => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [viewport, getGraphRenderer, canvasSize, axisSelection, docVersion, trace]);
+    // drawAxes is a stable local helper; the effect intentionally re-runs only
+    // on data/viewport changes, not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewport, getGraphRenderer, canvasSize, axisSelection, docVersion, trace, hiddenIds]);
 
   const handleTraceMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -306,7 +314,9 @@ export const GraphCanvas: React.FC = React.memo(() => {
     const frac = (e.clientX - rect.left) / Math.max(1, rect.width);
     const dataX = viewport.xMin + frac * (viewport.xMax - viewport.xMin);
 
-    const graphsData = getGraphRenderer().renderAll(1000, axisSelection);
+    const graphsData = getGraphRenderer()
+      .renderAll(1000, axisSelection)
+      .filter((g) => !hiddenIds.has(g.id));
     const formulas = new Map(getGraphs().map((g) => [g.id, g.formula]));
     const entries: Array<{ color: string; label: string; x: number; y: number }> = [];
     for (const g of graphsData) {
@@ -362,6 +372,18 @@ export const GraphCanvas: React.FC = React.memo(() => {
     if (lastPlotBoundsRef.current) {
       setViewport(lastPlotBoundsRef.current);
     }
+  };
+
+  const toggleHidden = (id: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   return (
@@ -429,7 +451,51 @@ export const GraphCanvas: React.FC = React.memo(() => {
           <button className="btn ghost" onClick={handleReset}>Reset</button>
         </div>
       </div>
+      {graphs.length > 0 && (
+        <div className="graph-legend" role="group" aria-label="Graph series">
+          {graphs.map((g) => {
+            const hidden = hiddenIds.has(g.id);
+            return (
+              <div
+                key={g.id}
+                className={`graph-legend__item${hidden ? ' is-hidden' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="graph-legend__toggle"
+                  onClick={() => toggleHidden(g.id)}
+                  aria-pressed={!hidden}
+                  title={hidden ? 'Show this series' : 'Hide this series'}
+                >
+                  <span className="graph-legend__dot" style={{ background: g.color }} />
+                  <span className="graph-legend__label">{g.formula || g.id}</span>
+                </button>
+                <button
+                  type="button"
+                  className="graph-legend__remove"
+                  onClick={() => removeGraph(g.id)}
+                  title="Remove this series"
+                  aria-label={`Remove ${g.formula || g.id}`}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div className="graph-canvas-shell">
+        {graphs.length === 0 && (
+          <div className="graph-empty">
+            <div className="graph-empty__card">
+              <p className="graph-empty__title">No graphs yet</p>
+              <p className="graph-empty__body">
+                Plot a formula like <code>y = A1*x + B1</code>, or select a range
+                of cells and choose <strong>Plot Selection</strong>.
+              </p>
+            </div>
+          </div>
+        )}
         <canvas
           ref={canvasRef}
           className="graph-canvas"

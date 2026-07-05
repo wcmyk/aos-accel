@@ -2,6 +2,9 @@
  * SVG Icon Library
  * Icons for ribbon buttons
  */
+/* Static icon library, not a component module — the fast-refresh
+   "only-export-components" rule does not apply here. */
+/* eslint-disable react-refresh/only-export-components */
 
 export const Icons = {
   Bold: () => (
@@ -154,6 +157,26 @@ export const Icons = {
       <path d="M4 4h2v8H4V4zm4 0h4v2H8V4zm0 4h3v2H8V8zm6-4v8h-1V4h1z"/>
     </svg>
   ),
+  Clear: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M9 2l5 5-6 6H5l-3-3 7-8zm-.5 2.4L3.7 10l2.3 2.3h1.2l4.4-4.4L8.5 4.4zM2 14h7v2H2v-2z"/>
+    </svg>
+  ),
+  Export: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 1l4 4h-3v5H7V5H4l4-4zM2 12h12v3H2v-3z"/>
+    </svg>
+  ),
+  Palette: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 1a7 7 0 0 0 0 14c1.1 0 1.5-.8 1-1.6-.5-.9 0-1.9 1-1.9h1.2A3.8 3.8 0 0 0 16 7.7C16 4 12.4 1 8 1zM4 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm2-3a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm2 3a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+    </svg>
+  ),
+  Plus: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M7 2h2v5h5v2H9v5H7V9H2V7h5V2z"/>
+    </svg>
+  ),
 };
 
 export const IconButton: React.FC<{
@@ -161,11 +184,23 @@ export const IconButton: React.FC<{
   tooltip: string;
   onClick?: () => void;
   className?: string;
-}> = ({ icon, tooltip, onClick, className = 'ribbon-btn' }) => {
+  disabled?: boolean;
+  active?: boolean;
+  label?: string;
+}> = ({ icon, tooltip, onClick, className = 'ribbon-btn', disabled = false, active = false, label }) => {
   const Icon = Icons[icon];
   return (
-    <button className={className} onClick={onClick} title={tooltip}>
+    <button
+      type="button"
+      className={`${className}${active ? ' is-active' : ''}`}
+      onClick={onClick}
+      title={tooltip}
+      aria-label={tooltip}
+      aria-pressed={active || undefined}
+      disabled={disabled}
+    >
       <Icon />
+      {label && <span className="icon-btn__label">{label}</span>}
     </button>
   );
 };

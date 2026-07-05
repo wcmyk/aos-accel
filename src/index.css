@@ -3,9 +3,6 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color: rgba(0, 0, 0, 0.87);
-  background-color: #f2f3f8;
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,7 +12,11 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f2f3f8;
+  /* Theme-aware so the body (visible behind overscroll / short content)
+     matches the active theme instead of a fixed light color. Falls back to
+     the previous value before App.css theme variables resolve. */
+  color: var(--text-primary, rgba(0, 0, 0, 0.87));
+  background: var(--bg-primary, #f2f3f8);
 }
 
 #root {

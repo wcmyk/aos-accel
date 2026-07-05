@@ -24,18 +24,23 @@ export class AccelEngine {
     this.seedDemoWorkbook();
   }
 
-  addWorksheet(name: string): void {
+  addWorksheet(name: string, kind: import('./types').SheetKind = 'grid'): void {
     if (this.workbook.sheets.has(name)) {
       throw new Error(`Worksheet already exists: ${name}`);
     }
     const worksheet: Worksheet = {
       name,
+      kind,
       cells: new Map(),
       graphs: new Map(),
       namedRanges: new Map(),
     };
     this.workbook.sheets.set(name, worksheet);
     this.workbook.activeSheet = name;
+  }
+
+  getSheetKind(name: string): import('./types').SheetKind {
+    return this.workbook.sheets.get(name)?.kind ?? 'grid';
   }
 
   deleteWorksheet(name: string): void {
@@ -68,6 +73,13 @@ export class AccelEngine {
 
   getActiveSheetName(): string {
     return this.workbook.activeSheet;
+  }
+
+  // Live map of every worksheet, for cross-sheet reference resolution
+  // (Sheet1!A1). Returned by reference — it is mutated in place as sheets are
+  // added/removed, so holders always see the current set.
+  getSheets(): Map<string, Worksheet> {
+    return this.workbook.sheets;
   }
 
   private seedDemoWorkbook(): void {
@@ -318,7 +330,7 @@ export class AccelEngine {
     }
 
     try {
-      const evaluator = new Evaluator(worksheet);
+      const evaluator = new Evaluator(worksheet, this.workbook.sheets);
       const result = evaluator.evaluate(graph.ast, { x });
 
       if (typeof result === 'number') {
@@ -336,7 +348,7 @@ export class AccelEngine {
     if (!cell || !cell.ast) return;
 
     try {
-      const evaluator = new Evaluator(worksheet);
+      const evaluator = new Evaluator(worksheet, this.workbook.sheets);
       cell.value = evaluator.evaluate(cell.ast);
     } catch (error) {
       cell.value = `#ERROR: ${(error as Error).message}`;

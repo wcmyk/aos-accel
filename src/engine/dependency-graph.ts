@@ -24,10 +24,17 @@ export class DependencyGraph {
   private extractDepsRecursive(node: ASTNode, deps: Set<string>): void {
     switch (node.type) {
       case 'cell':
+        // Cross-sheet references (Sheet1!A1) are excluded from this sheet's
+        // dependency graph: their local col,row key would collide with a
+        // same-positioned cell here (a false self-dependency / cycle). They
+        // are still read live by the evaluator; cross-sheet reactive recalc is
+        // simply not tracked in this pass.
+        if (node.ref.sheet) break;
         deps.add(this.cellKey(node.ref.row, node.ref.col));
         break;
 
       case 'range':
+        if (node.start.sheet) break;
         for (let row = node.start.row; row <= node.end.row; row++) {
           for (let col = node.start.col; col <= node.end.col; col++) {
             deps.add(this.cellKey(row, col));

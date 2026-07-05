@@ -8,10 +8,24 @@ import { FORMULAS } from './formulas';
 
 export class Evaluator {
   private worksheet: Worksheet;
+  private sheets?: Map<string, Worksheet>;
   private graphContext?: { x?: number; y?: number; t?: number };
 
-  constructor(worksheet: Worksheet) {
+  // `sheets` (optional) enables cross-sheet references like Sheet1!A1: when a
+  // cell/range address carries a `sheet`, the value is read from that
+  // worksheet instead of the current one. Omitting it keeps single-sheet
+  // behavior unchanged.
+  constructor(worksheet: Worksheet, sheets?: Map<string, Worksheet>) {
     this.worksheet = worksheet;
+    this.sheets = sheets;
+  }
+
+  // Worksheet a given address resolves against — the named sheet for a
+  // cross-sheet reference, otherwise the current one. Falls back to the current
+  // worksheet if the named sheet is unknown (e.g. renamed/deleted).
+  private sheetFor(sheet?: string): Worksheet {
+    if (!sheet) return this.worksheet;
+    return this.sheets?.get(sheet) ?? this.worksheet;
   }
 
   evaluate(node: ASTNode, context?: { x?: number; y?: number; t?: number }): CellValue {
@@ -25,18 +39,20 @@ export class Evaluator {
         return node.value;
 
       case 'cell': {
+        const sheet = this.sheetFor(node.ref.sheet);
         const cellKey = this.cellKey(node.ref.row, node.ref.col);
-        const cell = this.worksheet.cells.get(cellKey);
+        const cell = sheet.cells.get(cellKey);
         return cell?.value ?? null;
       }
 
       case 'range': {
+        const sheet = this.sheetFor(node.start.sheet);
         const values: CellValue[] = [];
         for (let row = node.start.row; row <= node.end.row; row++) {
           const rowValues: CellValue[] = [];
           for (let col = node.start.col; col <= node.end.col; col++) {
             const cellKey = this.cellKey(row, col);
-            const cell = this.worksheet.cells.get(cellKey);
+            const cell = sheet.cells.get(cellKey);
             rowValues.push(cell?.value ?? null);
           }
           values.push(rowValues);

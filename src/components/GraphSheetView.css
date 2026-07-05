@@ -1,8 +1,21 @@
+/* Dedicated host so the graph sheet does NOT inherit the .workspace grid
+   (2fr 1fr), whose fr column grows to the canvas's min-content and drives the
+   runaway. This is a plain flex box that fills the shell's vertical slot and
+   pins its child to the viewport-bounded width. */
+.graph-sheet-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
 .graph-sheet {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 0;
+  min-width: 0;
   padding: 12px;
   gap: 10px;
   box-sizing: border-box;
@@ -88,14 +101,6 @@
   opacity: 1;
 }
 
-/* The graph sheet fills the workspace slot; override the default .workspace
-   grid so it's a plain block with a bounded height. */
-.workspace--graph-sheet {
-  display: block;
-  min-height: 0;
-  overflow: hidden;
-}
-
 /* Fixed height, not flex: GraphCanvas drives its own height via a
    ResizeObserver on this element, so a flexible height that depends on the
    canvas would feed back into an endless resize loop. A stable box breaks it. */
@@ -107,6 +112,17 @@
   border: 1px solid var(--border, #e0e0e5);
   border-radius: 10px;
   overflow: hidden;
+}
+
+/* Pin the graph to the container width. GraphCanvas measures its own parent to
+   size the canvas; if that parent is content-sized it grows with the canvas
+   (an unbounded feedback loop — the graph "runs away"). Making the container
+   fill this fixed-width box anchors the measurement so it stays put. */
+.graph-sheet__canvas > .graph-container {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .graph-sheet__hint {

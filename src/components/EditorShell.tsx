@@ -6,6 +6,7 @@ import { GraphCanvas } from './GraphCanvas';
 import { StockPanel } from './StockPanel';
 import { ParameterPanel } from './ParameterPanel';
 import { SheetTabs } from './SheetTabs';
+import { GraphSheetView } from './GraphSheetView';
 import { ShareButton } from './ShareButton';
 import { WelcomeOverlay } from './WelcomeOverlay';
 import { useAccelStore } from '../store/accel-store';
@@ -30,6 +31,9 @@ function saveStatusLabel(status: 'idle' | 'saving' | 'saved' | 'error', isReadOn
 export function EditorShell() {
   const navigate = useNavigate();
   const activeSheet = useAccelStore((state) => state.activeSheet);
+  const sheetKinds = useAccelStore((state) => state.sheetKinds);
+  const addGraphSheet = useAccelStore((state) => state.addGraphSheet);
+  const activeIsGraph = (sheetKinds[activeSheet] ?? 'grid') === 'graph';
   const workbookTitle = useAccelStore((state) => state.workbookTitle);
   const setWorkbookTitle = useAccelStore((state) => state.setWorkbookTitle);
   const isReadOnly = useAccelStore((state) => state.isReadOnly);
@@ -153,6 +157,11 @@ export function EditorShell() {
 
       <Ribbon />
 
+      {activeIsGraph ? (
+        <div className="workspace workspace--graph-sheet">
+          <GraphSheetView />
+        </div>
+      ) : (
       <div
         className={`workspace${panelHidden ? ' workspace--graph-collapsed' : ''}`}
         style={panelHidden ? undefined : { gridTemplateColumns: `1fr 6px ${panelWidth}px` }}
@@ -203,6 +212,16 @@ export function EditorShell() {
                   <div className="card__header">
                     <span className="label">Graph</span>
                     <span className="card__actions">
+                      {!isReadOnly && (
+                        <button
+                          className="icon-btn"
+                          onClick={() => addGraphSheet(true)}
+                          title="Open the graph as a full sheet"
+                          aria-label="Open the graph as a full sheet"
+                        >
+                          ⤢ Open as sheet
+                        </button>
+                      )}
                       {!showMarket && (
                         <button className="icon-btn" onClick={() => setShowMarket(true)} title="Show market view">
                           + Market
@@ -223,6 +242,7 @@ export function EditorShell() {
           </>
         )}
       </div>
+      )}
 
       <SheetTabs />
 

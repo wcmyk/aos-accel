@@ -23,11 +23,12 @@ export interface SerializedCell {
 export interface SerializedGraph {
   id: string;
   formula: string;
-  type: 'function' | 'parametric' | 'implicit' | 'scatter';
+  type: 'function' | 'parametric' | 'implicit' | 'scatter' | 'plot';
 }
 
 export interface SerializedWorksheet {
   name: string;
+  kind?: 'grid' | 'graph';
   cells: SerializedCell[];
   graphs: SerializedGraph[];
 }
@@ -68,12 +69,16 @@ export function serializeEngine(engine: AccelEngine): SerializedWorkbook {
       cells.push(serialized);
     });
 
+    // Every graph that has a source formula is persisted, INCLUDING 'plot'
+    // graphs: on a graph sheet the plots (often cross-sheet, e.g.
+    // =PLOT(Sheet1!A:A, Sheet1!B:B)) are the entire content, so dropping them
+    // would lose the sheet. Their points are still recomputed on load.
     const graphs: SerializedGraph[] = engine
       .getGraphs(name)
-      .filter((graph): graph is typeof graph & { type: SerializedGraph['type'] } => graph.type !== 'plot')
-      .map((graph) => ({ id: graph.id, formula: graph.formula, type: graph.type }));
+      .filter((graph) => Boolean(graph.formula))
+      .map((graph) => ({ id: graph.id, formula: graph.formula, type: graph.type as SerializedGraph['type'] }));
 
-    return { name, cells, graphs };
+    return { name, kind: worksheet.kind, cells, graphs };
   });
 
   return {
@@ -109,7 +114,7 @@ export function deserializeEngine(data: SerializedWorkbook): AccelEngine {
 
   for (const sheet of data.sheets) {
     if (sheet.name !== defaultSheet) {
-      engine.addWorksheet(sheet.name);
+      engine.addWorksheet(sheet.name, sheet.kind ?? 'grid');
     }
   }
 

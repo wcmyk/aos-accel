@@ -58,6 +58,7 @@ export const GraphCanvas: React.FC = React.memo(() => {
     const canvas = canvasRef.current;
     if (!canvas || !canvas.parentElement) return;
 
+    let raf = 0;
     const resize = () => {
       const parentRect = canvas.parentElement!.getBoundingClientRect();
       const width = parentRect.width;
@@ -68,21 +69,36 @@ export const GraphCanvas: React.FC = React.memo(() => {
       // Fill mode absorbs the hidden sibling's space — grow, never shrink.
       const height = filled ? Math.max(base, parentRect.height) : base;
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      const nextW = Math.round(width * dpr);
+      const nextH = Math.round(height * dpr);
+      // Idempotence guard: bail when nothing changed. Without this, every
+      // ResizeObserver tick pushed a fresh canvasSize object and re-rendered,
+      // and in a bounded container that churn became a self-sustaining resize
+      // loop (the graph sheet reflowed forever).
+      if (canvas.width === nextW && canvas.height === nextH) return;
+      canvas.width = nextW;
+      canvas.height = nextH;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
-      setCanvasSize({ width: canvas.width, height: canvas.height });
+      setCanvasSize({ width: nextW, height: nextH });
+    };
+
+    // Defer observer callbacks to the next frame so a size change we make here
+    // can't re-enter synchronously (avoids the "ResizeObserver loop" warning).
+    const onObserved = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(resize);
     };
 
     resize();
-    const observer = new ResizeObserver(resize);
+    const observer = new ResizeObserver(onObserved);
     observer.observe(canvas.parentElement);
     window.addEventListener('resize', resize);
 
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', resize);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, []);
 
@@ -500,8 +516,15 @@ export const GraphCanvas: React.FC = React.memo(() => {
           ref={canvasRef}
           className="graph-canvas"
           onWheel={(e) => {
-            e.preventDefault();
-            handleZoom(e.deltaY);
+            // A trackpad pinch arrives as a wheel event with ctrlKey set; a
+            // plain two-finger scroll does not. Only intercept the pinch so
+            // ordinary scrolling still moves the surrounding UI instead of the
+            // graph fighting it. Ctrl/Cmd+wheel on a mouse zooms too; the
+            // on-canvas Zoom In/Out buttons cover plain-mouse users.
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              handleZoom(e.deltaY);
+            }
           }}
           onMouseMove={handleTraceMove}
           onMouseLeave={() => setTrace(null)}

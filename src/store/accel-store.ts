@@ -31,6 +31,21 @@ export interface WatchedTicker {
 
 const WATCH_COLORS = ['#3b82f6', '#f59e0b', '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#ec4899'];
 
+// Rewrite bare cell/range references in a formula to point at a specific sheet,
+// so a graph copied onto a (data-less) graph sheet still reads the original
+// data: PLOT(A1:A100, B1:B100) -> PLOT(Sheet1!A1:A100, Sheet1!B1:B100). Skips
+// text inside double quotes, references already sheet-qualified (preceded by
+// '!'), and function names (a name followed by '(' — e.g. LOG10(...)).
+function qualifyFormulaRefs(formula: string, sheet: string): string {
+  if (!formula || !formula.startsWith('=')) return formula;
+  const refPattern = /(?<![A-Za-z0-9_!])([A-Za-z]{1,3}[0-9]+(?::[A-Za-z]{1,3}[0-9]+)?)(?!\s*\()/g;
+  // Odd indices are quoted string literals — leave them untouched.
+  return formula
+    .split(/("(?:[^"\\]|\\.)*")/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(refPattern, (m) => `${sheet}!${m}`)))
+    .join('');
+}
+
 // Upper bound on retained undo checkpoints. Snapshots are serialized workbooks
 // (plain JSON), so 100 is cheap in memory while covering any realistic session.
 const MAX_HISTORY = 100;
@@ -178,6 +193,9 @@ interface AccelState {
   graphRenderer: GraphRenderer | null;
   activeSheet: string;
   sheetNames: string[];
+  // Per-sheet kind, mirrored from the engine for reactive UI (tab icons,
+  // grid-vs-graph rendering). Absent entries are treated as 'grid'.
+  sheetKinds: Record<string, 'grid' | 'graph'>;
 
   // Multi-cell selection
   selectionRange: {
@@ -275,6 +293,7 @@ interface AccelState {
 
   // Worksheets
   addSheet: () => void;
+  addGraphSheet: (seedFromActive?: boolean) => string;
   deleteSheet: (name: string) => void;
   setActiveSheet: (name: string) => void;
   getSheetNames: () => string[];
@@ -309,6 +328,7 @@ export const useAccelStore = create<AccelState>()(
     graphRenderer: null,
     activeSheet: 'Sheet1',
     sheetNames: ['Sheet1'],
+    sheetKinds: { Sheet1: 'grid' },
     selectionRange: null,
     isSelecting: false,
 
@@ -330,6 +350,9 @@ export const useAccelStore = create<AccelState>()(
         state.engine = engine;
         state.activeSheet = engine.getActiveSheetName();
         state.sheetNames = engine.getSheetNames();
+        state.sheetKinds = Object.fromEntries(
+          engine.getSheetNames().map((n) => [n, engine.getSheetKind(n)])
+        );
         state.selectedCell = null;
         state.selectionRange = null;
         state.fillRange = null;
@@ -797,6 +820,7 @@ export const useAccelStore = create<AccelState>()(
         state.engine = engine;
         state.activeSheet = name;
         state.sheetNames = [...sheetNames, name];
+        state.sheetKinds = { ...state.sheetKinds, [name]: 'grid' };
         state.selectedCell = null;
         state.selectionRange = null;
         state.fillRange = null;
@@ -806,6 +830,48 @@ export const useAccelStore = create<AccelState>()(
         state.dirtyFormulas.clear();
         state.docVersion += 1;
       });
+    },
+
+    // Create a full-canvas graph sheet and switch to it. When seedFromActive is
+    // set, the plots/functions on the current sheet are copied in (rewritten to
+    // reference the source sheet, e.g. PLOT(A:A) -> PLOT(Sheet1!A:A)) so
+    // "open graph as a sheet" carries the graphs you were already looking at.
+    addGraphSheet: (seedFromActive = false) => {
+      if (get().isReadOnly) return '';
+      const { engine, sheetNames, activeSheet } = get();
+      const sourceSheet = activeSheet;
+      const sourceGraphs = seedFromActive ? engine.getGraphs(sourceSheet) : [];
+
+      let suffix = 1;
+      let name = `Graph${suffix}`;
+      while (sheetNames.includes(name)) {
+        suffix += 1;
+        name = `Graph${suffix}`;
+      }
+
+      engine.addWorksheet(name, 'graph');
+      // Re-anchor each seeded graph's cell references to the source sheet so it
+      // still resolves once the active sheet is the (data-less) graph sheet.
+      sourceGraphs.forEach((graph, i) => {
+        const formula = qualifyFormulaRefs(graph.formula, sourceSheet);
+        engine.addGraph(`${name}-g${i + 1}`, formula, graph.type === 'plot' ? 'plot' : 'function', name);
+      });
+      engine.setActiveWorksheet(name);
+
+      set((state) => {
+        state.engine = engine;
+        state.activeSheet = name;
+        state.sheetNames = [...sheetNames, name];
+        state.sheetKinds = { ...state.sheetKinds, [name]: 'graph' };
+        state.selectedCell = null;
+        state.selectionRange = null;
+        state.fillRange = null;
+        state.graphRenderer = null;
+        state.dirtyValues.clear();
+        state.dirtyFormulas.clear();
+        state.docVersion += 1;
+      });
+      return name;
     },
 
     deleteSheet: (name) => {
@@ -823,6 +889,9 @@ export const useAccelStore = create<AccelState>()(
         state.engine = engine;
         state.activeSheet = nextActive;
         state.sheetNames = remaining;
+        const nextKinds = { ...state.sheetKinds };
+        delete nextKinds[name];
+        state.sheetKinds = nextKinds;
         state.selectedCell = null;
         state.selectionRange = null;
         state.fillRange = null;
@@ -858,7 +927,7 @@ export const useAccelStore = create<AccelState>()(
       const { engine, graphRenderer } = get();
       if (!graphRenderer) {
         const worksheet = engine.getWorksheet();
-        const newRenderer = new GraphRenderer(worksheet);
+        const newRenderer = new GraphRenderer(worksheet, engine.getSheets());
         set((state) => {
           state.graphRenderer = newRenderer;
         });

@@ -29,21 +29,6 @@ export interface WatchedTicker {
   visible: boolean;
 }
 
-/**
- * Undo/redo for cell edits. Each entry stores the cell's authored content
- * (formula string if present, else raw value) before and after the change.
- * Module-level: the stacks don't need to be reactive.
- */
-interface UndoEntry {
-  row: number;
-  col: number;
-  before: string | number | boolean | null;
-  after: string | number | boolean | null;
-}
-const undoStack: UndoEntry[] = [];
-const redoStack: UndoEntry[] = [];
-const UNDO_LIMIT = 200;
-
 const WATCH_COLORS = ['#3b82f6', '#f59e0b', '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#ec4899'];
 
 // Upper bound on retained undo checkpoints. Snapshots are serialized workbooks
@@ -214,8 +199,6 @@ interface AccelState {
 
   // Actions
   setCell: (row: number, col: number, value: string | number | boolean) => void;
-  undo: () => void;
-  redo: () => void;
   getCell: (row: number, col: number) => CellValue;
   getCellObject: (row: number, col: number) => Cell | undefined;
   selectCell: (row: number, col: number) => void;
@@ -466,42 +449,6 @@ export const useAccelStore = create<AccelState>()(
         // Mark all dependent formulas as dirty
         const dependents = engine.getDependents(row, col);
         dependents.forEach(dep => {
-          state.dirtyFormulas.add(`${dep.col},${dep.row}`);
-        });
-        state.docVersion += 1;
-      });
-    },
-
-    undo: () => {
-      if (get().isReadOnly) return;
-      const entry = undoStack.pop();
-      if (!entry) return;
-      redoStack.push(entry);
-      const { engine } = get();
-      engine.setCell(entry.row, entry.col, entry.before ?? '');
-      const cellKey = `${entry.col},${entry.row}`;
-      get().invalidateGraphCache([cellKey]);
-      set((state) => {
-        state.dirtyValues.add(cellKey);
-        engine.getDependents(entry.row, entry.col).forEach((dep) => {
-          state.dirtyFormulas.add(`${dep.col},${dep.row}`);
-        });
-        state.docVersion += 1;
-      });
-    },
-
-    redo: () => {
-      if (get().isReadOnly) return;
-      const entry = redoStack.pop();
-      if (!entry) return;
-      undoStack.push(entry);
-      const { engine } = get();
-      engine.setCell(entry.row, entry.col, entry.after ?? '');
-      const cellKey = `${entry.col},${entry.row}`;
-      get().invalidateGraphCache([cellKey]);
-      set((state) => {
-        state.dirtyValues.add(cellKey);
-        engine.getDependents(entry.row, entry.col).forEach((dep) => {
           state.dirtyFormulas.add(`${dep.col},${dep.row}`);
         });
         state.docVersion += 1;

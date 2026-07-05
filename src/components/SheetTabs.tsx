@@ -7,8 +7,10 @@ export const SheetTabs: React.FC = React.memo(() => {
     activeSheet,
     setActiveSheet,
     addSheet,
+    addGraphSheet,
     deleteSheet,
     sheetNames,
+    sheetKinds,
     isReadOnly,
   } = useAccelStore();
 
@@ -35,6 +37,9 @@ export const SheetTabs: React.FC = React.memo(() => {
               className={`sheet-tab ${isActive ? 'active' : ''}`}
               onClick={() => setActiveSheet(sheet)}
             >
+              {(sheetKinds[sheet] ?? 'grid') === 'graph' && (
+                <span className="sheet-tab__kind" aria-hidden="true" title="Graph sheet">📈 </span>
+              )}
               {sheet}
               {canDelete && (
                 <span
@@ -69,6 +74,15 @@ export const SheetTabs: React.FC = React.memo(() => {
           aria-label="Add a new sheet"
         >
           ＋ Add Sheet
+        </button>
+        <button
+          className="sheet-tab add-tab"
+          onClick={() => addGraphSheet(false)}
+          disabled={isReadOnly}
+          title="Add a new graph sheet"
+          aria-label="Add a new graph sheet"
+        >
+          📈 Graph Sheet
         </button>
       </div>
     </div>

@@ -24,18 +24,23 @@ export class AccelEngine {
     this.seedDemoWorkbook();
   }
 
-  addWorksheet(name: string): void {
+  addWorksheet(name: string, kind: import('./types').SheetKind = 'grid'): void {
     if (this.workbook.sheets.has(name)) {
       throw new Error(`Worksheet already exists: ${name}`);
     }
     const worksheet: Worksheet = {
       name,
+      kind,
       cells: new Map(),
       graphs: new Map(),
       namedRanges: new Map(),
     };
     this.workbook.sheets.set(name, worksheet);
     this.workbook.activeSheet = name;
+  }
+
+  getSheetKind(name: string): import('./types').SheetKind {
+    return this.workbook.sheets.get(name)?.kind ?? 'grid';
   }
 
   deleteWorksheet(name: string): void {

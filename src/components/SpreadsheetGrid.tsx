@@ -713,6 +713,14 @@ export const SpreadsheetGrid: React.FC = () => {
 
   const formatCellValue = useCallback((value: CellValue): string => {
     if (value === null || value === undefined) return '';
+    // Array-valued cells (STOCK series, Monte Carlo simulations, …) show a
+    // compact summary instead of a giant comma-joined blob that would wreck
+    // both readability and render performance.
+    if (Array.isArray(value)) {
+      const flat = (value as unknown[]).flat(Infinity) as unknown[];
+      if (flat.length <= 3) return flat.map((v) => (v == null ? '' : String(v))).join(', ');
+      return `[${flat.length.toLocaleString()} values]`;
+    }
     if (typeof value === 'number') {
       // Fast number formatting - toLocaleString is VERY slow
       // Only use it for numbers that need special formatting

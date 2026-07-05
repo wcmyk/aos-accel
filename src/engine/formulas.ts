@@ -1145,9 +1145,142 @@ export const FORMULAS: Record<string, FormulaFunction> = {
    * BOLTZMANN - Boltzmann constant in J/K
    */
   BOLTZMANN: () => Quantum.k_B,
+
+  // ===== MONTE CARLO & RISK =====
+  // These power the Monte Carlo model sheet. MC_TERMINAL uses a *fixed* seed so
+  // the simulated cloud is stable across recalculations — dragging a drift or
+  // volatility slider smoothly morphs the same paths instead of re-rolling a
+  // brand-new random cloud each frame.
+
+  /**
+   * MC_TERMINAL(s0, muAnnual, sigmaAnnual, days, n) - terminal prices from a
+   * geometric Brownian motion: S_T = S0 * exp((mu - sigma^2/2)T + sigma*sqrt(T)*Z).
+   * Returns an array of n simulated terminal prices (T in years = days/252).
+   */
+  MC_TERMINAL: (s0, muAnnual, sigmaAnnual, days, n) => {
+    const S0 = toNumber(s0);
+    const mu = toNumber(muAnnual);
+    const sigma = Math.max(0, toNumber(sigmaAnnual));
+    const T = Math.max(0, toNumber(days)) / 252;
+    const N = Math.max(1, Math.min(100000, Math.floor(toNumber(n) || 0)));
+    const rng = mulberry32(0x9e3779b1);
+    const drift = (mu - (sigma * sigma) / 2) * T;
+    const vol = sigma * Math.sqrt(T);
+    const out: number[] = [];
+    for (let i = 0; i < N; i++) {
+      out.push(S0 * Math.exp(drift + vol * standardNormal(rng)));
+    }
+    return out;
+  },
+
+  /**
+   * PROB_BELOW(array, threshold) - fraction of values strictly below threshold
+   * (e.g. probability of ending below the starting price = probability of loss).
+   */
+  PROB_BELOW: (array, threshold) => {
+    const vals = numericValues(array);
+    if (vals.length === 0) return null;
+    const t = toNumber(threshold);
+    return vals.filter((v) => v < t).length / vals.length;
+  },
+
+  /**
+   * EXPECTED_SHORTFALL(array, p) - mean of the worst (lowest) p-fraction of
+   * outcomes; the average loss in the tail beyond the p-quantile.
+   */
+  EXPECTED_SHORTFALL: (array, p) => {
+    const vals = numericValues(array).sort((a, b) => a - b);
+    if (vals.length === 0) return null;
+    const k = Math.max(1, Math.floor(clamp01(toNumber(p)) * vals.length));
+    let sum = 0;
+    for (let i = 0; i < k; i++) sum += vals[i];
+    return sum / k;
+  },
+
+  /**
+   * VALUE_AT_RISK(array, baseline, confidence) - VaR as a positive loss amount
+   * relative to baseline at the given confidence (e.g. 0.95): the drop from
+   * baseline that is only exceeded (1-confidence) of the time.
+   */
+  VALUE_AT_RISK: (array, baseline, confidence) => {
+    const vals = numericValues(array);
+    if (vals.length === 0) return null;
+    const q = quantile(vals, 1 - clamp01(toNumber(confidence)));
+    return Math.max(0, toNumber(baseline) - q);
+  },
+
+  /**
+   * HISTOGRAM(array, bins) - a [binCenter, count] table for plotting a
+   * distribution: PLOT(HISTOGRAM(sim, 30)) draws the terminal-price histogram.
+   */
+  HISTOGRAM: (array, bins) => {
+    const vals = numericValues(array);
+    if (vals.length === 0) return [];
+    const B = Math.max(1, Math.min(200, Math.floor(toNumber(bins) || 30)));
+    let min = Infinity;
+    let max = -Infinity;
+    for (const v of vals) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const width = (max - min) / B || 1;
+    const counts = new Array(B).fill(0);
+    for (const v of vals) {
+      let b = Math.floor((v - min) / width);
+      if (b >= B) b = B - 1;
+      if (b < 0) b = 0;
+      counts[b]++;
+    }
+    const rows: number[][] = [];
+    for (let i = 0; i < B; i++) rows.push([min + (i + 0.5) * width, counts[i]]);
+    return rows;
+  },
 };
 
 // ===== HELPER FUNCTIONS =====
+
+// ---- Monte Carlo / risk helpers ----
+
+// Deterministic PRNG (mulberry32) so simulations are reproducible: the same
+// inputs always yield the same cloud, which keeps slider-dragging stable.
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Standard normal draw via Box–Muller from a uniform PRNG.
+function standardNormal(rng: () => number): number {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function clamp01(x: number): number {
+  if (!isFinite(x)) return 0;
+  return Math.min(1, Math.max(0, x));
+}
+
+// Finite numeric values from a (possibly nested) array argument.
+function numericValues(arg: CellValue): number[] {
+  return flattenArgs([arg]).map(toNumber).filter((v) => isFinite(v));
+}
+
+// p-quantile (p in 0..1) of an unsorted numeric array, linear interpolation.
+function quantile(values: number[], p: number): number {
+  const sorted = values.slice().sort((a, b) => a - b);
+  if (sorted.length === 0) return NaN;
+  const idx = clamp01(p) * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
 
 /**
  * Flatten nested arrays into a single array of values

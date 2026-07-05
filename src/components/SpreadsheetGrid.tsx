@@ -168,6 +168,7 @@ export const SpreadsheetGrid: React.FC = () => {
   const startSelection = useAccelStore((state) => state.startSelection);
   const updateSelection = useAccelStore((state) => state.updateSelection);
   const endSelection = useAccelStore((state) => state.endSelection);
+  const clearSelection = useAccelStore((state) => state.clearSelection);
   const copyCell = useAccelStore((state) => state.copyCell);
   const pasteCell = useAccelStore((state) => state.pasteCell);
   const cutCell = useAccelStore((state) => state.cutCell);
@@ -460,14 +461,13 @@ export const SpreadsheetGrid: React.FC = () => {
       return;
     }
 
-    if (!selectedCell || editingCell) return;
-
-    const { row, col } = selectedCell;
-
     // Undo / Redo. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z or Ctrl+Y redoes.
+    // Handled BEFORE the selected-cell guard: undo() clears the selection, so
+    // gating these on selectedCell would swallow every keystroke after the
+    // first undo. Skipped while editing, where the input owns its text history.
     // Store actions are no-ops when there is nothing to undo/redo or the
     // workbook is read-only, so we can call them unconditionally.
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    if (!editingCell && (e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
       if (e.shiftKey) {
         redo();
@@ -476,11 +476,15 @@ export const SpreadsheetGrid: React.FC = () => {
       }
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+    if (!editingCell && (e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
       e.preventDefault();
       redo();
       return;
     }
+
+    if (!selectedCell || editingCell) return;
+
+    const { row, col } = selectedCell;
 
     // Copy/Paste/Cut shortcuts
     if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
@@ -498,17 +502,6 @@ export const SpreadsheetGrid: React.FC = () => {
       cutCell(row, col);
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-      e.preventDefault();
-      undo();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-      e.preventDefault();
-      redo();
-      return;
-    }
-
     // Ctrl+Arrow: jump to the edge of the data region, like Excel
     if ((e.ctrlKey || e.metaKey) && e.key.startsWith('Arrow')) {
       e.preventDefault();
@@ -597,7 +590,7 @@ export const SpreadsheetGrid: React.FC = () => {
       e.preventDefault();
       startEditing(row, col, e.key);
     }
-  }, [selectedCell, editingCell, selectCell, copyCell, pasteCell, cutCell, setCell, startEditing, undo, redo]);
+  }, [selectedCell, editingCell, selectCell, copyCell, pasteCell, cutCell, setCell, startEditing, undo, redo, clearSelection, getCell]);
 
   const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
@@ -867,7 +860,6 @@ export const SpreadsheetGrid: React.FC = () => {
     // Pass range start if there's a selection range
     const rangeStart = selectionRange ? selectionRange.start : undefined;
     applyReferenceToFormula(targetRow, targetCol, Boolean(selectionRange) || Boolean(lastInsertedRef.current), rangeStart);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting, editValue]);
 
   // Helper function to get cell state (computed on-demand, not stored)

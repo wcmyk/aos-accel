@@ -1,0 +1,94 @@
+/**
+ * Ribbon / Toolbar polish styles (co-located).
+ * Additive only — does not redefine base .ribbon / .btn / .ribbon-btn layout,
+ * which the shell owns in App.css. Scoped mostly to quick-access + states.
+ */
+
+/* Always-visible quick-access cluster on the ribbon tab strip */
+.ribbon-quick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.ribbon-quick .ribbon-btn {
+  border: 1px solid var(--button-border);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Disabled + active states for ribbon controls (additive). */
+.ribbon-btn:disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ribbon-color:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ribbon-btn.is-active,
+.btn.is-active {
+  background: var(--button-active);
+}
+
+/* Keyboard focus visibility for all ribbon controls */
+.ribbon-btn:focus-visible,
+.btn:focus-visible,
+.tab:focus-visible,
+.sheet-tab:focus-visible,
+.ribbon-color:focus-visible {
+  outline: 2px solid var(--cell-selected, #2563eb);
+  outline-offset: 1px;
+}
+
+.ribbon-btn svg,
+.btn svg {
+  vertical-align: middle;
+}
+
+.icon-btn__label {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sheet-tab__close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* Compact list of active graphs shown inside the Graphing tab */
+.ribbon-graph-list {
+  max-height: 100px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.ribbon-graph-item {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  align-items: center;
+}
+
+.ribbon-graph-dot {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.ribbon-graph-formula {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

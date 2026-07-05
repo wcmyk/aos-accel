@@ -3,7 +3,7 @@
  * Supports sampling, PDF, CDF, and uncertainty propagation
  */
 
-import { Distribution, RandomVariable, Vector } from '../types-advanced';
+import { Distribution, Vector } from '../types-advanced';
 import { createVector } from '../math/linalg';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -310,7 +310,7 @@ export class RandomVariableClass {
       case 'poisson':
         return new PoissonDistribution(dist.lambda);
       default:
-        throw new Error(`Unknown distribution type: ${(dist as any).type}`);
+        throw new Error(`Unknown distribution type: ${(dist as { type: string }).type}`);
     }
   }
 

@@ -1,6 +1,11 @@
 import { FormEvent, useState } from 'react';
 import { useAuthStore } from '../store/auth-store';
 
+function messageFor(err: unknown): string {
+  const msg = (err as Error)?.message;
+  return msg || 'Something went wrong. Please try again.';
+}
+
 export function AuthScreen() {
   const { signIn, signUp, error, isLoading } = useAuthStore();
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
@@ -13,13 +18,21 @@ export function AuthScreen() {
     event.preventDefault();
     setSubmitting(true);
     setConfirmationSent(false);
-    if (mode === 'sign-in') {
-      await signIn(email, password);
-    } else {
-      await signUp(email, password);
-      setConfirmationSent(true);
+    try {
+      if (mode === 'sign-in') {
+        await signIn(email, password);
+      } else {
+        await signUp(email, password);
+        // Only prompt for confirmation if the sign-up didn't surface an error.
+        if (!useAuthStore.getState().error) {
+          setConfirmationSent(true);
+        }
+      }
+    } catch (err) {
+      useAuthStore.setState({ error: messageFor(err) });
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   return (
@@ -68,6 +81,7 @@ export function AuthScreen() {
           onClick={() => {
             setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in');
             setConfirmationSent(false);
+            useAuthStore.setState({ error: null });
           }}
         >
           {mode === 'sign-in' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}

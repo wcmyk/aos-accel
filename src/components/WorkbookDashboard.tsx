@@ -10,30 +10,37 @@ export function WorkbookDashboard() {
   const { user, signOut } = useAuthStore();
   const [workbooks, setWorkbooks] = useState<WorkbookSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () => {
     setIsLoading(true);
+    setError(null);
     listWorkbooks()
       .then(setWorkbooks)
-      .catch((e) => setError(e.message))
+      .catch((e) => setError((e as Error).message))
       .finally(() => setIsLoading(false));
   };
 
   useEffect(refresh, []);
 
   const handleCreate = async () => {
+    if (creating) return;
+    setCreating(true);
+    setError(null);
     try {
       const blank = serializeEngine(new AccelEngine());
       const workbook = await createWorkbook('Untitled workbook', blank);
       navigate(`/w/${workbook.id}`);
     } catch (e) {
       setError((e as Error).message);
+      setCreating(false);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this workbook? This cannot be undone.')) return;
+    setError(null);
     try {
       await deleteWorkbook(id);
       refresh();
@@ -53,7 +60,9 @@ export function WorkbookDashboard() {
       </header>
 
       <div className="dashboard__actions">
-        <button className="primary" onClick={handleCreate}>+ New workbook</button>
+        <button className="primary" onClick={handleCreate} disabled={creating}>
+          {creating ? 'Creating…' : '+ New workbook'}
+        </button>
       </div>
 
       {error && <div className="auth-error">{error}</div>}

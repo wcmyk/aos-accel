@@ -1,35 +1,88 @@
 /**
- * Excel-style Ribbon Component
- * Tabbed interface for all spreadsheet operations
+ * Ribbon Component
+ *
+ * The primary action surface. Every control here performs a real operation
+ * against the store — there are no decorative buttons. Tabs are limited to the
+ * capabilities the engine actually supports (formatting, structure edits,
+ * export, market data, automation, graphing, and theming).
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { Theme, useAccelStore } from '../store/accel-store';
+import React, { useState, useCallback } from 'react';
+import { useAccelStore } from '../store/accel-store';
+import { CellFormat } from '../engine/types';
 import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
 import { IconButton } from './Icons';
+import './Ribbon.css';
 
-type TabName = 'Home' | 'Insert' | 'Page Layout' | 'Formulas' | 'Data' | 'Market' | 'Automation' | 'Graphing' | 'Review' | 'View';
+type TabName = 'Home' | 'Insert' | 'Data' | 'Market' | 'Automation' | 'Graphing' | 'View';
+
+const TABS: TabName[] = ['Home', 'Insert', 'Data', 'Market', 'Automation', 'Graphing', 'View'];
+
+const colToLetter = (col: number): string => {
+  let letter = '';
+  let c = col;
+  while (c > 0) {
+    const remainder = (c - 1) % 26;
+    letter = String.fromCharCode(65 + remainder) + letter;
+    c = Math.floor((c - 1) / 26);
+  }
+  return letter;
+};
 
 export const Ribbon: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Home');
-  const { selectedCell, copyCell, cutCell, pasteCell, formatCell, getCellObject, sortColumn, insertRow, deleteRow, insertColumn, deleteColumn, exportCSV, setParameter, addGraph, removeGraph, getGraphs, setCell, watchlist, removeWatchedTicker, toggleWatchedTicker, setStockPickerOpen, selectionRange } = useAccelStore();
+  const {
+    selectedCell,
+    selectionRange,
+    copyCell,
+    cutCell,
+    pasteCell,
+    formatCell,
+    getCell,
+    getCellObject,
+    setCell,
+    sortColumn,
+    insertRow,
+    deleteRow,
+    insertColumn,
+    deleteColumn,
+    exportCSV,
+    setParameter,
+    addGraph,
+    removeGraph,
+    getGraphs,
+    watchlist,
+    removeWatchedTicker,
+    toggleWatchedTicker,
+    setStockPickerOpen,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    isReadOnly,
+  } = useAccelStore();
 
-  // Theme is managed locally to avoid triggering re-renders across the entire app
+  // Theme is managed locally to avoid triggering re-renders across the whole app.
   const [localTheme, setLocalTheme] = useState<string>(() => {
     return document.documentElement.getAttribute('data-theme') || 'default';
   });
 
-  // Dialog states for parameter and graph management
+  // Dialog states for parameter and graph management.
   const [showParamDialog, setShowParamDialog] = useState(false);
   const [paramConfig, setParamConfig] = useState({ min: 0, max: 10, step: 0.1 });
   const [showGraphDialog, setShowGraphDialog] = useState(false);
   const [graphFormula, setGraphFormula] = useState('');
 
+  const activeFormat = selectedCell
+    ? getCellObject(selectedCell.row, selectedCell.col)?.format
+    : undefined;
+
   const handleThemeChange = useCallback((newTheme: string) => {
     if (newTheme === localTheme) return;
 
-    // Reuse or create the transition disable style element
+    // Reuse or create the transition-disable style element so the theme swap
+    // doesn't animate every element at once.
     let style = document.getElementById('disable-transitions') as HTMLStyleElement;
     if (!style) {
       style = document.createElement('style');
@@ -38,12 +91,9 @@ export const Ribbon: React.FC = () => {
       document.head.appendChild(style);
     }
 
-    // Apply theme in next frame
     requestAnimationFrame(() => {
       document.documentElement.setAttribute('data-theme', newTheme);
       setLocalTheme(newTheme);
-
-      // Re-enable transitions after paint
       requestAnimationFrame(() => {
         setTimeout(() => {
           const disableStyle = document.getElementById('disable-transitions');
@@ -55,11 +105,15 @@ export const Ribbon: React.FC = () => {
     });
   }, [localTheme]);
 
+  const toggleFormat = useCallback((key: 'bold' | 'italic' | 'underline') => {
+    if (!selectedCell) return;
+    const cell = getCellObject(selectedCell.row, selectedCell.col);
+    const next: Partial<CellFormat> = { [key]: !cell?.format?.[key] };
+    formatCell(selectedCell.row, selectedCell.col, next);
+  }, [selectedCell, getCellObject, formatCell]);
+
   const handleAddParameter = useCallback(() => {
-    if (!selectedCell) {
-      alert('Please select a cell first');
-      return;
-    }
+    if (!selectedCell) return;
     setParameter(selectedCell.row, selectedCell.col, paramConfig.min, paramConfig.max, paramConfig.step);
     setShowParamDialog(false);
   }, [selectedCell, paramConfig, setParameter]);
@@ -70,8 +124,7 @@ export const Ribbon: React.FC = () => {
       return;
     }
     try {
-      const id = `graph_${Date.now()}`;
-      addGraph(id, graphFormula);
+      addGraph(`graph_${Date.now()}`, graphFormula);
       setGraphFormula('');
       setShowGraphDialog(false);
     } catch (error) {
@@ -79,342 +132,37 @@ export const Ribbon: React.FC = () => {
     }
   }, [graphFormula, addGraph]);
 
-  const renderHomeTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Clipboard</p>
-        <div className="ribbon-controls">
-          <IconButton
-            icon="Copy"
-            tooltip="Copy (Ctrl+C)"
-            onClick={() => selectedCell && copyCell(selectedCell.row, selectedCell.col)}
-          />
-          <IconButton
-            icon="Cut"
-            tooltip="Cut (Ctrl+X)"
-            onClick={() => selectedCell && cutCell(selectedCell.row, selectedCell.col)}
-          />
-          <IconButton
-            icon="Paste"
-            tooltip="Paste (Ctrl+V)"
-            onClick={() => selectedCell && pasteCell(selectedCell.row, selectedCell.col)}
-          />
-        </div>
-      </div>
+  // AutoSum: write =SUM(...) over the run of numeric cells directly above the
+  // selected cell. Falls back to no-op when there is nothing numeric to total.
+  const handleAutoSum = useCallback(() => {
+    if (!selectedCell) return;
+    const { row, col } = selectedCell;
+    let top = row - 1;
+    while (top >= 1 && typeof getCell(top, col) === 'number') top -= 1;
+    const startRow = top + 1;
+    if (startRow > row - 1) return; // no numeric cells above
+    const letter = colToLetter(col);
+    setCell(row, col, `=SUM(${letter}${startRow}:${letter}${row - 1})`);
+  }, [selectedCell, getCell, setCell]);
 
-      <div className="ribbon-group">
-        <p className="ribbon-title">Font</p>
-        <div className="ribbon-controls">
-          <select className="ribbon-input" defaultValue="Calibri">
-            <option>Calibri</option>
-            <option>Arial</option>
-            <option>Times New Roman</option>
-            <option>Courier New</option>
-          </select>
-          <select className="ribbon-input" defaultValue="11">
-            <option>8</option>
-            <option>9</option>
-            <option>10</option>
-            <option>11</option>
-            <option>12</option>
-            <option>14</option>
-            <option>16</option>
-            <option>18</option>
-            <option>20</option>
-            <option>24</option>
-          </select>
-          <div className="button-group">
-            <button
-              className="ribbon-btn"
-              title="Bold"
-              onClick={() => {
-                if (selectedCell) {
-                  const cell = getCellObject(selectedCell.row, selectedCell.col);
-                  formatCell(selectedCell.row, selectedCell.col, { bold: !cell?.format?.bold });
-                }
-              }}
-            >
-              <strong>B</strong>
-            </button>
-            <button
-              className="ribbon-btn"
-              title="Italic"
-              onClick={() => {
-                if (selectedCell) {
-                  const cell = getCellObject(selectedCell.row, selectedCell.col);
-                  formatCell(selectedCell.row, selectedCell.col, { italic: !cell?.format?.italic });
-                }
-              }}
-            >
-              <em>I</em>
-            </button>
-            <button
-              className="ribbon-btn"
-              title="Underline"
-              onClick={() => {
-                if (selectedCell) {
-                  const cell = getCellObject(selectedCell.row, selectedCell.col);
-                  formatCell(selectedCell.row, selectedCell.col, { underline: !cell?.format?.underline });
-                }
-              }}
-            >
-              <u>U</u>
-            </button>
-          </div>
-          <input
-            type="color"
-            className="ribbon-color"
-            title="Font Color"
-            defaultValue="#000000"
-            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { fontColor: e.target.value })}
-          />
-          <input
-            type="color"
-            className="ribbon-color"
-            title="Fill Color"
-            defaultValue="#FFFFFF"
-            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { backgroundColor: e.target.value })}
-          />
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Alignment</p>
-        <div className="ribbon-controls">
-          <div className="button-group">
-            <button className="ribbon-btn" title="Align Left">≡</button>
-            <button className="ribbon-btn" title="Center">≣</button>
-            <button className="ribbon-btn" title="Align Right">≡</button>
-          </div>
-          <div className="button-group">
-            <button className="ribbon-btn" title="Top Align">⇈</button>
-            <button className="ribbon-btn" title="Middle Align">⇕</button>
-            <button className="ribbon-btn" title="Bottom Align">⇊</button>
-          </div>
-          <button className="ribbon-btn" title="Wrap Text">⤾</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Number</p>
-        <div className="ribbon-controls">
-          <select className="ribbon-input" defaultValue="General">
-            <option>General</option>
-            <option>Number</option>
-            <option>Currency</option>
-            <option>Accounting</option>
-            <option>Short Date</option>
-            <option>Long Date</option>
-            <option>Time</option>
-            <option>Percentage</option>
-            <option>Fraction</option>
-            <option>Scientific</option>
-            <option>Text</option>
-          </select>
-          <div className="button-group">
-            <button className="ribbon-btn" title="Increase Decimals">.0→</button>
-            <button className="ribbon-btn" title="Decrease Decimals">←.0</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Cells</p>
-        <div className="ribbon-controls">
-          <button className="btn">Insert</button>
-          <button className="btn">Delete</button>
-          <button className="btn">Format</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Editing</p>
-        <div className="ribbon-controls">
-          <button className="btn">AutoSum</button>
-          <button className="btn">Fill</button>
-          <button className="btn">Clear</button>
-          <div className="button-group">
-            <IconButton
-              icon="SortAsc"
-              tooltip="Sort Ascending (A to Z)"
-              onClick={() => selectedCell && sortColumn(selectedCell.col, true)}
-            />
-            <IconButton
-              icon="SortDesc"
-              tooltip="Sort Descending (Z to A)"
-              onClick={() => selectedCell && sortColumn(selectedCell.col, false)}
-            />
-          </div>
-          <button className="btn">Find & Select</button>
-        </div>
-      </div>
-    </>
-  );
-
-  const renderInsertTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Rows & Columns</p>
-        <div className="ribbon-controls">
-          <button
-            className="btn"
-            onClick={() => selectedCell && insertRow(selectedCell.row)}
-          >
-            Insert Row
-          </button>
-          <button
-            className="btn"
-            onClick={() => selectedCell && deleteRow(selectedCell.row)}
-          >
-            Delete Row
-          </button>
-          <button
-            className="btn"
-            onClick={() => selectedCell && insertColumn(selectedCell.col)}
-          >
-            Insert Column
-          </button>
-          <button
-            className="btn"
-            onClick={() => selectedCell && deleteColumn(selectedCell.col)}
-          >
-            Delete Column
-          </button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Tables</p>
-        <div className="ribbon-controls">
-          <button className="btn">PivotTable</button>
-          <button className="btn">Table</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Illustrations</p>
-        <div className="ribbon-controls">
-          <button className="btn">Pictures</button>
-          <button className="btn">Shapes</button>
-          <button className="btn">Icons</button>
-          <button className="btn">3D Models</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Charts</p>
-        <div className="ribbon-controls">
-          <button className="btn">Column</button>
-          <button className="btn">Line</button>
-          <button className="btn">Pie</button>
-          <button className="btn">Bar</button>
-          <button className="btn">Scatter</button>
-          <button className="btn">See All Charts</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Links</p>
-        <div className="ribbon-controls">
-          <button className="btn">Link</button>
-          <button className="btn">Comment</button>
-        </div>
-      </div>
-    </>
-  );
-
-  const renderFormulasTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Function Library</p>
-        <div className="ribbon-controls">
-          <button className="btn">Insert Function</button>
-          <button className="btn">AutoSum</button>
-          <button className="btn">Recently Used</button>
-          <button className="btn">Financial</button>
-          <button className="btn">Logical</button>
-          <button className="btn">Text</button>
-          <button className="btn">Date & Time</button>
-          <button className="btn">Lookup & Reference</button>
-          <button className="btn">Math & Trig</button>
-          <button className="btn">More Functions</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Defined Names</p>
-        <div className="ribbon-controls">
-          <button className="btn">Name Manager</button>
-          <button className="btn">Define Name</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Formula Auditing</p>
-        <div className="ribbon-controls">
-          <button className="btn">Trace Precedents</button>
-          <button className="btn">Trace Dependents</button>
-          <button className="btn">Show Formulas</button>
-          <button className="btn">Error Checking</button>
-        </div>
-      </div>
-    </>
-  );
-
-  const renderDataTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Import & Export</p>
-        <div className="ribbon-controls">
-          <button className="btn">From Text/CSV</button>
-          <button className="btn">From Web</button>
-          <button className="btn">From Table/Range</button>
-          <button className="btn" onClick={exportCSV}>Export to CSV</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Sort & Filter</p>
-        <div className="ribbon-controls">
-          <button className="btn">Sort A to Z</button>
-          <button className="btn">Sort Z to A</button>
-          <button className="btn">Filter</button>
-          <button className="btn">Clear</button>
-          <button className="btn">Reapply</button>
-          <button className="btn">Advanced</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Data Tools</p>
-        <div className="ribbon-controls">
-          <button className="btn">Text to Columns</button>
-          <button className="btn">Remove Duplicates</button>
-          <button className="btn">Data Validation</button>
-          <button className="btn">Consolidate</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Outline</p>
-        <div className="ribbon-controls">
-          <button className="btn">Group</button>
-          <button className="btn">Ungroup</button>
-          <button className="btn">Subtotal</button>
-        </div>
-      </div>
-    </>
-  );
-
-  const renderAutomationTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Automation</p>
-        <AutomationPanel />
-      </div>
-
-    </>
-  );
+  // Clear contents of the current selection (or the single selected cell).
+  const handleClear = useCallback(() => {
+    const range = selectionRange
+      ? selectionRange
+      : selectedCell
+        ? { start: selectedCell, end: selectedCell }
+        : null;
+    if (!range) return;
+    const r1 = Math.min(range.start.row, range.end.row);
+    const r2 = Math.max(range.start.row, range.end.row);
+    const c1 = Math.min(range.start.col, range.end.col);
+    const c2 = Math.max(range.start.col, range.end.col);
+    for (let r = r1; r <= r2; r += 1) {
+      for (let c = c1; c <= c2; c += 1) {
+        setCell(r, c, '');
+      }
+    }
+  }, [selectionRange, selectedCell, setCell]);
 
   const handleInsertStockTemplate = useCallback(() => {
     // Live market data template: a ticker cell, a timeframe slider, summary
@@ -433,20 +181,9 @@ export const Ribbon: React.FC = () => {
     setCell(5, 2, '=PLOT(STOCK(B1, "close", B2))');
   }, [setCell, setParameter]);
 
-  const colToLetter = (col: number): string => {
-    let letter = '';
-    let c = col;
-    while (c > 0) {
-      const remainder = (c - 1) % 26;
-      letter = String.fromCharCode(65 + remainder) + letter;
-      c = Math.floor((c - 1) / 26);
-    }
-    return letter;
-  };
-
   // Selection -> Graph bridge: turn the selected cells into a live plot.
   // One column (or row) plots as a single series; exactly two columns plot
-  // as x/y pairs. The graph stays bound to the cells - edit them and the
+  // as x/y pairs. The graph stays bound to the cells — edit them and the
   // plot follows, like everything else in the engine.
   const handlePlotSelection = useCallback(() => {
     const range = selectionRange
@@ -463,7 +200,6 @@ export const Ribbon: React.FC = () => {
 
     let formula: string;
     if (c2 - c1 === 1) {
-      // Two columns: first is x, second is y
       formula = `PLOT(${colToLetter(c1)}${r1}:${colToLetter(c1)}${r2}, ${colToLetter(c2)}${r1}:${colToLetter(c2)}${r2})`;
     } else {
       formula = `PLOT(${colToLetter(c1)}${r1}:${colToLetter(c2)}${r2})`;
@@ -473,7 +209,7 @@ export const Ribbon: React.FC = () => {
 
   // Market -> Sheet bridge: drop a live stats block for a watched ticker.
   // Every formula uses MARKETDAYS(), so the block recalculates when the
-  // Market chart's timeframe buttons change.
+  // Market chart's timeframe changes.
   const handleInsertTickerBlock = useCallback((symbol: string) => {
     const anchor = selectedCell ?? { row: 1, col: 1 };
     const r = anchor.row;
@@ -490,13 +226,135 @@ export const Ribbon: React.FC = () => {
     setCell(r + 4, c + 1, `=PLOT(STOCK("${symbol}", "close", MARKETDAYS()))`);
   }, [selectedCell, setCell]);
 
+  const hasSelection = !!(selectedCell || selectionRange);
+  const canEdit = !isReadOnly;
+  const cellDisabled = !selectedCell || !canEdit;
+
+  const renderHomeTab = () => (
+    <>
+      <div className="ribbon-group">
+        <p className="ribbon-title">Clipboard</p>
+        <div className="ribbon-controls">
+          <div className="button-group">
+            <IconButton icon="Copy" tooltip="Copy (Ctrl+C)" disabled={!selectedCell}
+              onClick={() => selectedCell && copyCell(selectedCell.row, selectedCell.col)} />
+            <IconButton icon="Cut" tooltip="Cut (Ctrl+X)" disabled={cellDisabled}
+              onClick={() => selectedCell && cutCell(selectedCell.row, selectedCell.col)} />
+            <IconButton icon="Paste" tooltip="Paste (Ctrl+V)" disabled={cellDisabled}
+              onClick={() => selectedCell && pasteCell(selectedCell.row, selectedCell.col)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="ribbon-group">
+        <p className="ribbon-title">Font</p>
+        <div className="ribbon-controls">
+          <div className="button-group">
+            <IconButton icon="Bold" tooltip="Bold" disabled={cellDisabled}
+              active={!!activeFormat?.bold} onClick={() => toggleFormat('bold')} />
+            <IconButton icon="Italic" tooltip="Italic" disabled={cellDisabled}
+              active={!!activeFormat?.italic} onClick={() => toggleFormat('italic')} />
+            <IconButton icon="Underline" tooltip="Underline" disabled={cellDisabled}
+              active={!!activeFormat?.underline} onClick={() => toggleFormat('underline')} />
+          </div>
+          <input
+            type="color"
+            className="ribbon-color"
+            title="Font color"
+            aria-label="Font color"
+            disabled={cellDisabled}
+            value={activeFormat?.fontColor ?? '#000000'}
+            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { fontColor: e.target.value })}
+          />
+          <input
+            type="color"
+            className="ribbon-color"
+            title="Fill color"
+            aria-label="Fill color"
+            disabled={cellDisabled}
+            value={activeFormat?.backgroundColor ?? '#ffffff'}
+            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { backgroundColor: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="ribbon-group">
+        <p className="ribbon-title">Editing</p>
+        <div className="ribbon-controls">
+          <button className="btn" title="Sum the numeric cells above the selected cell"
+            disabled={cellDisabled} onClick={handleAutoSum}>AutoSum</button>
+          <button className="btn" title="Clear the contents of the selection"
+            disabled={!hasSelection || !canEdit} onClick={handleClear}>Clear</button>
+          <div className="button-group">
+            <IconButton icon="SortAsc" tooltip="Sort column A to Z" disabled={cellDisabled}
+              onClick={() => selectedCell && sortColumn(selectedCell.col, true)} />
+            <IconButton icon="SortDesc" tooltip="Sort column Z to A" disabled={cellDisabled}
+              onClick={() => selectedCell && sortColumn(selectedCell.col, false)} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderInsertTab = () => (
+    <>
+      <div className="ribbon-group">
+        <p className="ribbon-title">Rows &amp; Columns</p>
+        <div className="ribbon-controls">
+          <button className="btn" disabled={cellDisabled}
+            onClick={() => selectedCell && insertRow(selectedCell.row)}>Insert Row</button>
+          <button className="btn" disabled={cellDisabled}
+            onClick={() => selectedCell && deleteRow(selectedCell.row)}>Delete Row</button>
+          <button className="btn" disabled={cellDisabled}
+            onClick={() => selectedCell && insertColumn(selectedCell.col)}>Insert Column</button>
+          <button className="btn" disabled={cellDisabled}
+            onClick={() => selectedCell && deleteColumn(selectedCell.col)}>Delete Column</button>
+        </div>
+      </div>
+
+      <div className="ribbon-group">
+        <p className="ribbon-title">Charts</p>
+        <div className="ribbon-controls">
+          <button className="btn" onClick={() => setShowGraphDialog(true)}
+            title="Add a graph bound to a formula">Add Graph</button>
+          <button className="btn" disabled={!hasSelection} onClick={handlePlotSelection}
+            title="Plot the selected cells as a live graph (two columns = x/y pairs)">Plot Selection</button>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderDataTab = () => (
+    <>
+      <div className="ribbon-group">
+        <p className="ribbon-title">Export</p>
+        <div className="ribbon-controls">
+          <button className="btn" onClick={exportCSV}
+            title="Download the active sheet as a CSV file">Export to CSV</button>
+        </div>
+      </div>
+
+      <div className="ribbon-group">
+        <p className="ribbon-title">Sort</p>
+        <div className="ribbon-controls">
+          <button className="btn" disabled={cellDisabled}
+            title="Sort the selected column ascending"
+            onClick={() => selectedCell && sortColumn(selectedCell.col, true)}>Sort A to Z</button>
+          <button className="btn" disabled={cellDisabled}
+            title="Sort the selected column descending"
+            onClick={() => selectedCell && sortColumn(selectedCell.col, false)}>Sort Z to A</button>
+        </div>
+      </div>
+    </>
+  );
+
   const renderMarketTab = () => (
     <>
       <div className="ribbon-group">
         <p className="ribbon-title">Stocks</p>
         <div className="ribbon-controls">
           <button className="btn" onClick={() => setStockPickerOpen(true)}>
-            Choose Stock & Date Range…
+            Choose Stock &amp; Date Range…
           </button>
         </div>
       </div>
@@ -511,7 +369,7 @@ export const Ribbon: React.FC = () => {
               <button className="ribbon-watch-name" onClick={() => toggleWatchedTicker(w.symbol)} title={w.visible ? 'Click to hide from chart' : 'Click to show on chart'}>
                 {w.symbol}
               </button>
-              <button className="ribbon-btn" onClick={() => handleInsertTickerBlock(w.symbol)} title={`Insert a live ${w.symbol} stats block at the selected cell — it follows the chart's timeframe`}>→Sheet</button>
+              <button className="ribbon-btn" disabled={!canEdit} onClick={() => handleInsertTickerBlock(w.symbol)} title={`Insert a live ${w.symbol} stats block at the selected cell — it follows the chart's timeframe`}>→Sheet</button>
               <button className="ribbon-btn" onClick={() => removeWatchedTicker(w.symbol)} title={`Remove ${w.symbol}`}>×</button>
             </div>
           ))}
@@ -523,6 +381,7 @@ export const Ribbon: React.FC = () => {
         <div className="ribbon-controls">
           <button
             className="btn"
+            disabled={!canEdit}
             onClick={handleInsertStockTemplate}
             title="Insert a ready-made live stock worksheet: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))"
           >
@@ -531,6 +390,13 @@ export const Ribbon: React.FC = () => {
         </div>
       </div>
     </>
+  );
+
+  const renderAutomationTab = () => (
+    <div className="ribbon-group">
+      <p className="ribbon-title">Automation</p>
+      <AutomationPanel />
+    </div>
   );
 
   const renderGraphingTab = () => {
@@ -544,7 +410,7 @@ export const Ribbon: React.FC = () => {
             <button className="btn" onClick={() => setShowGraphDialog(true)}>Add Graph</button>
             <button
               className="btn"
-              disabled={!selectionRange && !selectedCell}
+              disabled={!hasSelection}
               onClick={handlePlotSelection}
               title="Plot the selected cells as a live graph (two columns = x/y pairs)"
             >
@@ -552,16 +418,16 @@ export const Ribbon: React.FC = () => {
             </button>
           </div>
           {graphs.length > 0 && (
-            <div style={{ maxHeight: '100px', overflowY: 'auto', marginTop: '8px' }}>
+            <div className="ribbon-graph-list">
               {graphs.map((graph) => (
-                <div key={graph.id} style={{ display: 'flex', gap: '8px', padding: '4px', alignItems: 'center' }}>
-                  <span style={{ color: graph.color, fontSize: '16px' }}>●</span>
-                  <span style={{ flex: 1, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{graph.formula}</span>
+                <div key={graph.id} className="ribbon-graph-item">
+                  <span className="ribbon-graph-dot" style={{ color: graph.color }}>●</span>
+                  <span className="ribbon-graph-formula">{graph.formula}</span>
                   <button
                     className="ribbon-btn"
                     onClick={() => removeGraph(graph.id)}
-                    title="Remove"
-                    style={{ padding: '2px 6px', fontSize: '14px', cursor: 'pointer' }}
+                    title="Remove graph"
+                    aria-label="Remove graph"
                   >×</button>
                 </div>
               ))}
@@ -574,121 +440,46 @@ export const Ribbon: React.FC = () => {
           <div className="ribbon-controls">
             <button
               className="btn"
-              disabled={!selectedCell}
+              disabled={cellDisabled}
               onClick={() => setShowParamDialog(true)}
+              title="Turn the selected cell into a slider that drives recalculation"
             >
               Make Parameter from Selection
             </button>
           </div>
           <ParameterPanel />
         </div>
-
       </>
     );
   };
 
-  const renderReviewTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Proofing</p>
-        <div className="ribbon-controls">
-          <button className="btn">Spelling</button>
-          <button className="btn">Thesaurus</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Comments</p>
-        <div className="ribbon-controls">
-          <button className="btn">New Comment</button>
-          <button className="btn">Delete</button>
-          <button className="btn">Previous</button>
-          <button className="btn">Next</button>
-          <button className="btn">Show All</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Protect</p>
-        <div className="ribbon-controls">
-          <button className="btn">Protect Sheet</button>
-          <button className="btn">Protect Workbook</button>
-        </div>
-      </div>
-    </>
-  );
-
   const renderViewTab = () => (
-    <>
-      <div className="ribbon-group">
-        <p className="ribbon-title">Theme</p>
-        <div className="ribbon-controls">
-          <select
-            className="ribbon-input"
-            value={localTheme}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleThemeChange(e.target.value)}
-            style={{ width: '180px' }}
-          >
-            <option value="default">Default</option>
-            <option value="pastel-yellow">Pastel Yellow</option>
-            <option value="pastel-blue">Pastel Blue</option>
-            <option value="pastel-brown">Pastel Brown</option>
-            <option value="pastel-red">Pastel Red</option>
-            <option value="pastel-pink">Pastel Pink</option>
-            <option value="pastel-green">Pastel Green</option>
-            <option value="pastel-purple">Pastel Purple</option>
-            <option value="dark">Dark</option>
-            <option value="dark-blue">Dark Blue</option>
-            <option value="dark-green">Dark Green</option>
-            <option value="dark-purple">Dark Purple</option>
-          </select>
-        </div>
+    <div className="ribbon-group">
+      <p className="ribbon-title">Theme</p>
+      <div className="ribbon-controls">
+        <select
+          className="ribbon-input"
+          value={localTheme}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleThemeChange(e.target.value)}
+          style={{ width: '180px' }}
+          title="Change the workbook color theme"
+          aria-label="Color theme"
+        >
+          <option value="default">Default</option>
+          <option value="pastel-yellow">Pastel Yellow</option>
+          <option value="pastel-blue">Pastel Blue</option>
+          <option value="pastel-brown">Pastel Brown</option>
+          <option value="pastel-red">Pastel Red</option>
+          <option value="pastel-pink">Pastel Pink</option>
+          <option value="pastel-green">Pastel Green</option>
+          <option value="pastel-purple">Pastel Purple</option>
+          <option value="dark">Dark</option>
+          <option value="dark-blue">Dark Blue</option>
+          <option value="dark-green">Dark Green</option>
+          <option value="dark-purple">Dark Purple</option>
+        </select>
       </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Workbook Views</p>
-        <div className="ribbon-controls">
-          <button className="btn">Normal</button>
-          <button className="btn">Page Break Preview</button>
-          <button className="btn">Page Layout</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Show</p>
-        <div className="ribbon-controls">
-          <label>
-            <input type="checkbox" defaultChecked /> Ruler
-          </label>
-          <label>
-            <input type="checkbox" defaultChecked /> Gridlines
-          </label>
-          <label>
-            <input type="checkbox" defaultChecked /> Formula Bar
-          </label>
-          <label>
-            <input type="checkbox" defaultChecked /> Headings
-          </label>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Zoom</p>
-        <div className="ribbon-controls">
-          <button className="btn">Zoom</button>
-          <button className="btn">100%</button>
-          <button className="btn">Zoom to Selection</button>
-        </div>
-      </div>
-
-      <div className="ribbon-group">
-        <p className="ribbon-title">Window</p>
-        <div className="ribbon-controls">
-          <button className="btn">Freeze Panes</button>
-          <button className="btn">Split</button>
-        </div>
-      </div>
-    </>
+    </div>
   );
 
   const renderActiveTab = () => {
@@ -697,8 +488,6 @@ export const Ribbon: React.FC = () => {
         return renderHomeTab();
       case 'Insert':
         return renderInsertTab();
-      case 'Formulas':
-        return renderFormulasTab();
       case 'Data':
         return renderDataTab();
       case 'Market':
@@ -707,27 +496,30 @@ export const Ribbon: React.FC = () => {
         return renderAutomationTab();
       case 'Graphing':
         return renderGraphingTab();
-      case 'Review':
-        return renderReviewTab();
       case 'View':
         return renderViewTab();
       default:
-        return <div className="ribbon-group"><p>Coming soon...</p></div>;
+        return null;
     }
   };
 
   return (
     <>
       <div className="ribbon-tabs">
-        {(['Home', 'Insert', 'Page Layout', 'Formulas', 'Data', 'Market', 'Automation', 'Graphing', 'Review', 'View'] as TabName[]).map((tab) => (
+        {TABS.map((tab) => (
           <button
             key={tab}
             className={`tab ${activeTab === tab ? 'active' : ''}`}
+            aria-pressed={activeTab === tab}
             onClick={() => setActiveTab(tab)}
           >
             {tab}
           </button>
         ))}
+        <div className="ribbon-quick">
+          <IconButton icon="Undo" tooltip="Undo (Ctrl+Z)" disabled={!canUndo || isReadOnly} onClick={undo} />
+          <IconButton icon="Redo" tooltip="Redo (Ctrl+Y)" disabled={!canRedo || isReadOnly} onClick={redo} />
+        </div>
       </div>
 
       <div className="ribbon">
@@ -749,6 +541,7 @@ export const Ribbon: React.FC = () => {
                 value={graphFormula}
                 onChange={(e) => setGraphFormula(e.target.value)}
                 placeholder="y = f(x)"
+                autoFocus
               />
             </label>
             <div className="dialog-buttons">

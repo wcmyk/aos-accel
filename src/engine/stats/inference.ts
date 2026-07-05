@@ -37,13 +37,6 @@ function normalCDF(z: number): number {
 }
 
 /**
- * Standard normal PDF (φ)
- */
-function normalPDF(z: number): number {
-  return Math.exp((-z * z) / 2) / Math.sqrt(2 * Math.PI);
-}
-
-/**
  * Inverse normal CDF (approximation)
  */
 function normalInverseCDF(p: number): number {

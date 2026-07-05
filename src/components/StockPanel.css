@@ -1,0 +1,75 @@
+/* Market panel: robustness & polish additions.
+   Base market styles live in App.css (owned by the shell). This file only
+   adds the loading / empty / error overlay, a spinner, and keyboard focus
+   affordances — it never redefines the existing .stock-* base rules. */
+
+/* Chart status overlay (loading / empty / hidden / no-range).
+   Sits over the chart area; pointer-events stay off so it never blocks the
+   crosshair, but its interactive call-to-action re-enables them locally. */
+.stock-chart-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.stock-chart-overlay__msg {
+  max-width: 280px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  opacity: 0.72;
+}
+
+.stock-chart-overlay__cta {
+  pointer-events: auto;
+}
+
+.stock-spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--button-border);
+  border-top-color: var(--cell-selected, #3b82f6);
+  animation: stock-spin 0.8s linear infinite;
+}
+
+@keyframes stock-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Honest demo-data badge — the error variant reads a touch warmer/louder so
+   an actual live-fetch failure is distinguishable from expected offline mode. */
+.stock-demo-note.is-error {
+  border-style: solid;
+  color: #b45309;
+  opacity: 0.85;
+}
+
+:root[data-theme='dark'] .stock-demo-note.is-error,
+:root[data-theme='midnight'] .stock-demo-note.is-error {
+  color: #fbbf24;
+}
+
+/* Keyboard focus affordances (chips are role="button", so make focus visible). */
+.stock-chip:focus-visible,
+.stock-tf:focus-visible,
+.stock-chip__remove:focus-visible,
+.stock-picker__row:focus-visible {
+  outline: 2px solid var(--cell-selected, #3b82f6);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stock-spinner {
+    animation: none;
+  }
+}

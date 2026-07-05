@@ -10,6 +10,7 @@ import { useAuthStore } from './store/auth-store';
 import { AuthScreen } from './components/AuthScreen';
 import { WorkbookDashboard } from './components/WorkbookDashboard';
 import { EditorPage } from './pages/EditorPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './App.css';
 
 function CloudApp() {
@@ -22,7 +23,12 @@ function CloudApp() {
   }, [init]);
 
   if (isLoading) {
-    return <div className="loading-screen">Loading…</div>;
+    return (
+      <div className="loading-screen">
+        <span className="loading-spinner" aria-hidden="true" />
+        <span>Loading…</span>
+      </div>
+    );
   }
 
   return (
@@ -49,16 +55,20 @@ function App() {
   // ancestor and would crash the whole app to a blank page.
   if (!isCloudEnabled) {
     return (
-      <HashRouter>
-        <EditorPage mode="local" />
-      </HashRouter>
+      <ErrorBoundary>
+        <HashRouter>
+          <EditorPage mode="local" />
+        </HashRouter>
+      </ErrorBoundary>
     );
   }
 
   return (
-    <HashRouter>
-      <CloudApp />
-    </HashRouter>
+    <ErrorBoundary>
+      <HashRouter>
+        <CloudApp />
+      </HashRouter>
+    </ErrorBoundary>
   );
 }
 

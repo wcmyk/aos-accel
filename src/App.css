@@ -340,14 +340,14 @@ body {
 }
 .title span {
   font-size: 12px;
-  color: #5f6368;
+  color: var(--text-secondary);
 }
 
 .title-bar__right {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #5f6368;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -417,7 +417,7 @@ body {
 .ribbon-title {
   font-weight: 700;
   font-size: 12px;
-  color: #5f6368;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -525,18 +525,18 @@ body {
 
 .label {
   font-weight: 700;
-  color: #4a4a4a;
+  color: var(--text-primary);
 }
 
 .dim-note {
-  color: #7a7a7a;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .note-list {
   list-style: square;
   padding-left: 18px;
-  color: #4a4a4a;
+  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1721,4 +1721,147 @@ body.theme-transitioning * {
   border-radius: 4px;
   background: var(--input-bg);
   color: var(--text-primary);
+}
+
+/* ============================================================
+   Global polish: loading, focus, scrollbars, responsiveness
+   ============================================================ */
+
+/* Loading / error screens ------------------------------------ */
+.loading-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--cell-selected);
+  animation: radix-spin 720ms linear infinite;
+}
+
+@keyframes radix-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-error {
+  max-width: 420px;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.loading-link {
+  color: var(--cell-selected);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.loading-link:hover {
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation-duration: 2s;
+  }
+}
+
+/* Keyboard focus visibility --------------------------------- */
+/* Show a clear focus ring only for keyboard users; mouse clicks
+   stay clean. Applied broadly so every interactive control is
+   reachable and legible, in both light and dark themes. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--cell-selected);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The grid draws its own cell-selection highlight; keep its keyboard focus
+   from painting a heavy ring around the whole panel. */
+.spreadsheet-container:focus-visible {
+  outline: none;
+}
+
+/* Custom scrollbars ----------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cell-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--cell-border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Responsive: keep the shell usable on smaller windows ------- */
+@media (max-width: 900px) {
+  .title-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .title-bar__right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .ribbon {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ribbon-group {
+    min-width: 160px;
+  }
+
+  .workspace {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .title .title-input,
+  .title strong {
+    max-width: 42vw;
+  }
+
+  .title span {
+    display: none;
+  }
+
+  .ribbon-group {
+    border-right: none;
+    padding-right: 0;
+    min-width: 100%;
+  }
+
+  .status-bar {
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
 }

@@ -83,6 +83,25 @@ export function serializeEngine(engine: AccelEngine): SerializedWorkbook {
   };
 }
 
+/**
+ * Structural guard for untrusted payloads (localStorage, share links, cloud
+ * rows). Returns true only for a shape deserializeEngine can safely consume,
+ * so corrupt or version-mismatched data is rejected instead of crashing the
+ * app on load.
+ */
+export function isValidWorkbook(data: unknown): data is SerializedWorkbook {
+  if (!data || typeof data !== 'object') return false;
+  const wb = data as Partial<SerializedWorkbook>;
+  if (wb.version !== 1) return false;
+  if (typeof wb.activeSheet !== 'string') return false;
+  if (!Array.isArray(wb.sheets)) return false;
+  return wb.sheets.every((sheet) => {
+    if (!sheet || typeof sheet !== 'object') return false;
+    const s = sheet as Partial<SerializedWorksheet>;
+    return typeof s.name === 'string' && Array.isArray(s.cells) && Array.isArray(s.graphs);
+  });
+}
+
 export function deserializeEngine(data: SerializedWorkbook): AccelEngine {
   const engine = new AccelEngine();
   const defaultSheet = engine.getSheetNames()[0];

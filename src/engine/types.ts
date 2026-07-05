@@ -72,8 +72,15 @@ export interface GraphDefinition {
   dimensions?: number;
 }
 
+// A worksheet is either an ordinary grid or a full-canvas graph sheet. Graph
+// sheets hold plot/function graphs (usually built from cross-sheet formulas
+// like =PLOT(Sheet1!A:A, Sheet1!B:B)) and are rendered as a graph instead of a
+// grid. Absent kind is treated as 'grid' for backward compatibility.
+export type SheetKind = 'grid' | 'graph';
+
 export interface Worksheet {
   name: string;
+  kind?: SheetKind;
   cells: Map<string, Cell>;
   graphs: Map<string, GraphDefinition>;
   namedRanges: Map<string, RangeReference>;

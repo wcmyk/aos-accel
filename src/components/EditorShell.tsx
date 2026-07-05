@@ -158,7 +158,7 @@ export function EditorShell() {
       <Ribbon />
 
       {activeIsGraph ? (
-        <div className="workspace workspace--graph-sheet">
+        <div className="graph-sheet-host">
           <GraphSheetView />
         </div>
       ) : (

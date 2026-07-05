@@ -31,11 +31,15 @@ type AxisSelection = {
 
 export class GraphRenderer {
   private worksheet: Worksheet;
+  private sheets?: Map<string, Worksheet>;
   private cache: Map<string, CacheEntry> = new Map();
   private cellVersions: Map<string, number> = new Map();
 
-  constructor(worksheet: Worksheet) {
+  // `sheets` lets plots reference other worksheets (Sheet1!A2:A100) so a graph
+  // sheet can draw data that lives on a grid sheet.
+  constructor(worksheet: Worksheet, sheets?: Map<string, Worksheet>) {
     this.worksheet = worksheet;
+    this.sheets = sheets;
   }
 
   /**
@@ -94,7 +98,7 @@ export class GraphRenderer {
     const { min, max } = graph.domain || { min: -10, max: 10 };
     const step = (max - min) / resolution;
 
-    const evaluator = new Evaluator(this.worksheet);
+    const evaluator = new Evaluator(this.worksheet, this.sheets);
 
     for (let i = 0; i <= resolution; i++) {
       const x = min + i * step;
@@ -140,7 +144,7 @@ export class GraphRenderer {
       return [];
     }
 
-    const evaluator = new Evaluator(this.worksheet);
+    const evaluator = new Evaluator(this.worksheet, this.sheets);
     const axisData: number[][] = [];
 
     for (const arg of graph.ast.args) {
@@ -241,7 +245,7 @@ export class GraphRenderer {
           } else {
             const { min, max } = graph.domain || { min: 0, max: 2 * Math.PI };
             const step = (max - min) / resolution;
-            const evaluator = new Evaluator(this.worksheet);
+            const evaluator = new Evaluator(this.worksheet, this.sheets);
 
             for (let i = 0; i <= resolution; i++) {
               const t = min + i * step;
@@ -285,7 +289,7 @@ export class GraphRenderer {
             const gridRes = Math.floor(Math.sqrt(resolution)); // e.g., 30x30 grid for 900 resolution
             const xStep = (xMax - xMin) / gridRes;
             const yStep = (yMax - yMin) / gridRes;
-            const evaluator = new Evaluator(this.worksheet);
+            const evaluator = new Evaluator(this.worksheet, this.sheets);
 
             // Sample grid and find zero crossings
             for (let xi = 0; xi <= gridRes; xi++) {

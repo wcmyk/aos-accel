@@ -70,6 +70,13 @@ export class AccelEngine {
     return this.workbook.activeSheet;
   }
 
+  // Live map of every worksheet, for cross-sheet reference resolution
+  // (Sheet1!A1). Returned by reference — it is mutated in place as sheets are
+  // added/removed, so holders always see the current set.
+  getSheets(): Map<string, Worksheet> {
+    return this.workbook.sheets;
+  }
+
   private seedDemoWorkbook(): void {
     // Demo data removed - start with empty spreadsheet
     // Users can add their own data
@@ -318,7 +325,7 @@ export class AccelEngine {
     }
 
     try {
-      const evaluator = new Evaluator(worksheet);
+      const evaluator = new Evaluator(worksheet, this.workbook.sheets);
       const result = evaluator.evaluate(graph.ast, { x });
 
       if (typeof result === 'number') {
@@ -336,7 +343,7 @@ export class AccelEngine {
     if (!cell || !cell.ast) return;
 
     try {
-      const evaluator = new Evaluator(worksheet);
+      const evaluator = new Evaluator(worksheet, this.workbook.sheets);
       cell.value = evaluator.evaluate(cell.ast);
     } catch (error) {
       cell.value = `#ERROR: ${(error as Error).message}`;

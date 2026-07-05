@@ -89,7 +89,13 @@ export const StockPanel: React.FC = React.memo(() => {
     if (!shell) return;
     const measure = () => {
       const rect = shell.getBoundingClientRect();
-      setSize({ width: Math.max(280, rect.width), height: 260 });
+      // Fill the flexed shell when the graph view is hidden; fixed otherwise.
+      const filled = shell.closest('.card--fill');
+      setSize({
+        width: Math.max(280, rect.width),
+        // Fill mode absorbs the hidden sibling's space — grow, never shrink.
+        height: filled ? Math.max(260, rect.height) : 260,
+      });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -99,7 +105,11 @@ export const StockPanel: React.FC = React.memo(() => {
 
   const barCount = TIMEFRAMES.find((t) => t.label === timeframe)?.bars ?? 63;
   const visible = watchlist.filter((w) => w.visible);
-  const compareMode = visible.length > 1;
+  // $ / % toggle: 'auto' shows prices for one ticker and %-change when
+  // comparing several; the user can force either at any time.
+  const [valueMode, setValueMode] = useState<'auto' | 'price' | 'percent'>('auto');
+  const compareMode =
+    valueMode === 'percent' || (valueMode === 'auto' && visible.length > 1);
 
   const series: SeriesData[] = useMemo(() => {
     void docVersion; // re-derive when data arrives
@@ -381,7 +391,21 @@ export const StockPanel: React.FC = React.memo(() => {
             Custom
           </button>
         )}
-        {compareMode && <span className="stock-mode-note">% change comparison</span>}
+        <span className="stock-vmode" title="Show absolute prices ($) or percent change (%)">
+          <button
+            className={`stock-tf ${!compareMode ? 'active' : ''}`}
+            onClick={() => setValueMode('price')}
+          >
+            $
+          </button>
+          <button
+            className={`stock-tf ${compareMode ? 'active' : ''}`}
+            onClick={() => setValueMode('percent')}
+          >
+            %
+          </button>
+        </span>
+        {compareMode && <span className="stock-mode-note">% change</span>}
         {anySynthetic && (
           <span className="stock-demo-note" title="No API key configured or the market data API was unreachable — showing generated placeholder data.">
             simulated data

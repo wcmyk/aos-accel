@@ -500,8 +500,15 @@ export const GraphCanvas: React.FC = React.memo(() => {
           ref={canvasRef}
           className="graph-canvas"
           onWheel={(e) => {
-            e.preventDefault();
-            handleZoom(e.deltaY);
+            // A trackpad pinch arrives as a wheel event with ctrlKey set; a
+            // plain two-finger scroll does not. Only intercept the pinch so
+            // ordinary scrolling still moves the surrounding UI instead of the
+            // graph fighting it. Ctrl/Cmd+wheel on a mouse zooms too; the
+            // on-canvas Zoom In/Out buttons cover plain-mouse users.
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              handleZoom(e.deltaY);
+            }
           }}
           onMouseMove={handleTraceMove}
           onMouseLeave={() => setTrace(null)}

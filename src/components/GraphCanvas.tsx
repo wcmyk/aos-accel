@@ -61,7 +61,12 @@ export const GraphCanvas: React.FC = React.memo(() => {
     const resize = () => {
       const parentRect = canvas.parentElement!.getBoundingClientRect();
       const width = parentRect.width;
-      const height = Math.max(420, Math.min(720, width * 0.6));
+      // In a fill card (sibling view hidden) the shell has a definite flexed
+      // height — use all of it. Otherwise derive height from width.
+      const filled = canvas.parentElement!.closest('.card--fill');
+      const base = Math.max(420, Math.min(720, width * 0.6));
+      // Fill mode absorbs the hidden sibling's space — grow, never shrink.
+      const height = filled ? Math.max(base, parentRect.height) : base;
       const dpr = window.devicePixelRatio || 1;
       canvas.width = width * dpr;
       canvas.height = height * dpr;

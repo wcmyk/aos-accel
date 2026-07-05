@@ -449,6 +449,17 @@ export const SpreadsheetGrid: React.FC = () => {
 
   // Grid keyboard navigation
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Escape always cancels an in-progress edit, like Excel — even when the
+    // grid (not the formula input) has focus. Leaving the edit active meant
+    // the NEXT commit silently landed in the stale editing cell.
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingCell(null);
+      setEditValue('');
+      clearSelection();
+      return;
+    }
+
     if (!selectedCell || editingCell) return;
 
     const { row, col } = selectedCell;
@@ -485,6 +496,57 @@ export const SpreadsheetGrid: React.FC = () => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
       e.preventDefault();
       cutCell(row, col);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      redo();
+      return;
+    }
+
+    // Ctrl+Arrow: jump to the edge of the data region, like Excel
+    if ((e.ctrlKey || e.metaKey) && e.key.startsWith('Arrow')) {
+      e.preventDefault();
+      const dr = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+      const dc = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      const isEmpty = (r: number, c: number) => {
+        const v = getCell(r, c);
+        return v === null || v === undefined || v === '';
+      };
+      let r = row;
+      let c = col;
+      const inBounds = (rr: number, cc: number) => rr >= 1 && rr <= ROWS && cc >= 1 && cc <= COLS;
+      if (inBounds(r + dr, c + dc) && !isEmpty(r + dr, c + dc)) {
+        // Inside a data run: go to its far edge
+        while (inBounds(r + dr, c + dc) && !isEmpty(r + dr, c + dc)) { r += dr; c += dc; }
+      } else {
+        // In empty space: go to the next occupied cell, or the sheet edge
+        while (inBounds(r + dr, c + dc) && isEmpty(r + dr, c + dc)) { r += dr; c += dc; }
+        if (!inBounds(r + dr, c + dc)) {
+          // hit the boundary
+        } else { r += dr; c += dc; }
+      }
+      selectCell(r, c);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Home') {
+      e.preventDefault();
+      selectCell(1, 1);
+      return;
+    }
+    if (e.key === 'PageDown') {
+      e.preventDefault();
+      selectCell(Math.min(ROWS, row + 20), col);
+      return;
+    }
+    if (e.key === 'PageUp') {
+      e.preventDefault();
+      selectCell(Math.max(1, row - 20), col);
       return;
     }
 
@@ -744,9 +806,10 @@ export const SpreadsheetGrid: React.FC = () => {
   const applyReferenceToFormula = useCallback((row: number, col: number, replaceExisting: boolean, rangeStart?: { row: number; col: number }) => {
     if (!editingCell) return;
 
-    // Create range reference if rangeStart is provided
+    // Create range reference if rangeStart is provided; a range that starts
+    // and ends on the same cell is a plain reference (C4, never C4:C4).
     let refString: string;
-    if (rangeStart) {
+    if (rangeStart && (rangeStart.row !== row || rangeStart.col !== col)) {
       const startRef = `${colToLetter(rangeStart.col)}${rangeStart.row}`;
       const endRef = `${colToLetter(col)}${row}`;
       refString = `${startRef}:${endRef}`;
@@ -796,10 +859,16 @@ export const SpreadsheetGrid: React.FC = () => {
     // This prevents unwanted L#:L# insertions when just scrolling the sheet
     if (!isSelecting && !selectionRange && !lastInsertedRef.current) return;
 
+    // Reference insertion is a FORMULA-building affordance. Without this
+    // guard, dragging a multi-cell selection while a non-formula edit was
+    // active spliced raw references into the value ("C4:C4B2:B2…").
+    if (!editValue.startsWith('=')) return;
+
     // Pass range start if there's a selection range
     const rangeStart = selectionRange ? selectionRange.start : undefined;
     applyReferenceToFormula(targetRow, targetCol, Boolean(selectionRange) || Boolean(lastInsertedRef.current), rangeStart);
-  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting, editValue]);
 
   // Helper function to get cell state (computed on-demand, not stored)
   // Memoized with dirty tracking to only update when cells actually change

@@ -81,6 +81,9 @@ export type SheetKind = 'grid' | 'graph';
 export interface Worksheet {
   name: string;
   kind?: SheetKind;
+  // Freeze panes: the first `rows` rows and `cols` columns stay pinned while the
+  // rest of the sheet scrolls. Absent/0 means nothing is frozen.
+  freeze?: { rows: number; cols: number };
   cells: Map<string, Cell>;
   graphs: Map<string, GraphDefinition>;
   namedRanges: Map<string, RangeReference>;

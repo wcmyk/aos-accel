@@ -197,6 +197,12 @@ interface AccelState {
   // grid-vs-graph rendering). Absent entries are treated as 'grid'.
   sheetKinds: Record<string, 'grid' | 'graph'>;
 
+  // Freeze panes for the active sheet (mirrored from the engine for reactive
+  // rendering). rows/cols are how many leading rows/columns stay pinned.
+  freezeRows: number;
+  freezeCols: number;
+  setFreeze: (rows: number, cols: number) => void;
+
   // Multi-cell selection
   selectionRange: {
     start: { row: number; col: number };
@@ -329,6 +335,8 @@ export const useAccelStore = create<AccelState>()(
     activeSheet: 'Sheet1',
     sheetNames: ['Sheet1'],
     sheetKinds: { Sheet1: 'grid' },
+    freezeRows: 0,
+    freezeCols: 0,
     selectionRange: null,
     isSelecting: false,
 
@@ -353,6 +361,9 @@ export const useAccelStore = create<AccelState>()(
         state.sheetKinds = Object.fromEntries(
           engine.getSheetNames().map((n) => [n, engine.getSheetKind(n)])
         );
+        const fz = engine.getFreeze(engine.getActiveSheetName());
+        state.freezeRows = fz.rows;
+        state.freezeCols = fz.cols;
         state.selectedCell = null;
         state.selectionRange = null;
         state.fillRange = null;
@@ -388,6 +399,9 @@ export const useAccelStore = create<AccelState>()(
         state.engine = restored;
         state.activeSheet = restored.getActiveSheetName();
         state.sheetNames = restored.getSheetNames();
+        const fz = restored.getFreeze(restored.getActiveSheetName());
+        state.freezeRows = fz.rows;
+        state.freezeCols = fz.cols;
         state.graphRenderer = null;
         state.selectedCell = null;
         state.selectionRange = null;
@@ -415,6 +429,9 @@ export const useAccelStore = create<AccelState>()(
         state.engine = restored;
         state.activeSheet = restored.getActiveSheetName();
         state.sheetNames = restored.getSheetNames();
+        const fz = restored.getFreeze(restored.getActiveSheetName());
+        state.freezeRows = fz.rows;
+        state.freezeCols = fz.cols;
         state.graphRenderer = null;
         state.selectedCell = null;
         state.selectionRange = null;
@@ -491,6 +508,19 @@ export const useAccelStore = create<AccelState>()(
     selectCell: (row, col) => {
       set((state) => {
         state.selectedCell = { row, col };
+      });
+    },
+
+    setFreeze: (rows, cols) => {
+      if (get().isReadOnly) return;
+      const { engine, activeSheet } = get();
+      recordHistory();
+      engine.setFreeze(rows, cols, activeSheet);
+      set((state) => {
+        state.engine = engine;
+        state.freezeRows = Math.max(0, Math.floor(rows));
+        state.freezeCols = Math.max(0, Math.floor(cols));
+        state.docVersion += 1;
       });
     },
 
@@ -598,67 +628,95 @@ export const useAccelStore = create<AccelState>()(
 
     executeFill: () => {
       if (get().isReadOnly) return;
-      const { selectedCell, fillRange, engine } = get();
+      const { selectedCell, selectionRange, fillRange, engine } = get();
       if (!selectedCell || !fillRange) return;
 
+      // The selected cells are the pattern being extended. With no range it is a
+      // single source cell (legacy behavior); with a single-row/column range of
+      // 2+ cells we can infer a linear series (1,2 -> 3,4,5) like Excel.
+      const selMinRow = selectionRange ? Math.min(selectionRange.start.row, selectionRange.end.row) : selectedCell.row;
+      const selMaxRow = selectionRange ? Math.max(selectionRange.start.row, selectionRange.end.row) : selectedCell.row;
+      const selMinCol = selectionRange ? Math.min(selectionRange.start.col, selectionRange.end.col) : selectedCell.col;
+      const selMaxCol = selectionRange ? Math.max(selectionRange.start.col, selectionRange.end.col) : selectedCell.col;
+      const singleCol = selMinCol === selMaxCol;
+      const singleRow = selMinRow === selMaxRow;
+
+      // Fill axis is decided by where the drag target sits relative to the
+      // selection. A block selection (neither single row nor column) has no
+      // unambiguous fill direction, so we leave it alone.
+      let axis: 'vertical' | 'horizontal' | null = null;
+      if (singleCol && (fillRange.row > selMaxRow || fillRange.row < selMinRow)) axis = 'vertical';
+      else if (singleRow && (fillRange.col > selMaxCol || fillRange.col < selMinCol)) axis = 'horizontal';
+
+      if (!axis) {
+        set((state) => { state.fillRange = null; });
+        return;
+      }
+
       recordHistory();
-      const startRow = selectedCell.row;
-      const startCol = selectedCell.col;
-      const endRow = fillRange.row;
-      const endCol = fillRange.col;
 
-      // Get the source cell value
-      const sourceCell = engine.getCellObject(startRow, startCol);
-      const sourceValue = sourceCell?.value ?? '';
+      const filledKeys: string[] = [];
 
-      // Determine fill direction
-      const isVertical = startCol === endCol;
-      const isHorizontal = startRow === endRow;
+      if (axis === 'vertical') {
+        const col = selMinCol;
+        const goingDown = fillRange.row > selMaxRow;
+        // Source values top-to-bottom, plus whether they form a formula-free
+        // numeric run we can extrapolate.
+        const sourceCells = [];
+        for (let r = selMinRow; r <= selMaxRow; r++) sourceCells.push(engine.getCellObject(r, col));
+        const values = sourceCells.map((c) => c?.value);
+        const numericSeries = values.length >= 2
+          && values.every((v) => typeof v === 'number')
+          && sourceCells.every((c) => !c?.formula);
+        const step = numericSeries
+          ? ((values[values.length - 1] as number) - (values[0] as number)) / (values.length - 1)
+          : 0;
+        // Anchor for the pattern-repeat fallback: the selection edge facing the drag.
+        const anchorRow = goingDown ? selMaxRow : selMinRow;
+        const anchorCell = engine.getCellObject(anchorRow, col);
 
-      if (isVertical) {
-        // Fill vertically
-        const direction = endRow > startRow ? 1 : -1;
-        const steps = Math.abs(endRow - startRow);
+        const targetRows: number[] = [];
+        if (goingDown) for (let r = selMaxRow + 1; r <= fillRange.row; r++) targetRows.push(r);
+        else for (let r = selMinRow - 1; r >= fillRange.row; r--) targetRows.push(r);
 
-        for (let i = 1; i <= steps; i++) {
-          const targetRow = startRow + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i * direction, sourceCell?.formula, true);
-          engine.setCell(targetRow, startCol, fillValue);
+        for (const r of targetRows) {
+          const value = numericSeries
+            ? (values[0] as number) + (r - selMinRow) * step
+            : calculateFillValue(anchorCell?.value ?? '', r - anchorRow, anchorCell?.formula, true);
+          engine.setCell(r, col, value);
+          filledKeys.push(`${col},${r}`);
         }
-      } else if (isHorizontal) {
-        // Fill horizontally
-        const direction = endCol > startCol ? 1 : -1;
-        const steps = Math.abs(endCol - startCol);
+      } else {
+        const row = selMinRow;
+        const goingRight = fillRange.col > selMaxCol;
+        const sourceCells = [];
+        for (let c = selMinCol; c <= selMaxCol; c++) sourceCells.push(engine.getCellObject(row, c));
+        const values = sourceCells.map((c) => c?.value);
+        const numericSeries = values.length >= 2
+          && values.every((v) => typeof v === 'number')
+          && sourceCells.every((c) => !c?.formula);
+        const step = numericSeries
+          ? ((values[values.length - 1] as number) - (values[0] as number)) / (values.length - 1)
+          : 0;
+        const anchorCol = goingRight ? selMaxCol : selMinCol;
+        const anchorCell = engine.getCellObject(row, anchorCol);
 
-        for (let i = 1; i <= steps; i++) {
-          const targetCol = startCol + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i * direction, sourceCell?.formula, false);
-          engine.setCell(startRow, targetCol, fillValue);
+        const targetCols: number[] = [];
+        if (goingRight) for (let c = selMaxCol + 1; c <= fillRange.col; c++) targetCols.push(c);
+        else for (let c = selMinCol - 1; c >= fillRange.col; c--) targetCols.push(c);
+
+        for (const c of targetCols) {
+          const value = numericSeries
+            ? (values[0] as number) + (c - selMinCol) * step
+            : calculateFillValue(anchorCell?.value ?? '', c - anchorCol, anchorCell?.formula, false);
+          engine.setCell(row, c, value);
+          filledKeys.push(`${c},${row}`);
         }
       }
 
-      // Mark all filled cells as dirty
       set((state) => {
         state.fillRange = null;
-
-        // Mark all cells in the fill range as dirty
-        if (isVertical) {
-          const direction = endRow > startRow ? 1 : -1;
-          const steps = Math.abs(endRow - startRow);
-          for (let i = 1; i <= steps; i++) {
-            const targetRow = startRow + i * direction;
-            const targetKey = `${startCol},${targetRow}`;
-            state.dirtyValues.add(targetKey);
-          }
-        } else if (isHorizontal) {
-          const direction = endCol > startCol ? 1 : -1;
-          const steps = Math.abs(endCol - startCol);
-          for (let i = 1; i <= steps; i++) {
-            const targetCol = startCol + i * direction;
-            const targetKey = `${targetCol},${startRow}`;
-            state.dirtyValues.add(targetKey);
-          }
-        }
+        filledKeys.forEach((key) => state.dirtyValues.add(key));
         state.docVersion += 1;
       });
     },
@@ -821,6 +879,8 @@ export const useAccelStore = create<AccelState>()(
         state.activeSheet = name;
         state.sheetNames = [...sheetNames, name];
         state.sheetKinds = { ...state.sheetKinds, [name]: 'grid' };
+        state.freezeRows = 0;
+        state.freezeCols = 0;
         state.selectedCell = null;
         state.selectionRange = null;
         state.fillRange = null;
@@ -863,6 +923,8 @@ export const useAccelStore = create<AccelState>()(
         state.activeSheet = name;
         state.sheetNames = [...sheetNames, name];
         state.sheetKinds = { ...state.sheetKinds, [name]: 'graph' };
+        state.freezeRows = 0;
+        state.freezeCols = 0;
         state.selectedCell = null;
         state.selectionRange = null;
         state.fillRange = null;
@@ -884,11 +946,14 @@ export const useAccelStore = create<AccelState>()(
       const remaining = sheetNames.filter((sheet) => sheet !== name);
       const nextActive = activeSheet === name ? remaining[0] : activeSheet;
       engine.setActiveWorksheet(nextActive);
+      const nextFreeze = engine.getFreeze(nextActive);
 
       set((state) => {
         state.engine = engine;
         state.activeSheet = nextActive;
         state.sheetNames = remaining;
+        state.freezeRows = nextFreeze.rows;
+        state.freezeCols = nextFreeze.cols;
         const nextKinds = { ...state.sheetKinds };
         delete nextKinds[name];
         state.sheetKinds = nextKinds;
@@ -906,8 +971,11 @@ export const useAccelStore = create<AccelState>()(
     setActiveSheet: (name) => {
       const { engine } = get();
       engine.setActiveWorksheet(name);
+      const fz = engine.getFreeze(name);
       set((state) => {
         state.activeSheet = name;
+        state.freezeRows = fz.rows;
+        state.freezeCols = fz.cols;
         state.graphRenderer = null;
         state.selectedCell = null;
         state.selectionRange = null;

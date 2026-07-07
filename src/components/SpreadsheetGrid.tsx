@@ -74,6 +74,8 @@ interface GridCellProps {
   isParameter?: boolean;
   isInFillRange: boolean;
   isInSelectionRange?: boolean;
+  isFillHandle: boolean;
+  stickyStyle?: React.CSSProperties;
   onClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
   onDoubleClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
   onMouseEnter: (e: React.MouseEvent<HTMLTableCellElement>) => void;
@@ -92,6 +94,8 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
   isParameter,
   isInFillRange,
   isInSelectionRange,
+  isFillHandle,
+  stickyStyle,
   onClick,
   onDoubleClick,
   onMouseEnter,
@@ -109,7 +113,8 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
   const tdStyle: React.CSSProperties = useMemo(() => ({
     width: colWidth,
     ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
-  }), [colWidth, cellFormat?.backgroundColor]);
+    ...stickyStyle,
+  }), [colWidth, cellFormat?.backgroundColor, stickyStyle]);
 
   const errorInfo = getErrorInfo(displayValue);
 
@@ -135,7 +140,7 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
           {errorInfo ? errorInfo.label : displayValue}
         </div>
       )}
-      {isSelected && !isEditing && (
+      {isFillHandle && !isEditing && (
         <div
           className="fill-handle"
           onMouseDown={onFillHandleMouseDown}
@@ -155,6 +160,11 @@ const GridCell: React.FC<GridCellProps> = React.memo(({
     prev.isParameter === next.isParameter &&
     prev.isInFillRange === next.isInFillRange &&
     prev.isInSelectionRange === next.isInSelectionRange &&
+    prev.isFillHandle === next.isFillHandle &&
+    prev.stickyStyle?.left === next.stickyStyle?.left &&
+    prev.stickyStyle?.top === next.stickyStyle?.top &&
+    prev.stickyStyle?.zIndex === next.stickyStyle?.zIndex &&
+    prev.stickyStyle?.position === next.stickyStyle?.position &&
     prev.cellFormat?.bold === next.cellFormat?.bold &&
     prev.cellFormat?.italic === next.cellFormat?.italic &&
     prev.cellFormat?.underline === next.cellFormat?.underline &&
@@ -191,12 +201,28 @@ export const SpreadsheetGrid: React.FC = () => {
   const executeFill = useAccelStore((state) => state.executeFill);
   const undo = useAccelStore((state) => state.undo);
   const redo = useAccelStore((state) => state.redo);
+  // Clipboard + structural edits power the right-click context menu.
+  const clipboard = useAccelStore((state) => state.clipboard);
+  const insertRow = useAccelStore((state) => state.insertRow);
+  const deleteRow = useAccelStore((state) => state.deleteRow);
+  const insertColumn = useAccelStore((state) => state.insertColumn);
+  const deleteColumn = useAccelStore((state) => state.deleteColumn);
+  const formatCell = useAccelStore((state) => state.formatCell);
   // engine + docVersion power the fresh-sheet empty-state hint; docVersion
   // bumps on every mutation so the reactive read stays current.
   const engine = useAccelStore((state) => state.engine);
   const docVersion = useAccelStore((state) => state.docVersion);
+  // Freeze panes: how many leading rows/columns stay pinned while scrolling.
+  const freezeRows = useAccelStore((state) => state.freezeRows);
+  const freezeCols = useAccelStore((state) => state.freezeCols);
+  const setFreeze = useAccelStore((state) => state.setFreeze);
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: number; col: number } | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [matchIdx, setMatchIdx] = useState(0);
+  const findInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingFill, setIsDraggingFill] = useState(false);
   const [formulaHint, setFormulaHint] = useState<{ func: string; params: string[]; currentParam: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -204,9 +230,17 @@ export const SpreadsheetGrid: React.FC = () => {
   const gridWrapperRef = useRef<HTMLDivElement>(null);
   const pendingFillTarget = useRef<{ row: number; col: number } | null>(null);
   const fillRangeRaf = useRef<number | null>(null);
+  // Set by startEditing so the layout effect focuses the input synchronously on
+  // the render that opens the edit (see startEditing for why this replaced a
+  // setTimeout-based focus).
+  const pendingEditFocusRef = useRef(false);
   const [virtualWindow, setVirtualWindow] = useState({ startRow: 1, startCol: 1 });
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [viewportWidth, setViewportWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
+  // Measured width of the row-number gutter — the sticky-left offset the first
+  // frozen data column must clear. Defaults to the CSS cell width.
+  const [rowHeaderWidth, setRowHeaderWidth] = useState(COL_WIDTH);
+  const rowHeaderThRef = useRef<HTMLTableCellElement>(null);
   // Per-column widths (all default to COL_WIDTH -> geometry is byte-identical to
   // the fixed-width grid until the user drags a column border).
   const [colWidths, setColWidths] = useState<number[]>(() => new Array(COLS).fill(COL_WIDTH));
@@ -291,6 +325,8 @@ export const SpreadsheetGrid: React.FC = () => {
       if (!gridWrapperRef.current) return;
       setViewportHeight(gridWrapperRef.current.clientHeight || DEFAULT_VIEWPORT_HEIGHT);
       setViewportWidth(gridWrapperRef.current.clientWidth || DEFAULT_VIEWPORT_WIDTH);
+      const rh = rowHeaderThRef.current?.offsetWidth;
+      if (rh) setRowHeaderWidth((prev) => (prev === rh ? prev : rh));
       const scrollTop = gridWrapperRef.current.scrollTop;
       const scrollLeft = gridWrapperRef.current.scrollLeft;
       const nextStartRow = Math.max(1, Math.floor(scrollTop / ROW_HEIGHT) + 1 - OVERSCAN);
@@ -324,15 +360,26 @@ export const SpreadsheetGrid: React.FC = () => {
     setEditValue(value);
     lastInsertedRef.current = null;
     lastPointedKeyRef.current = null;
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-        const pos = inputRef.current.value.length;
-        inputRef.current.setSelectionRange(pos, pos);
-        caretPositionRef.current = { start: pos, end: pos };
-      }
-    }, 0);
+    // Focus is applied synchronously by the layout effect below, not a
+    // setTimeout. A deferred focus let the keystrokes between entering edit
+    // mode and the timer firing land on the grid container instead of the
+    // input, so the first character(s) were silently dropped.
+    pendingEditFocusRef.current = true;
   }, [getCellObject]);
+
+  // Move focus into the formula input the moment an edit begins. useLayoutEffect
+  // runs after the DOM commit (so the input already holds the new editValue) but
+  // before the browser processes the next keystroke or paints — closing the race
+  // the old setTimeout(…, 0) left open.
+  useLayoutEffect(() => {
+    if (editingCell && pendingEditFocusRef.current && inputRef.current) {
+      pendingEditFocusRef.current = false;
+      inputRef.current.focus();
+      const pos = inputRef.current.value.length;
+      inputRef.current.setSelectionRange(pos, pos);
+      caretPositionRef.current = { start: pos, end: pos };
+    }
+  }, [editingCell]);
 
   const handleCellDoubleClick = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
     const row = parseInt(e.currentTarget.dataset.row || '0', 10);
@@ -469,6 +516,55 @@ export const SpreadsheetGrid: React.FC = () => {
       clearDirty();
     }
   }, [dirtyValues, dirtyFormulas, clearDirty]);
+
+  // ===== Right-click context menu =====
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    const targetEl = (e.target as HTMLElement).closest('td[data-row]') as HTMLElement | null;
+    if (!targetEl) return; // off a data cell → leave the native menu alone
+    const row = parseInt(targetEl.dataset.row || '0', 10);
+    const col = parseInt(targetEl.dataset.col || '0', 10);
+    if (!row || !col) return;
+    e.preventDefault();
+
+    // Right-clicking outside the active selection moves the selection to the
+    // clicked cell first, so the menu always acts on what the user pointed at.
+    const inSelection = selectionRange
+      ? (row >= Math.min(selectionRange.start.row, selectionRange.end.row) &&
+         row <= Math.max(selectionRange.start.row, selectionRange.end.row) &&
+         col >= Math.min(selectionRange.start.col, selectionRange.end.col) &&
+         col <= Math.max(selectionRange.start.col, selectionRange.end.col))
+      : (selectedCell?.row === row && selectedCell?.col === col);
+    if (!inSelection) selectCell(row, col);
+
+    setContextMenu({ x: e.clientX, y: e.clientY, row, col });
+  }, [selectedCell, selectionRange, selectCell]);
+
+  // Close the context menu on any outside interaction: a click elsewhere, the
+  // Escape key, or scrolling the grid (its coordinates would go stale).
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onPointerDown = (ev: MouseEvent) => {
+      if ((ev.target as HTMLElement).closest('.grid-context-menu')) return;
+      setContextMenu(null);
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setContextMenu(null);
+    };
+    const wrap = gridWrapperRef.current;
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKey, true);
+    wrap?.addEventListener('scroll', () => setContextMenu(null), { passive: true, once: true });
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [contextMenu]);
+
+  // Run a context-menu action then dismiss the menu.
+  const runMenuAction = useCallback((fn: () => void) => {
+    fn();
+    setContextMenu(null);
+  }, []);
 
   // Grid keyboard navigation
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -695,9 +791,21 @@ export const SpreadsheetGrid: React.FC = () => {
     };
   }, [resizingCol]);
 
-  const formatCellValue = useCallback((value: CellValue): string => {
+  const formatCellValue = useCallback((value: CellValue, format?: CellFormat): string => {
     if (value === null || value === undefined) return '';
     if (typeof value === 'number') {
+      // Currency / percent number formats (set via the right-click Format menu).
+      // toLocaleString is comparatively slow, but only formatted cells reach it.
+      const nf = format?.numberFormat;
+      if (nf === 'currency') {
+        const decimals = format?.decimals ?? 2;
+        const sign = value < 0 ? '-' : '';
+        return `${sign}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+      }
+      if (nf === 'percent') {
+        const decimals = format?.decimals ?? 2;
+        return `${(value * 100).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}%`;
+      }
       // Fast number formatting - toLocaleString is VERY slow
       // Only use it for numbers that need special formatting
       if (Number.isInteger(value) && Math.abs(value) < 1000000) {
@@ -709,6 +817,100 @@ export const SpreadsheetGrid: React.FC = () => {
     }
     return String(value);
   }, []);
+
+  // ===== Ctrl+F Find =====
+  // Every populated cell whose displayed value or raw formula contains the
+  // query (case-insensitive), ordered top-to-bottom then left-to-right.
+  // Replace is a planned follow-up; the match list is the shared groundwork.
+  const findMatches = useMemo(() => {
+    if (!findOpen) return [] as { row: number; col: number }[];
+    const q = findQuery.trim().toLowerCase();
+    if (!q) return [];
+    const results: { row: number; col: number }[] = [];
+    const cells = engine.getWorksheet().cells;
+    cells.forEach((cell) => {
+      const display = formatCellValue(cell.value, cell.format).toLowerCase();
+      const formula = (cell.formula || '').toLowerCase();
+      if (display.includes(q) || formula.includes(q)) {
+        results.push({ row: cell.address.row, col: cell.address.col });
+      }
+    });
+    results.sort((a, b) => (a.row - b.row) || (a.col - b.col));
+    return results;
+    // docVersion bumps on every edit, keeping matches current as cells change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findOpen, findQuery, engine, docVersion, formatCellValue]);
+
+  // Select a match and scroll it into view (only when it isn't already visible,
+  // so navigating a column of matches doesn't jump the horizontal scroll).
+  const navigateToMatch = useCallback((idx: number, list: { row: number; col: number }[]) => {
+    const m = list[idx];
+    if (!m) return;
+    selectCell(m.row, m.col);
+    const wrap = gridWrapperRef.current;
+    if (!wrap) return;
+    const cellTop = (m.row - 1) * ROW_HEIGHT;
+    const cellLeft = colLeftRef.current[m.col] ?? 0;
+    const cellRight = colLeftRef.current[m.col + 1] ?? cellLeft + COL_WIDTH;
+    if (cellTop < wrap.scrollTop || cellTop + ROW_HEIGHT > wrap.scrollTop + wrap.clientHeight) {
+      wrap.scrollTop = Math.max(0, cellTop - wrap.clientHeight / 2);
+    }
+    if (cellLeft < wrap.scrollLeft || cellRight > wrap.scrollLeft + wrap.clientWidth) {
+      wrap.scrollLeft = Math.max(0, cellLeft - wrap.clientWidth / 2);
+    }
+  }, [selectCell]);
+
+  const stepMatch = useCallback((dir: 1 | -1) => {
+    if (findMatches.length === 0) return;
+    setMatchIdx((prev) => {
+      const next = (prev + dir + findMatches.length) % findMatches.length;
+      navigateToMatch(next, findMatches);
+      return next;
+    });
+  }, [findMatches, navigateToMatch]);
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    gridRef.current?.focus();
+  }, []);
+
+  const handleFindKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      stepMatch(e.shiftKey ? -1 : 1);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeFind();
+    }
+  }, [stepMatch, closeFind]);
+
+  // Whenever the result set changes (new query / edited cells), jump to the
+  // first match so the count and selection stay in sync with what's typed.
+  useEffect(() => {
+    if (!findOpen) return;
+    setMatchIdx(0);
+    if (findMatches.length > 0) navigateToMatch(0, findMatches);
+  }, [findMatches, findOpen, navigateToMatch]);
+
+  // Ctrl/Cmd+F opens the Find bar from anywhere in the app and focuses it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setFindOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Focus (and pre-select) the Find input each time the bar opens.
+  useEffect(() => {
+    if (findOpen && findInputRef.current) {
+      findInputRef.current.focus();
+      findInputRef.current.select();
+    }
+  }, [findOpen]);
 
   // Parse formula to detect function and current parameter for hints
   const updateFormulaHint = useCallback((formula: string, caretPos: number) => {
@@ -767,7 +969,6 @@ export const SpreadsheetGrid: React.FC = () => {
     : ROWS;
   const startRow = Math.max(1, Math.min(ROWS, virtualWindow.startRow));
   const endRow = Math.min(ROWS, startRow + estimatedVisibleRowCount + OVERSCAN * 2 - 1);
-  const topSpacerHeight = (startRow - 1) * ROW_HEIGHT;
   const bottomSpacerHeight = Math.max(totalGridHeight - endRow * ROW_HEIGHT, 0);
 
   const startCol = Math.max(1, Math.min(COLS, virtualWindow.startCol));
@@ -779,7 +980,6 @@ export const SpreadsheetGrid: React.FC = () => {
   let coverCol = firstVisibleCol;
   while (coverCol < COLS && colLeft[coverCol + 1] < rightBound) coverCol++;
   const endCol = Math.min(COLS, coverCol + OVERSCAN);
-  const leftSpacerWidth = colLeft[startCol];
   const rightSpacerWidth = Math.max(totalGridWidth - colLeft[endCol + 1], 0);
 
   const visibleRows = useMemo(
@@ -790,6 +990,23 @@ export const SpreadsheetGrid: React.FC = () => {
     () => Array.from({ length: endCol - startCol + 1 }, (_, i) => startCol + i),
     [startCol, endCol]
   );
+
+  // ===== Freeze panes geometry =====
+  // The first `fr` rows and `fc` columns are pinned; the rest scroll. Frozen
+  // cells are always rendered (as sticky bands) and excluded from the scrolling
+  // window, and the spacers shrink to cover only the still-scrolling range.
+  const fr = Math.min(freezeRows, ROWS);
+  const fc = Math.min(freezeCols, COLS);
+  const frozenCols = useMemo(() => (fc > 0 ? Array.from({ length: fc }, (_, i) => i + 1) : []), [fc]);
+  const frozenRows = useMemo(() => (fr > 0 ? Array.from({ length: fr }, (_, i) => i + 1) : []), [fr]);
+  const scrollColumns = useMemo(() => visibleColumns.filter((c) => c > fc), [visibleColumns, fc]);
+  const scrollRows = useMemo(() => visibleRows.filter((r) => r > fr), [visibleRows, fr]);
+  const firstScrollCol = scrollColumns.length ? scrollColumns[0] : fc + 1;
+  const firstScrollRow = scrollRows.length ? scrollRows[0] : fr + 1;
+  const leftSpacerWidth = Math.max(0, colLeft[firstScrollCol] - colLeft[fc + 1]);
+  const topSpacerHeight = Math.max(0, (firstScrollRow - 1 - fr) * ROW_HEIGHT);
+  // Sticky-left offset for a frozen data column (clears the row-number gutter).
+  const frozenColLeft = useCallback((col: number) => rowHeaderWidth + colLeft[col], [rowHeaderWidth, colLeft]);
 
   // Fresh-sheet hint: a workbook with no populated cells. Empty cells are pruned
   // from the engine's map, so size === 0 is an exact "nothing typed yet" signal.
@@ -909,7 +1126,7 @@ export const SpreadsheetGrid: React.FC = () => {
     const value = getCell(row, col);
 
     return {
-      displayValue: formatCellValue(value),
+      displayValue: formatCellValue(value, cellObj?.format),
       isParameter: cellObj?.isParameter || false,
       format: cellObj?.format,
     };
@@ -936,8 +1153,63 @@ export const SpreadsheetGrid: React.FC = () => {
       (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
     ) : false;
 
-    return { isSelected, isEditing, isInSelectionRange, isInFillRange };
+    // The fill handle lives at the bottom-right corner of the selection (its end
+    // when a range is active, otherwise the single selected cell) so dragging it
+    // extends the whole selected pattern, Excel-style.
+    const anchorRow = selectionRange ? Math.max(selectionRange.start.row, selectionRange.end.row) : selectedCell?.row;
+    const anchorCol = selectionRange ? Math.max(selectionRange.start.col, selectionRange.end.col) : selectedCell?.col;
+    const isFillHandle = selectedCell != null && row === anchorRow && col === anchorCol;
+
+    return { isSelected, isEditing, isInSelectionRange, isInFillRange, isFillHandle };
   }, [selectedCell, editingCell, selectionRange, fillRange]);
+
+  // Render one data cell (optionally pinned via stickyStyle for freeze panes).
+  const renderDataCell = (row: number, col: number, stickyStyle?: React.CSSProperties) => {
+    const cellData = getCellDisplayData(row, col);
+    const cellState = getCellStateData(row, col);
+    return (
+      <GridCell
+        key={col}
+        row={row}
+        col={col}
+        displayValue={cellData.displayValue}
+        colWidth={colWidths[col - 1]}
+        cellFormat={cellData.format}
+        isSelected={cellState.isSelected}
+        isEditing={cellState.isEditing}
+        isParameter={cellData.isParameter}
+        isInFillRange={cellState.isInFillRange}
+        isInSelectionRange={cellState.isInSelectionRange}
+        isFillHandle={cellState.isFillHandle}
+        stickyStyle={stickyStyle}
+        onClick={handleCellClick}
+        onDoubleClick={handleCellDoubleClick}
+        onMouseDown={handleCellMouseDown}
+        onMouseEnter={handleCellMouseEnter}
+        onFillHandleMouseDown={handleFillHandleMouseDown}
+      />
+    );
+  };
+
+  // Render one column header (label + resize grip), optionally pinned.
+  const renderColHeaderTh = (col: number, stickyStyle?: React.CSSProperties) => (
+    <th
+      key={col}
+      className={`col-header${resizingCol === col ? ' resizing' : ''}`}
+      style={{ width: colWidths[col - 1], ...stickyStyle }}
+    >
+      <span className="col-label">{columnLabels[col - 1] || colToLetter(col)}</span>
+      <span
+        className="col-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={`Resize column ${columnLabels[col - 1] || colToLetter(col)}`}
+        onMouseDown={(e) => handleResizeMouseDown(e, col)}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+      />
+    </th>
+  );
 
   return (
     <div
@@ -1000,6 +1272,29 @@ export const SpreadsheetGrid: React.FC = () => {
         )}
       </div>
 
+      {findOpen && (
+        <div className="find-bar" role="search">
+          <input
+            ref={findInputRef}
+            className="find-input"
+            type="text"
+            value={findQuery}
+            placeholder="Find in sheet"
+            aria-label="Find in sheet"
+            onChange={(e) => setFindQuery(e.target.value)}
+            onKeyDown={handleFindKeyDown}
+          />
+          <span className="find-count">
+            {findQuery.trim()
+              ? (findMatches.length ? `${matchIdx + 1} of ${findMatches.length}` : 'No results')
+              : ''}
+          </span>
+          <button className="find-nav" onClick={() => stepMatch(-1)} disabled={!findMatches.length} aria-label="Previous match" title="Previous (Shift+Enter)">▲</button>
+          <button className="find-nav" onClick={() => stepMatch(1)} disabled={!findMatches.length} aria-label="Next match" title="Next (Enter)">▼</button>
+          <button className="find-close" onClick={closeFind} aria-label="Close find" title="Close (Esc)">✕</button>
+        </div>
+      )}
+
       <div
         className="grid-wrapper"
         ref={gridWrapperRef}
@@ -1014,35 +1309,38 @@ export const SpreadsheetGrid: React.FC = () => {
             </div>
           </div>
         )}
-        <table className="spreadsheet-grid">
+        <table className="spreadsheet-grid" onContextMenu={handleContextMenu}>
           <thead>
             <tr>
-              <th className="row-header"></th>
+              <th ref={rowHeaderThRef} className="row-header"></th>
+              {frozenCols.map((col) => renderColHeaderTh(col, { position: 'sticky', left: frozenColLeft(col), zIndex: 4 }))}
               {leftSpacerWidth > 0 && (
                 <th style={{ width: leftSpacerWidth }} />
               )}
-              {visibleColumns.map((col) => (
-                <th
-                  key={col}
-                  className={`col-header${resizingCol === col ? ' resizing' : ''}`}
-                  style={{ width: colWidths[col - 1] }}
-                >
-                  <span className="col-label">{columnLabels[col - 1] || colToLetter(col)}</span>
-                  <span
-                    className="col-resize-handle"
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label={`Resize column ${columnLabels[col - 1] || colToLetter(col)}`}
-                    onMouseDown={(e) => handleResizeMouseDown(e, col)}
-                    onClick={(e) => e.stopPropagation()}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  />
-                </th>
-              ))}
+              {scrollColumns.map((col) => renderColHeaderTh(col))}
               {rightSpacerWidth > 0 && (
                 <th style={{ width: rightSpacerWidth }} />
               )}
             </tr>
+
+            {/* Frozen rows live in <thead> so they stay pinned during vertical
+                scroll (sticky <tbody> rows are constrained to their own row). */}
+            {frozenRows.map((row, i) => {
+              const top = ROW_HEIGHT * (i + 1);
+              return (
+                <tr key={`frozen-${row}`}>
+                  <td className="row-header" style={{ position: 'sticky', left: 0, top, zIndex: 7 }}>{row}</td>
+                  {frozenCols.map((col) => renderDataCell(row, col, { position: 'sticky', left: frozenColLeft(col), top, zIndex: 6 }))}
+                  {leftSpacerWidth > 0 && (
+                    <td style={{ width: leftSpacerWidth, position: 'sticky', top, zIndex: 4 }} />
+                  )}
+                  {scrollColumns.map((col) => renderDataCell(row, col, { position: 'sticky', top, zIndex: 4 }))}
+                  {rightSpacerWidth > 0 && (
+                    <td style={{ width: rightSpacerWidth, position: 'sticky', top, zIndex: 4 }} />
+                  )}
+                </tr>
+              );
+            })}
           </thead>
           <tbody>
             {topSpacerHeight > 0 && (
@@ -1051,38 +1349,14 @@ export const SpreadsheetGrid: React.FC = () => {
               </tr>
             )}
 
-            {visibleRows.map((row) => (
+            {scrollRows.map((row) => (
               <tr key={row}>
                 <td className="row-header">{row}</td>
+                {frozenCols.map((col) => renderDataCell(row, col, { position: 'sticky', left: frozenColLeft(col), zIndex: 1 }))}
                 {leftSpacerWidth > 0 && (
                   <td style={{ width: leftSpacerWidth }} />
                 )}
-                {visibleColumns.map((col) => {
-                  // Compute cell data on-demand to avoid storing massive Maps in memory
-                  const cellData = getCellDisplayData(row, col);
-                  const cellState = getCellStateData(row, col);
-
-                  return (
-                    <GridCell
-                      key={col}
-                      row={row}
-                      col={col}
-                      displayValue={cellData.displayValue}
-                      colWidth={colWidths[col - 1]}
-                      cellFormat={cellData.format}
-                      isSelected={cellState.isSelected}
-                      isEditing={cellState.isEditing}
-                      isParameter={cellData.isParameter}
-                      isInFillRange={cellState.isInFillRange}
-                      isInSelectionRange={cellState.isInSelectionRange}
-                      onClick={handleCellClick}
-                      onDoubleClick={handleCellDoubleClick}
-                      onMouseDown={handleCellMouseDown}
-                      onMouseEnter={handleCellMouseEnter}
-                      onFillHandleMouseDown={handleFillHandleMouseDown}
-                    />
-                  );
-                })}
+                {scrollColumns.map((col) => renderDataCell(row, col))}
                 {rightSpacerWidth > 0 && (
                   <td style={{ width: rightSpacerWidth }} />
                 )}
@@ -1097,6 +1371,65 @@ export const SpreadsheetGrid: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {contextMenu && (() => {
+        const { x, y, row, col } = contextMenu;
+        // Clamp so the menu stays on screen near the pointer.
+        const left = Math.min(x, window.innerWidth - 220);
+        const top = Math.min(y, window.innerHeight - 360);
+        return (
+          <div className="grid-context-menu" style={{ left, top }} role="menu">
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => cutCell(row, col))}>
+              <span>Cut</span><span className="cm-key">Ctrl+X</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => copyCell(row, col))}>
+              <span>Copy</span><span className="cm-key">Ctrl+C</span>
+            </button>
+            <button role="menuitem" className="cm-item" disabled={!clipboard} onClick={() => runMenuAction(() => pasteCell(row, col))}>
+              <span>Paste</span><span className="cm-key">Ctrl+V</span>
+            </button>
+            <div className="cm-sep" />
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => insertRow(row))}>
+              <span>Insert row above</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => insertColumn(col))}>
+              <span>Insert column left</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => deleteRow(row))}>
+              <span>Delete row</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => deleteColumn(col))}>
+              <span>Delete column</span>
+            </button>
+            <div className="cm-sep" />
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => formatCell(row, col, { numberFormat: 'currency' }))}>
+              <span>Format: Currency</span><span className="cm-key">$</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => formatCell(row, col, { numberFormat: 'percent' }))}>
+              <span>Format: Percent</span><span className="cm-key">%</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => formatCell(row, col, { numberFormat: 'number' }))}>
+              <span>Format: Number</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => formatCell(row, col, { numberFormat: 'number', bold: false, italic: false, underline: false, fontColor: undefined, backgroundColor: undefined }))}>
+              <span>Clear formatting</span>
+            </button>
+            <div className="cm-sep" />
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => setFreeze(1, fc))}>
+              <span>Freeze top row</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => setFreeze(fr, 1))}>
+              <span>Freeze first column</span>
+            </button>
+            <button role="menuitem" className="cm-item" onClick={() => runMenuAction(() => setFreeze(row - 1, col - 1))}>
+              <span>Freeze up to this cell</span>
+            </button>
+            <button role="menuitem" className="cm-item" disabled={!fr && !fc} onClick={() => runMenuAction(() => setFreeze(0, 0))}>
+              <span>Unfreeze panes</span>
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 };

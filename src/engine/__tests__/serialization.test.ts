@@ -37,6 +37,28 @@ describe('workbook serialization', () => {
     expect(restored.getCell(1, 1, 'Data')).toBe('hello');
   });
 
+  it('round-trips per-sheet freeze panes', () => {
+    const engine = new AccelEngine();
+    engine.addWorksheet('Data');
+    engine.setFreeze(1, 2, 'Sheet1');
+    engine.setFreeze(3, 0, 'Data');
+
+    const json = JSON.parse(JSON.stringify(serializeEngine(engine)));
+    const restored = deserializeEngine(json);
+
+    expect(restored.getFreeze('Sheet1')).toEqual({ rows: 1, cols: 2 });
+    expect(restored.getFreeze('Data')).toEqual({ rows: 3, cols: 0 });
+  });
+
+  it('omits freeze for sheets with nothing frozen', () => {
+    const engine = new AccelEngine();
+    const serialized = serializeEngine(engine);
+    expect(serialized.sheets[0].freeze).toBeUndefined();
+    // A default (unfrozen) restore still reports zeros.
+    const restored = deserializeEngine(JSON.parse(JSON.stringify(serialized)));
+    expect(restored.getFreeze('Sheet1')).toEqual({ rows: 0, cols: 0 });
+  });
+
   it('preserves an empty formatted cell with no value', () => {
     const engine = new AccelEngine();
     engine.formatCell(5, 5, { backgroundColor: '#eeeeee' });

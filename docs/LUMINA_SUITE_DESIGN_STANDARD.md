@@ -1,7 +1,7 @@
-# Accel Suite — Design Standard
+# Lumina Suite — Design Standard
 
-_The shared visual + interaction language for every product in the Accel Suite:
-**Radix** (compute), **Argus** (quant research), **Lumina** (docs & mind-mapping)._
+_The shared visual + interaction language for every product in the Lumina Suite:
+**Tessera** (compute), **Argus** (quant research), **Vellum** (docs & mind-mapping)._
 
 This document is the single source of truth for how our services look and feel.
 Each product ships its own landing page and app UI, but all of them draw from the
@@ -10,8 +10,8 @@ distinct products that unmistakably read as **one suite** — "partners in crime
 that bridge into each other.
 
 Reference implementation of these tokens lives in
-[`src/styles/accel-tokens.css`](../src/styles/accel-tokens.css). Copy that file
-into each repo (Radix / Argus / Lumina) so the suite stays in lockstep. When a
+[`src/styles/lumina-tokens.css`](../src/styles/lumina-tokens.css). Copy that file
+into each repo (Tessera / Argus / Vellum) so the suite stays in lockstep. When a
 token changes, it changes here first, then propagates to every repo's copy.
 
 ---
@@ -62,9 +62,9 @@ is the ONLY color that changes between products — everything else is shared.
 
 | Product | `--product-accent` | Soft (`-soft`) | Character |
 | --- | --- | --- | --- |
-| **Radix** | `#2ecc71` (emerald) | `#123524` | Spreadsheet-green heritage; compute, precision |
+| **Tessera** | `#2ecc71` (emerald) | `#123524` | Spreadsheet-green heritage; compute, precision |
 | **Argus** | `#f4b740` (amber) | `#3a2c0e` | The watchful eye; signal, vigilance |
-| **Lumina** | `#8b7cf6` (violet) | `#241f3d` | Light, ideas, connection |
+| **Vellum** | `#8b7cf6` (violet) | `#241f3d` | Light, ideas, connection |
 
 `--product-accent-contrast` is the text color that sits on top of a filled
 accent button — always `#0f1014` (the canvas) for our light accents.
@@ -140,7 +140,7 @@ Weights: 400 body, 500 UI labels, 600 headings, 700 display. Never bolder than
 Accent chip = `--product-accent-soft` bg + `--product-accent` text.
 
 ### Navigation / Suite switcher
-Every product surfaces a **suite switcher** (Radix · Argus · Lumina) so the
+Every product surfaces a **suite switcher** (Tessera · Argus · Vellum) so the
 products visibly bridge into each other. Active product uses its accent; the
 others are `--suite-text-dim` until hover.
 
@@ -154,12 +154,12 @@ coherent. Only copy and accent change.
 1. **Top bar** — product wordmark (left) + suite switcher + primary CTA (right).
 2. **Hero** — one-line promise (`--fs-display`), one-sentence subhead, primary +
    secondary CTA, and a product visual (screenshot/animation placeholder).
-3. **"Part of the Accel Suite" strip** — three linked cards (Radix / Argus /
-   Lumina) showing how this product bridges into the others.
+3. **"Part of the Lumina Suite" strip** — three linked cards (Tessera / Argus /
+   Vellum) showing how this product bridges into the others.
 4. **Feature triad** — three columns of the product's headline capabilities.
 5. **Deep-dive rows** — alternating text/visual rows for 2–3 flagship features.
 6. **Integration callout** — the cross-product story (e.g. "Argus runs on the
-   Radix compute engine").
+   Tessera compute engine").
 7. **Footer** — links, suite switcher again, subtle wordmark.
 
 ---
@@ -176,9 +176,9 @@ coherent. Only copy and accent change.
 
 ## 8. Governance
 
-- This file is versioned in **Radix** (`aos-accel`) as the canonical copy.
-- `accel-tokens.css` is mirrored into Argus and Lumina. A change lands here,
+- This file is versioned in **Tessera** (`aos-accel`) as the canonical copy.
+- `lumina-tokens.css` is mirrored into Argus and Vellum. A change lands here,
   then a follow-up PR syncs each repo's copy (tracked in Jira under each
-  project's landing/standard epic: ACE-22 shared, ACE-23 Radix, ARQ-8 Argus,
-  and the Lumina equivalent once LUM exists).
+  project's landing/standard epic: ACE-22 shared, ACE-23 Tessera, ARQ-8 Argus,
+  and the Vellum equivalent once LUM exists).
 - Any new token is added here **before** it is used in a product.

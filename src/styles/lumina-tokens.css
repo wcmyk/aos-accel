@@ -1,15 +1,15 @@
 /**
- * Accel Suite — shared design tokens.
+ * Lumina Suite — shared design tokens.
  *
- * Canonical copy lives in the Radix repo (aos-accel). Mirror this file into
- * Argus and Lumina verbatim; only the `--product-accent*` block below is meant
- * to differ per product. See docs/ACCEL_SUITE_DESIGN_STANDARD.md.
+ * Canonical copy lives in the Tessera repo (aos-accel). Mirror this file into
+ * Argus and Vellum verbatim; only the `--product-accent*` block below is meant
+ * to differ per product. See docs/LUMINA_SUITE_DESIGN_STANDARD.md.
  *
- * Scope with `.accel-suite` so these tokens can coexist with an app's existing
+ * Scope with `.lumina-suite` so these tokens can coexist with an app's existing
  * theme variables without a global takeover.
  */
 
-.accel-suite {
+.lumina-suite {
   /* Suite neutrals (shared across all products) */
   --suite-bg: #0f1014;
   --suite-surface: #16181f;
@@ -21,7 +21,7 @@
   --suite-text-faint: #6b7180;
   --suite-accent: #8b7cf6;
 
-  /* Per-product accent — Radix override (emerald). Argus/Lumina swap these. */
+  /* Per-product accent — Tessera override (emerald). Argus/Vellum swap these. */
   --product-accent: #2ecc71;
   --product-accent-soft: #123524;
   --product-accent-contrast: #0f1014;
@@ -63,22 +63,22 @@
   --elev-accent-glow: 0 0 0 1px var(--product-accent), 0 8px 30px -12px var(--product-accent);
 }
 
-/* Product accent variants — apply on the same element as .accel-suite. */
-.accel-suite.product-radix {
+/* Product accent variants — apply on the same element as .lumina-suite. */
+.lumina-suite.product-tessera {
   --product-accent: #2ecc71;
   --product-accent-soft: #123524;
 }
-.accel-suite.product-argus {
+.lumina-suite.product-argus {
   --product-accent: #f4b740;
   --product-accent-soft: #3a2c0e;
 }
-.accel-suite.product-lumina {
+.lumina-suite.product-vellum {
   --product-accent: #8b7cf6;
   --product-accent-soft: #241f3d;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .accel-suite * {
+  .lumina-suite * {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }

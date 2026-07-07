@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // Surface for anyone watching the console; no external logger in scope.
-    console.error('Radix crashed:', error, info.componentStack);
+    console.error('Tessera crashed:', error, info.componentStack);
   }
 
   private handleReload = (): void => {
@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div className="crash-card__glyph" aria-hidden="true">⚠</div>
           <h1 className="crash-card__title">Something went wrong</h1>
           <p className="crash-card__body">
-            Radix hit an unexpected error and had to stop. Your saved work is
+            Tessera hit an unexpected error and had to stop. Your saved work is
             usually safe — reloading fixes most hiccups.
           </p>
           {error.message && (

@@ -125,7 +125,7 @@ export function EditorShell() {
             <span className="light yellow" />
             <span className="light green" />
           </div>
-          <img className="brand-logo" src={radixLogo} alt="Radix" />
+          <img className="brand-logo" src={radixLogo} alt="Tessera" />
           <div className="title">
             {canEditTitle ? (
               <input
@@ -134,7 +134,7 @@ export function EditorShell() {
                 onChange={(e) => setWorkbookTitle(e.target.value)}
               />
             ) : (
-              <strong>{workbookTitle || 'Radix.xlsx'}</strong>
+              <strong>{workbookTitle || 'Tessera.xlsx'}</strong>
             )}
             <span>Professional Spreadsheet Application</span>
           </div>

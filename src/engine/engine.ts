@@ -43,6 +43,21 @@ export class AccelEngine {
     return this.workbook.sheets.get(name)?.kind ?? 'grid';
   }
 
+  // Freeze panes are per-sheet: the first `rows` rows and `cols` columns stay
+  // pinned while the rest scrolls. Stored on the worksheet so it serializes and
+  // participates in undo/redo like any other sheet state.
+  getFreeze(name?: string): { rows: number; cols: number } {
+    return this.getWorksheet(name).freeze ?? { rows: 0, cols: 0 };
+  }
+
+  setFreeze(rows: number, cols: number, name?: string): void {
+    const worksheet = this.getWorksheet(name);
+    worksheet.freeze = {
+      rows: Math.max(0, Math.floor(rows)),
+      cols: Math.max(0, Math.floor(cols)),
+    };
+  }
+
   deleteWorksheet(name: string): void {
     if (!this.workbook.sheets.has(name)) {
       throw new Error(`Worksheet not found: ${name}`);

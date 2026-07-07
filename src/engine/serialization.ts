@@ -29,6 +29,7 @@ export interface SerializedGraph {
 export interface SerializedWorksheet {
   name: string;
   kind?: 'grid' | 'graph';
+  freeze?: { rows: number; cols: number };
   cells: SerializedCell[];
   graphs: SerializedGraph[];
 }
@@ -78,7 +79,11 @@ export function serializeEngine(engine: AccelEngine): SerializedWorkbook {
       .filter((graph) => Boolean(graph.formula))
       .map((graph) => ({ id: graph.id, formula: graph.formula, type: graph.type as SerializedGraph['type'] }));
 
-    return { name, kind: worksheet.kind, cells, graphs };
+    const freeze = worksheet.freeze && (worksheet.freeze.rows > 0 || worksheet.freeze.cols > 0)
+      ? worksheet.freeze
+      : undefined;
+
+    return { name, kind: worksheet.kind, freeze, cells, graphs };
   });
 
   return {
@@ -137,6 +142,10 @@ export function deserializeEngine(data: SerializedWorkbook): AccelEngine {
 
     for (const graph of sheet.graphs) {
       engine.addGraph(graph.id, graph.formula, graph.type, sheet.name);
+    }
+
+    if (sheet.freeze && (sheet.freeze.rows > 0 || sheet.freeze.cols > 0)) {
+      engine.setFreeze(sheet.freeze.rows, sheet.freeze.cols, sheet.name);
     }
   }
 

@@ -1,6 +1,6 @@
-# Radix
+# Tessera
 
-Radix is a unified computational workspace that puts a **spreadsheet**, a
+Tessera is a unified computational workspace that puts a **spreadsheet**, a
 **live function graph**, **cell-bound slider parameters**, and a **live
 market-data panel** on top of a single calculation engine. Type a formula,
 mark a cell as a slider, and watch the grid, the graph, and the stats update
@@ -11,7 +11,7 @@ The core idea: **anything you can compute in a cell, you can graph; every
 graph is backed by the same engine that evaluates your cells.** Formulas are
 parsed once into an AST that both the grid and the graph renderer consume.
 
-> Radix is an early, focused tool (v0.1). It does a specific loop well. It is
+> Tessera is an early, focused tool (v0.1). It does a specific loop well. It is
 > **not** a drop-in Excel or Desmos replacement — see
 > [Honest limits](#honest-limits) below.
 
@@ -90,7 +90,7 @@ npm test         # run the Vitest suite
 npm run build    # type-check + production build
 ```
 
-Out of the box Radix runs in **local-only mode**: no account required. Your
+Out of the box Tessera runs in **local-only mode**: no account required. Your
 workbook is autosaved to `localStorage` (key `radix:workbook:v1`) so it
 survives reloads on the same browser. A first-run welcome overlay walks you
 through the core loop; a crash guard offers Reload / Reset if anything throws.
@@ -196,7 +196,7 @@ Formula: =A1 * x + B1
 
 ## Honest limits
 
-Radix does its core loop well, but it is deliberately scoped:
+Tessera does its core loop well, but it is deliberately scoped:
 
 - **Not full Excel.** ~150 functions, not the ~400+ of Excel 365. No dynamic
   arrays / spill, no named ranges, no conditional formatting, no pivot tables,

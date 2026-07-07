@@ -1,7 +1,7 @@
 {
-  "name": "radix",
+  "name": "tessera",
   "version": "0.1.0",
-  "description": "Radix: unified spreadsheet + graphing environment (Excel + Desmos replacement)",
+  "description": "Tessera: unified spreadsheet + graphing environment (Excel + Desmos replacement)",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -17,7 +17,7 @@ const STEPS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'ƒ',
     title: 'Type a formula',
-    body: 'Click any cell and enter =SIN(A1) or =2*B1+3. Radix recalculates instantly, just like a spreadsheet.',
+    body: 'Click any cell and enter =SIN(A1) or =2*B1+3. Tessera recalculates instantly, just like a spreadsheet.',
   },
   {
     icon: '◉',
@@ -63,7 +63,7 @@ export function WelcomeOverlay() {
         <div className="welcome-header">
           <span className="welcome-badge" aria-hidden="true">R</span>
           <div>
-            <h2 id="welcome-title" className="welcome-title">Welcome to Radix</h2>
+            <h2 id="welcome-title" className="welcome-title">Welcome to Tessera</h2>
             <p className="welcome-subtitle">
               A spreadsheet, live graphing, and market data — wired together.
             </p>

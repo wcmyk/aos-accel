@@ -38,7 +38,7 @@ export function AuthScreen() {
   return (
     <div className="auth-screen">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1>Radix</h1>
+        <h1>Tessera</h1>
         <p className="auth-subtitle">
           {mode === 'sign-in' ? 'Sign in to your workbooks' : 'Create an account'}
         </p>

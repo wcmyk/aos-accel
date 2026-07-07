@@ -10,6 +10,7 @@ import { useAuthStore } from './store/auth-store';
 import { AuthScreen } from './components/AuthScreen';
 import { WorkbookDashboard } from './components/WorkbookDashboard';
 import { EditorPage } from './pages/EditorPage';
+import { LandingPage } from './pages/LandingPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './App.css';
 
@@ -33,6 +34,8 @@ function CloudApp() {
 
   return (
     <Routes>
+      {/* Public marketing page — reachable regardless of auth state. */}
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/share/:token" element={<EditorPage mode="share" />} />
       {!user ? (
         <Route path="*" element={<AuthScreen />} />
@@ -57,7 +60,11 @@ function App() {
     return (
       <ErrorBoundary>
         <HashRouter>
-          <EditorPage mode="local" />
+          <Routes>
+            {/* Landing page is public even in local/demo mode. */}
+            <Route path="/landing" element={<LandingPage />} />
+            <Route path="*" element={<EditorPage mode="local" />} />
+          </Routes>
         </HashRouter>
       </ErrorBoundary>
     );

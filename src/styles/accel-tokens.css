@@ -1,0 +1,85 @@
+/**
+ * Accel Suite — shared design tokens.
+ *
+ * Canonical copy lives in the Radix repo (aos-accel). Mirror this file into
+ * Argus and Lumina verbatim; only the `--product-accent*` block below is meant
+ * to differ per product. See docs/ACCEL_SUITE_DESIGN_STANDARD.md.
+ *
+ * Scope with `.accel-suite` so these tokens can coexist with an app's existing
+ * theme variables without a global takeover.
+ */
+
+.accel-suite {
+  /* Suite neutrals (shared across all products) */
+  --suite-bg: #0f1014;
+  --suite-surface: #16181f;
+  --suite-surface-2: #1e212b;
+  --suite-border: #2a2e3a;
+  --suite-border-strong: #3a4050;
+  --suite-text: #e6e8ee;
+  --suite-text-dim: #a0a6b8;
+  --suite-text-faint: #6b7180;
+  --suite-accent: #8b7cf6;
+
+  /* Per-product accent — Radix override (emerald). Argus/Lumina swap these. */
+  --product-accent: #2ecc71;
+  --product-accent-soft: #123524;
+  --product-accent-contrast: #0f1014;
+
+  /* Semantic */
+  --status-ok: #2ecc71;
+  --status-warn: #f4b740;
+  --status-err: #ef5f5f;
+
+  /* Type scale */
+  --fs-display: 48px;
+  --fs-h1: 34px;
+  --fs-h2: 26px;
+  --fs-h3: 20px;
+  --fs-body: 16px;
+  --fs-sm: 14px;
+  --fs-xs: 12px;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
+
+  /* Spacing (4px base) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* Elevation */
+  --elev-1: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-accent-glow: 0 0 0 1px var(--product-accent), 0 8px 30px -12px var(--product-accent);
+}
+
+/* Product accent variants — apply on the same element as .accel-suite. */
+.accel-suite.product-radix {
+  --product-accent: #2ecc71;
+  --product-accent-soft: #123524;
+}
+.accel-suite.product-argus {
+  --product-accent: #f4b740;
+  --product-accent-soft: #3a2c0e;
+}
+.accel-suite.product-lumina {
+  --product-accent: #8b7cf6;
+  --product-accent-soft: #241f3d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accel-suite * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

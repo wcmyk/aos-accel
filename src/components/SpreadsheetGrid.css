@@ -70,7 +70,7 @@
  * keyboard user can always see where input will land. Additive box-shadow —
  * does not fight the existing .cell.selected outline in App.css. */
 .spreadsheet-container:focus-visible .cell.selected {
-  box-shadow: 0 0 0 2px var(--cell-selected), 0 0 0 4px rgba(33, 115, 70, 0.25);
+  box-shadow: 0 0 0 2px var(--cell-selected), 0 0 0 4px var(--selection-fill, rgba(26, 115, 232, 0.2));
 }
 
 /* ===== Empty-sheet hint ===== */

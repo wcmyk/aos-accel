@@ -12,6 +12,7 @@ import { WorkbookDashboard } from './components/WorkbookDashboard';
 import { EditorPage } from './pages/EditorPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './App.css';
+import './google-theme.css';
 
 function CloudApp() {
   const user = useAuthStore((state) => state.user);

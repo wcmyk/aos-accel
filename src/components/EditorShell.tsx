@@ -120,11 +120,6 @@ export function EditorShell() {
       {!isReadOnly && <WelcomeOverlay />}
       <div className="title-bar">
         <div className="title-bar__left">
-          <div className="traffic-lights">
-            <span className="light red" />
-            <span className="light yellow" />
-            <span className="light green" />
-          </div>
           <img className="brand-logo" src={radixLogo} alt="Radix" />
           <div className="title">
             {canEditTitle ? (
@@ -136,7 +131,7 @@ export function EditorShell() {
             ) : (
               <strong>{workbookTitle || 'Radix.xlsx'}</strong>
             )}
-            <span>Professional Spreadsheet Application</span>
+            <span>Spreadsheet · Graph · Market</span>
           </div>
         </div>
         <div className="title-bar__right">

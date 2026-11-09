@@ -169,6 +169,11 @@ export const SpreadsheetGrid: React.FC = () => {
   const fillRange = useAccelStore((state) => state.fillRange);
   const selectionRange = useAccelStore((state) => state.selectionRange);
   const isSelecting = useAccelStore((state) => state.isSelecting);
+  // Header highlight bounds (Sheets-style: headers of the active row/col tint).
+  const hlRowMin = selectionRange ? Math.min(selectionRange.start.row, selectionRange.end.row) : selectedCell?.row ?? 0;
+  const hlRowMax = selectionRange ? Math.max(selectionRange.start.row, selectionRange.end.row) : selectedCell?.row ?? 0;
+  const hlColMin = selectionRange ? Math.min(selectionRange.start.col, selectionRange.end.col) : selectedCell?.col ?? 0;
+  const hlColMax = selectionRange ? Math.max(selectionRange.start.col, selectionRange.end.col) : selectedCell?.col ?? 0;
   // Dirty cell tracking (Excel-grade optimization)
   const dirtyValues = useAccelStore((state) => state.dirtyValues);
   const dirtyFormulas = useAccelStore((state) => state.dirtyFormulas);
@@ -1024,7 +1029,7 @@ export const SpreadsheetGrid: React.FC = () => {
               {visibleColumns.map((col) => (
                 <th
                   key={col}
-                  className={`col-header${resizingCol === col ? ' resizing' : ''}`}
+                  className={`col-header${resizingCol === col ? ' resizing' : ''}${col >= hlColMin && col <= hlColMax ? ' header--active' : ''}`}
                   style={{ width: colWidths[col - 1] }}
                 >
                   <span className="col-label">{columnLabels[col - 1] || colToLetter(col)}</span>
@@ -1053,7 +1058,7 @@ export const SpreadsheetGrid: React.FC = () => {
 
             {visibleRows.map((row) => (
               <tr key={row}>
-                <td className="row-header">{row}</td>
+                <td className={`row-header${row >= hlRowMin && row <= hlRowMax ? ' header--active' : ''}`}>{row}</td>
                 {leftSpacerWidth > 0 && (
                   <td style={{ width: leftSpacerWidth }} />
                 )}

@@ -465,7 +465,7 @@ export const Ribbon: React.FC = () => {
           title="Change the workbook color theme"
           aria-label="Color theme"
         >
-          <option value="default">Default</option>
+          <option value="default">Default (Google)</option>
           <option value="pastel-yellow">Pastel Yellow</option>
           <option value="pastel-blue">Pastel Blue</option>
           <option value="pastel-brown">Pastel Brown</option>

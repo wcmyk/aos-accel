@@ -270,8 +270,10 @@ textarea {
 /* ===== Formula bar ===== */
 .formula-bar {
   background: var(--cell-bg);
-  padding: 4px 8px;
+  padding: 0 8px;
   gap: 0;
+  height: 32px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .cell-reference {
@@ -279,29 +281,35 @@ textarea {
   border-right: 1px solid var(--border-color);
   border-radius: 0;
   font-weight: 400;
-  font-size: 14px;
-  min-width: 90px;
+  font-size: 13px;
+  min-width: 92px;
+  height: 22px;
+  line-height: 22px;
+  padding: 0 8px;
   background: transparent;
+  color: var(--text-primary);
+}
+
+.formula-bar__fx {
+  padding: 0 10px 0 12px;
+  font-style: italic;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: 15px;
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border-color);
+  line-height: 22px;
+  margin-right: 8px;
+  user-select: none;
 }
 
 .formula-input {
   border: none;
   border-radius: 0;
-  font-family: 'Roboto Mono', 'Consolas', ui-monospace, monospace;
-  font-size: 14px;
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 13px;
   background: transparent;
-  padding-left: 32px;
-}
-
-.formula-bar::before {
-  content: 'fx';
-  position: absolute;
-  left: 112px;
-  font-style: italic;
-  font-family: 'Times New Roman', serif;
-  color: var(--text-secondary);
-  font-size: 15px;
-  pointer-events: none;
+  padding: 0;
+  height: 30px;
 }
 
 .formula-input:focus,
@@ -309,19 +317,83 @@ textarea {
   outline: none;
 }
 
+.formula-hint {
+  left: 140px;
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 12px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  border: none;
+}
+
 /* ===== Grid ===== */
+/* Geometry here must match the constants in SpreadsheetGrid.tsx
+   (ROW_HEIGHT 21, HEADER_HEIGHT 24, ROW_HEADER_WIDTH 46): the selection
+   overlay and pointer hit-testing are computed from them. */
+/* The grid must be the scroll container (not .sheet-panel): virtualization
+   sizes its window from .grid-wrapper's height and listens to its scroll. */
+.sheet-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.spreadsheet-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.grid-canvas {
+  position: relative;
+  /* Explicitly sized in JS; containment keeps overlay moves from
+     invalidating layout outside the grid. */
+  contain: layout style;
+}
+
 .spreadsheet-grid {
   font-family: 'Roboto', Arial, sans-serif;
   font-size: 13px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  width: auto;
 }
 
 .spreadsheet-grid th,
 .spreadsheet-grid td {
-  border: 1px solid var(--cell-border);
-  height: 21px;
+  width: auto;
+  height: 21px; /* border-box: 20px line + 1px bottom grid line = ROW_HEIGHT */
   padding: 0 4px;
+  border: none;
+  border-right: 1px solid var(--cell-border);
+  border-bottom: 1px solid var(--cell-border);
+  line-height: 20px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
+.spreadsheet-grid thead th {
+  height: 24px; /* = HEADER_HEIGHT */
+  line-height: 23px;
+}
+
+.spreadsheet-grid .spacer-cell,
+.spreadsheet-grid .spacer-row td {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.spreadsheet-grid .corner-header,
 .spreadsheet-grid .row-header,
 .spreadsheet-grid .col-header {
   background: var(--bg-gradient-start);
@@ -329,42 +401,130 @@ textarea {
   font-weight: 400;
   font-size: 11px;
   text-align: center;
-  border-color: var(--border-color);
+  border: none;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0;
+  user-select: none;
+}
+
+.spreadsheet-grid .col-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  cursor: default;
 }
 
 .spreadsheet-grid .row-header {
-  width: 46px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  cursor: default;
+}
+
+.spreadsheet-grid .corner-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 4;
 }
 
 .spreadsheet-grid .row-header.header--active,
 .spreadsheet-grid .col-header.header--active {
   background: var(--accent-soft, var(--button-active));
   color: var(--accent-text, var(--text-primary));
-  font-weight: 500;
 }
 
-.cell.selected {
-  opacity: 1;
-  outline: 2px solid var(--cell-selected);
-  outline-offset: -1px;
+.cell {
+  background: var(--cell-bg);
+  color: var(--text-primary);
+  cursor: cell;
 }
 
-.cell.in-selection:not(.selected) {
-  outline: none;
+.cell-content {
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.spreadsheet-grid .cell--num,
+.spreadsheet-grid .cell--error {
+  text-align: right;
+}
+
+.spreadsheet-grid .cell--bool {
+  text-align: center;
+}
+
+/* ===== Selection overlay ===== */
+.sel-range,
+.sel-active,
+.sel-fill-preview,
+.cell-editor,
+.fill-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  /* Positioned with transform (see boxStyle) so moving the selection is a
+     compositor-only change instead of a layout + repaint. */
+  will-change: transform;
+}
+
+.sel-range {
+  background: var(--selection-fill, rgba(26, 115, 232, 0.1));
+  border: 1px solid var(--cell-selected);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sel-active {
+  border: 2px solid var(--cell-selected);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sel-fill-preview {
+  border: 1px dashed var(--text-secondary);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .fill-handle {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  border: 1px solid #fff;
+  right: auto;
+  bottom: auto;
+  border-radius: 0;
+  background: var(--cell-selected);
+  border: 1px solid var(--cell-bg);
+  cursor: crosshair;
+  z-index: 2;
 }
 
-.grid-empty-hint {
-  border-style: solid;
-  border-color: var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15), 0 4px 8px rgba(60, 64, 67, 0.08);
+.cell-editor {
+  z-index: 2;
+  min-height: 22px;
+  background: var(--cell-bg);
+  border: 2px solid var(--cell-selected);
+  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.3);
+}
+
+.cell-editor__input {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  padding: 0 3px;
+  font: 13px 'Roboto', Arial, sans-serif;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.formula-hint--cell {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: -2px;
 }
 
 /* ===== Sheet tabs (bottom bar) ===== */

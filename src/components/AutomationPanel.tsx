@@ -5,10 +5,14 @@
 
 import React, { useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { useShallow } from 'zustand/react/shallow';
 import { AutomationRunner, EXAMPLE_SCRIPTS, AutomationScript } from '../engine/automation';
 
 export const AutomationPanel: React.FC = () => {
-  const { engine, refresh } = useAccelStore();
+  const { engine, refresh , docVersion} = useAccelStore(
+    useShallow((s) => ({ engine: s.engine, refresh: s.refresh, docVersion: s.docVersion }))
+  );
+  void docVersion; // re-render when cells change (parameter values live in the engine)
   const [runner] = useState(() => new AutomationRunner(engine, refresh));
   const [running, setRunning] = useState(false);
 

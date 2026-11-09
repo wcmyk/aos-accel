@@ -5,11 +5,14 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { useShallow } from 'zustand/react/shallow';
 import './GraphCanvas.css';
 export const GraphCanvas: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
-  const { getGraphs, getGraphRenderer, removeGraph } = useAccelStore();
+  const { getGraphs, getGraphRenderer, removeGraph } = useAccelStore(
+    useShallow((s) => ({ getGraphs: s.getGraphs, getGraphRenderer: s.getGraphRenderer, removeGraph: s.removeGraph }))
+  );
   // Per-series visibility toggled from the legend. Kept as local UI state so
   // we never mutate the store's graph definitions (which stay visible:true).
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());

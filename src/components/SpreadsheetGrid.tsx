@@ -1,25 +1,58 @@
 /**
- * Spreadsheet Grid Component
- * Excel-like grid interface with full keyboard support
+ * Spreadsheet Grid
+ *
+ * Rendering is split in two layers so interaction stays cheap:
+ *
+ *  - The cell layer (<GridRow>, memoized per row) depends only on cell data,
+ *    the visible window and column widths. Selecting, dragging, and typing
+ *    never re-render it.
+ *  - The overlay layer (active-cell box, range highlight, fill handle, fill
+ *    preview, in-cell editor) is a handful of absolutely positioned elements
+ *    computed from fixed grid geometry. Moving the selection only moves these.
+ *
+ * Pointer drags (range selection and the fill handle) are tracked on the
+ * document and mapped from coordinates to cells, so they keep working outside
+ * the grid and auto-scroll near its edges.
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { useAccelStore } from '../store/accel-store';
+import type { AccelEngine } from '../engine/engine';
 import { CellValue, CellFormat } from '../engine/types';
 import './SpreadsheetGrid.css';
 
 const ROWS = 1000;
-const COLS = 52; // A-AZ (52 columns)
-const ROW_HEIGHT = 24;
-const COL_WIDTH = 120; // Default column width in pixels (matches CSS)
-const MIN_COL_WIDTH = 48; // Smallest a column can be dragged
-const OVERSCAN = 10; // Increased significantly to prevent cells disappearing during scroll
+const COLS = 52; // A-AZ
+// Grid geometry. CSS in google-theme.css pins cells to exactly these sizes;
+// the overlay and pointer hit-testing rely on them matching.
+const ROW_HEIGHT = 21;
+const HEADER_HEIGHT = 24;
+const ROW_HEADER_WIDTH = 46;
+const COL_WIDTH = 100;
+const MIN_COL_WIDTH = 32;
+const OVERSCAN_ROWS = 8;
+const OVERSCAN_COLS = 3;
 const DEFAULT_VIEWPORT_HEIGHT = 600;
 const DEFAULT_VIEWPORT_WIDTH = 1200;
+const AUTOSCROLL_EDGE = 24; // px from the viewport edge where drag auto-scroll kicks in
+
+type CellPos = { row: number; col: number };
+type Rect = { left: number; top: number; width: number; height: number };
+
+// Grid lines sit on each cell's right/bottom edge, so a box drawn around a
+// block must start 1px up/left to cover the neighbouring line too.
+function outset(r: Rect): Rect {
+  return { left: r.left - 1, top: r.top - 1, width: r.width + 1, height: r.height + 1 };
+}
+
+function boxStyle(r: Rect): React.CSSProperties {
+  return { transform: `translate(${r.left}px, ${r.top}px)`, width: r.width, height: r.height };
+}
 
 // Recognized formula error markers. A cell whose evaluation failed stores its
-// value as a string starting with one of these tokens; we render a compact,
-// trustworthy badge (never a raw exception) with the full text as a tooltip.
+// value as a string starting with one of these tokens; we render a compact
+// badge (never a raw exception) with the full text as a tooltip.
 interface ErrorInfo {
   label: string;
   title: string;
@@ -36,501 +69,732 @@ function getErrorInfo(value: string): ErrorInfo | null {
   return null;
 }
 
-// Whether a cell reference is grammatically valid at the caret — i.e. the
-// nearest non-space character before it is an operator, an open paren, a
-// comma, a colon, or the leading '='. This is what distinguishes "point mode"
-// (clicking a cell to insert its reference while building a formula) from a
-// plain click meant to leave the formula: after a completed token like ')' or
-// a digit ("=1+2"), a click should commit and navigate, not splice in "D11".
+// Whether a cell reference is grammatically valid at the caret — the nearest
+// non-space character before it is an operator, '(', ',', ':' or the leading
+// '='. This distinguishes "point mode" (clicking a cell inserts its reference
+// while building a formula) from a click meant to leave the formula.
 function formulaExpectsReference(text: string, caret: number): boolean {
   if (!text.startsWith('=')) return false;
   let i = Math.min(caret, text.length) - 1;
   while (i >= 0 && text[i] === ' ') i--;
-  if (i < 0) return false; // nothing before the caret yet
+  if (i < 0) return false;
   return '=+-*/^(,:<>&%'.includes(text[i]);
 }
 
-// Left edge (x) of a 1-based column given a cumulative-offset table. colLeft[c]
-// is the pixel offset of column c; returns the last column whose left edge is at
-// or before scrollLeft (the first column that should render). Only 52 columns,
-// so a linear scan is cheaper than the machinery a binary search would need.
-function firstColAt(colLeft: number[], scrollLeft: number): number {
+function colToLetter(col: number): string {
+  let letter = '';
+  let c = col;
+  while (c > 0) {
+    const remainder = (c - 1) % 26;
+    letter = String.fromCharCode(65 + remainder) + letter;
+    c = Math.floor((c - 1) / 26);
+  }
+  return letter;
+}
+const COLUMN_LABELS = Array.from({ length: COLS }, (_, i) => colToLetter(i + 1));
+
+function formatCellValue(value: CellValue): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number') {
+    if (Number.isInteger(value) && Math.abs(value) < 1e15) return String(value);
+    if (!Number.isFinite(value)) return String(value);
+    if (Math.abs(value) >= 1e15 || (Math.abs(value) < 1e-9 && value !== 0)) return value.toExponential(4);
+    return value.toFixed(10).replace(/\.?0+$/, '');
+  }
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (Array.isArray(value)) return '';
+  return String(value);
+}
+
+// Last column whose left edge is at or before x (1-based). 52 columns, so a
+// linear scan beats anything cleverer.
+function colAtX(colLeft: number[], x: number): number {
   let col = 1;
   for (let c = 1; c <= COLS; c++) {
-    if (colLeft[c] <= scrollLeft) col = c;
+    if (colLeft[c] <= x) col = c;
     else break;
   }
   return col;
 }
 
-interface GridCellProps {
-  row: number;
-  col: number;
-  displayValue: string;
-  colWidth: number;
-  cellFormat?: CellFormat;
-  isSelected: boolean;
-  isEditing: boolean;
-  isParameter?: boolean;
-  isInFillRange: boolean;
-  isInSelectionRange?: boolean;
-  onClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
-  onDoubleClick: (e: React.MouseEvent<HTMLTableCellElement>) => void;
-  onMouseEnter: (e: React.MouseEvent<HTMLTableCellElement>) => void;
-  onMouseDown?: (e: React.MouseEvent<HTMLTableCellElement>) => void;
-  onFillHandleMouseDown: (e: React.MouseEvent) => void;
+function normRange(a: CellPos, b: CellPos) {
+  return {
+    r1: Math.min(a.row, b.row),
+    r2: Math.max(a.row, b.row),
+    c1: Math.min(a.col, b.col),
+    c2: Math.max(a.col, b.col),
+  };
 }
 
-const GridCell: React.FC<GridCellProps> = React.memo(({
+let measureCtx: CanvasRenderingContext2D | null = null;
+function measureText(text: string): number {
+  if (!measureCtx) {
+    measureCtx = document.createElement('canvas').getContext('2d');
+    if (measureCtx) measureCtx.font = '13px Roboto, Arial, sans-serif';
+  }
+  return measureCtx ? measureCtx.measureText(text).width : text.length * 7;
+}
+
+// ---------------------------------------------------------------------------
+// Cell layer
+// ---------------------------------------------------------------------------
+
+interface GridRowProps {
+  row: number;
+  startCol: number;
+  endCol: number;
+  hasLeftSpacer: boolean;
+  hasRightSpacer: boolean;
+  engine: AccelEngine;
+  /** Changes whenever cell data may have changed; forces a repaint. */
+  version: string;
+  headerActive: boolean;
+}
+
+const GridRow = React.memo(function GridRow({
   row,
-  col,
-  displayValue,
-  colWidth,
-  cellFormat,
-  isSelected,
-  isEditing,
-  isParameter,
-  isInFillRange,
-  isInSelectionRange,
-  onClick,
-  onDoubleClick,
-  onMouseEnter,
-  onMouseDown,
-  onFillHandleMouseDown,
-}) => {
-  const cellStyle: React.CSSProperties = useMemo(() => ({
-    ...(cellFormat?.bold && { fontWeight: 'bold' }),
-    ...(cellFormat?.italic && { fontStyle: 'italic' }),
-    ...(cellFormat?.underline && { textDecoration: 'underline' }),
-    ...(cellFormat?.fontColor && { color: cellFormat.fontColor }),
-    ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
-  }), [cellFormat]);
+  startCol,
+  endCol,
+  hasLeftSpacer,
+  hasRightSpacer,
+  engine,
+  headerActive,
+}: GridRowProps) {
+  const cells: React.ReactNode[] = [];
+  for (let col = startCol; col <= endCol; col++) {
+    const cell = engine.getCellObject(row, col);
+    const value = cell ? engine.getCell(row, col) : null;
+    const format: CellFormat | undefined = cell?.format;
+    const text = formatCellValue(value);
+    const error = typeof value === 'string' ? getErrorInfo(value) : null;
 
-  const tdStyle: React.CSSProperties = useMemo(() => ({
-    width: colWidth,
-    ...(cellFormat?.backgroundColor && { backgroundColor: cellFormat.backgroundColor }),
-  }), [colWidth, cellFormat?.backgroundColor]);
+    let className = 'cell';
+    if (cell?.isParameter) className += ' parameter';
+    if (error) className += ' cell--error';
+    else if (typeof value === 'number') className += ' cell--num';
+    else if (typeof value === 'boolean') className += ' cell--bool';
 
-  const errorInfo = getErrorInfo(displayValue);
+    let style: React.CSSProperties | undefined;
+    if (format && (format.bold || format.italic || format.underline || format.fontColor || format.backgroundColor)) {
+      style = {
+        fontWeight: format.bold ? 700 : undefined,
+        fontStyle: format.italic ? 'italic' : undefined,
+        textDecoration: format.underline ? 'underline' : undefined,
+        color: format.fontColor || undefined,
+        backgroundColor: format.backgroundColor || undefined,
+      };
+    }
+
+    cells.push(
+      <td key={col} data-row={row} data-col={col} role="gridcell" className={className} style={style}>
+        {text !== '' && (
+          <div className="cell-content" title={error ? error.title : undefined}>
+            {error ? error.label : text}
+          </div>
+        )}
+      </td>
+    );
+  }
 
   return (
-    <td
-      data-row={row}
-      data-col={col}
-      role="gridcell"
-      aria-selected={isSelected || undefined}
-      className={`cell ${isSelected ? 'selected' : ''} ${isParameter ? 'parameter' : ''} ${isInFillRange ? 'fill-range' : ''} ${isInSelectionRange ? 'in-selection' : ''}`}
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      onMouseEnter={onMouseEnter}
-      onMouseDown={onMouseDown}
-      style={tdStyle}
-    >
-      {!isEditing && (
-        <div
-          className={`cell-content${errorInfo ? ' cell-error' : ''}`}
-          style={cellStyle}
-          title={errorInfo ? errorInfo.title : undefined}
-        >
-          {errorInfo ? errorInfo.label : displayValue}
-        </div>
-      )}
-      {isSelected && !isEditing && (
-        <div
-          className="fill-handle"
-          onMouseDown={onFillHandleMouseDown}
-        />
-      )}
-    </td>
-  );
-}, (prev, next) => {
-  // Skip event handler comparison - they're stable via useCallback
-  return (
-    prev.row === next.row &&
-    prev.col === next.col &&
-    prev.displayValue === next.displayValue &&
-    prev.colWidth === next.colWidth &&
-    prev.isSelected === next.isSelected &&
-    prev.isEditing === next.isEditing &&
-    prev.isParameter === next.isParameter &&
-    prev.isInFillRange === next.isInFillRange &&
-    prev.isInSelectionRange === next.isInSelectionRange &&
-    prev.cellFormat?.bold === next.cellFormat?.bold &&
-    prev.cellFormat?.italic === next.cellFormat?.italic &&
-    prev.cellFormat?.underline === next.cellFormat?.underline &&
-    prev.cellFormat?.fontColor === next.cellFormat?.fontColor &&
-    prev.cellFormat?.backgroundColor === next.cellFormat?.backgroundColor
+    <tr>
+      <td className={`row-header${headerActive ? ' header--active' : ''}`} data-row-header={row}>
+        {row}
+      </td>
+      {hasLeftSpacer && <td className="spacer-cell" />}
+      {cells}
+      {hasRightSpacer && <td className="spacer-cell" />}
+    </tr>
   );
 });
 
-export const SpreadsheetGrid: React.FC = () => {
-  // Split selectors: actions don't trigger re-renders, only data changes do
-  const selectedCell = useAccelStore((state) => state.selectedCell);
-  const fillRange = useAccelStore((state) => state.fillRange);
-  const selectionRange = useAccelStore((state) => state.selectionRange);
-  const isSelecting = useAccelStore((state) => state.isSelecting);
-  // Header highlight bounds (Sheets-style: headers of the active row/col tint).
-  const hlRowMin = selectionRange ? Math.min(selectionRange.start.row, selectionRange.end.row) : selectedCell?.row ?? 0;
-  const hlRowMax = selectionRange ? Math.max(selectionRange.start.row, selectionRange.end.row) : selectedCell?.row ?? 0;
-  const hlColMin = selectionRange ? Math.min(selectionRange.start.col, selectionRange.end.col) : selectedCell?.col ?? 0;
-  const hlColMax = selectionRange ? Math.max(selectionRange.start.col, selectionRange.end.col) : selectedCell?.col ?? 0;
-  // Dirty cell tracking (Excel-grade optimization)
-  const dirtyValues = useAccelStore((state) => state.dirtyValues);
-  const dirtyFormulas = useAccelStore((state) => state.dirtyFormulas);
+// ---------------------------------------------------------------------------
+// Grid
+// ---------------------------------------------------------------------------
 
-  // Actions - stable references, don't cause re-renders
-  const setCell = useAccelStore((state) => state.setCell);
-  const getCell = useAccelStore((state) => state.getCell);
-  const getCellObject = useAccelStore((state) => state.getCellObject);
-  const selectCell = useAccelStore((state) => state.selectCell);
-  const clearDirty = useAccelStore((state) => state.clearDirty);
-  const startSelection = useAccelStore((state) => state.startSelection);
-  const updateSelection = useAccelStore((state) => state.updateSelection);
-  const endSelection = useAccelStore((state) => state.endSelection);
-  const clearSelection = useAccelStore((state) => state.clearSelection);
-  const copyCell = useAccelStore((state) => state.copyCell);
-  const pasteCell = useAccelStore((state) => state.pasteCell);
-  const cutCell = useAccelStore((state) => state.cutCell);
-  const setFillRange = useAccelStore((state) => state.setFillRange);
-  const clearFillRange = useAccelStore((state) => state.clearFillRange);
-  const executeFill = useAccelStore((state) => state.executeFill);
-  const undo = useAccelStore((state) => state.undo);
-  const redo = useAccelStore((state) => state.redo);
-  // engine + docVersion power the fresh-sheet empty-state hint; docVersion
-  // bumps on every mutation so the reactive read stays current.
-  const engine = useAccelStore((state) => state.engine);
-  const docVersion = useAccelStore((state) => state.docVersion);
-  const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
+const FORMULA_SIGNATURES: Record<string, string[]> = {
+  SUM: ['number1', 'number2', '...'],
+  AVERAGE: ['number1', 'number2', '...'],
+  COUNT: ['value1', 'value2', '...'],
+  MAX: ['number1', 'number2', '...'],
+  MIN: ['number1', 'number2', '...'],
+  IF: ['logical_test', 'value_if_true', 'value_if_false'],
+  VLOOKUP: ['lookup_value', 'table_array', 'col_index_num', '[range_lookup]'],
+  HLOOKUP: ['lookup_value', 'table_array', 'row_index_num', '[range_lookup]'],
+  INDEX: ['array', 'row_num', '[column_num]'],
+  MATCH: ['lookup_value', 'lookup_array', '[match_type]'],
+  CONCATENATE: ['text1', 'text2', '...'],
+  LEFT: ['text', '[num_chars]'],
+  RIGHT: ['text', '[num_chars]'],
+  MID: ['text', 'start_num', 'num_chars'],
+  LEN: ['text'],
+  TRIM: ['text'],
+  UPPER: ['text'],
+  LOWER: ['text'],
+  ROUND: ['number', 'num_digits'],
+  ROUNDUP: ['number', 'num_digits'],
+  ROUNDDOWN: ['number', 'num_digits'],
+  ABS: ['number'],
+  POWER: ['number', 'power'],
+  SQRT: ['number'],
+  SIN: ['number'],
+  COS: ['number'],
+  TAN: ['number'],
+  PLOT: ['y_values', '[x_values]'],
+  DATE: ['year', 'month', 'day'],
+  NOW: [],
+  TODAY: [],
+};
+
+type FormulaHint = { func: string; params: string[]; currentParam: number };
+
+function computeFormulaHint(formula: string, caretPos: number): FormulaHint | null {
+  if (!formula.startsWith('=')) return null;
+  const beforeCaret = formula.substring(0, caretPos);
+  const funcMatch = beforeCaret.match(/([A-Za-z_]+)\(([^)]*)$/);
+  if (!funcMatch) return null;
+  const funcName = funcMatch[1].toUpperCase();
+  const params = FORMULA_SIGNATURES[funcName];
+  if (!params) return null;
+  const argsText = funcMatch[2];
+  let currentParam = 0;
+  let inQuotes = false;
+  let depth = 0;
+  for (let i = 0; i < argsText.length; i++) {
+    const ch = argsText[i];
+    if (ch === '"') inQuotes = !inQuotes;
+    else if (!inQuotes) {
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      else if (ch === ',' && depth === 0) currentParam++;
+    }
+  }
+  return { func: funcName, params, currentParam };
+}
+
+export const SpreadsheetGrid: React.FC = () => {
+  const selectedCell = useAccelStore((s) => s.selectedCell);
+  const fillRange = useAccelStore((s) => s.fillRange);
+  const selectionRange = useAccelStore((s) => s.selectionRange);
+  const isSelecting = useAccelStore((s) => s.isSelecting);
+  const isReadOnly = useAccelStore((s) => s.isReadOnly);
+  const engine = useAccelStore((s) => s.engine);
+  const docVersion = useAccelStore((s) => s.docVersion);
+  const activeSheet = useAccelStore((s) => s.activeSheet);
+
+  const setCell = useAccelStore((s) => s.setCell);
+  const getCell = useAccelStore((s) => s.getCell);
+  const getCellObject = useAccelStore((s) => s.getCellObject);
+  const selectCell = useAccelStore((s) => s.selectCell);
+  const clearDirty = useAccelStore((s) => s.clearDirty);
+  const startSelection = useAccelStore((s) => s.startSelection);
+  const updateSelection = useAccelStore((s) => s.updateSelection);
+  const endSelection = useAccelStore((s) => s.endSelection);
+  const clearSelection = useAccelStore((s) => s.clearSelection);
+  const copyCell = useAccelStore((s) => s.copyCell);
+  const pasteCell = useAccelStore((s) => s.pasteCell);
+  const cutCell = useAccelStore((s) => s.cutCell);
+  const clearRange = useAccelStore((s) => s.clearRange);
+  const setFillRange = useAccelStore((s) => s.setFillRange);
+  const clearFillRange = useAccelStore((s) => s.clearFillRange);
+  const executeFill = useAccelStore((s) => s.executeFill);
+  const undo = useAccelStore((s) => s.undo);
+  const redo = useAccelStore((s) => s.redo);
+
+  const [editingCell, setEditingCell] = useState<CellPos | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [isDraggingFill, setIsDraggingFill] = useState(false);
-  const [formulaHint, setFormulaHint] = useState<{ func: string; params: string[]; currentParam: number } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
-  const gridWrapperRef = useRef<HTMLDivElement>(null);
-  const pendingFillTarget = useRef<{ row: number; col: number } | null>(null);
-  const fillRangeRaf = useRef<number | null>(null);
+  const [formulaHint, setFormulaHint] = useState<FormulaHint | null>(null);
+  const [hintAnchor, setHintAnchor] = useState<'bar' | 'cell'>('cell');
   const [virtualWindow, setVirtualWindow] = useState({ startRow: 1, startCol: 1 });
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [viewportWidth, setViewportWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
-  // Per-column widths (all default to COL_WIDTH -> geometry is byte-identical to
-  // the fixed-width grid until the user drags a column border).
   const [colWidths, setColWidths] = useState<number[]>(() => new Array(COLS).fill(COL_WIDTH));
   const [resizingCol, setResizingCol] = useState<number | null>(null);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const gridWrapperRef = useRef<HTMLDivElement>(null);
+  const barInputRef = useRef<HTMLInputElement>(null);
+  const cellInputRef = useRef<HTMLInputElement>(null);
+  // Whichever editor (formula bar or in-cell) last had focus; reference
+  // insertion and caret restore target it.
+  const activeEditorRef = useRef<HTMLInputElement | null>(null);
+  // 'enter': editing began by typing over the cell, so arrow keys commit and
+  // move (like Sheets). 'edit': F2 / double-click / formula bar, arrows move
+  // the caret.
+  const editModeRef = useRef<'enter' | 'edit'>('edit');
+  const originalValueRef = useRef('');
   const colResizeRef = useRef<{ col: number; startX: number; startWidth: number } | null>(null);
-  // Cumulative left-edge offsets (1-based; colLeftRef.current[c] = x of column c,
-  // [COLS+1] = total width). Kept in a ref so the stable scroll/measure callbacks
-  // always read the latest widths without re-subscribing.
-  const colLeftRef = useRef<number[]>((() => {
-    const arr = new Array<number>(COLS + 2);
-    arr[1] = 0;
-    for (let c = 1; c <= COLS; c++) arr[c + 1] = arr[c] + COL_WIDTH;
-    return arr;
-  })());
   const scrollRaf = useRef<number | null>(null);
   const caretPositionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const lastInsertedRef = useRef<{ start: number; end: number } | null>(null);
-  // The target a reference was last pointed at during the current gesture. A
-  // single click updates selectedCell, selectionRange and isSelecting in turn,
-  // re-running the point-mode effect several times; without this the same cell
-  // gets spliced in repeatedly ("D11D11D11"). Reset when the user types or the
-  // edit ends.
   const lastPointedKeyRef = useRef<string | null>(null);
+  const dragRef = useRef<{
+    mode: 'select' | 'fill';
+    clientX: number;
+    clientY: number;
+    last: CellPos | null;
+    raf: number | null;
+  } | null>(null);
 
-  // Formula signatures for parameter hints
-  const formulaSignatures: Record<string, string[]> = useMemo(() => ({
-    SUM: ['number1', 'number2', '...'],
-    AVERAGE: ['number1', 'number2', '...'],
-    COUNT: ['value1', 'value2', '...'],
-    MAX: ['number1', 'number2', '...'],
-    MIN: ['number1', 'number2', '...'],
-    IF: ['logical_test', 'value_if_true', 'value_if_false'],
-    VLOOKUP: ['lookup_value', 'table_array', 'col_index_num', '[range_lookup]'],
-    HLOOKUP: ['lookup_value', 'table_array', 'row_index_num', '[range_lookup]'],
-    INDEX: ['array', 'row_num', '[column_num]'],
-    MATCH: ['lookup_value', 'lookup_array', '[match_type]'],
-    CONCATENATE: ['text1', 'text2', '...'],
-    LEFT: ['text', '[num_chars]'],
-    RIGHT: ['text', '[num_chars]'],
-    MID: ['text', 'start_num', 'num_chars'],
-    LEN: ['text'],
-    TRIM: ['text'],
-    UPPER: ['text'],
-    LOWER: ['text'],
-    ROUND: ['number', 'num_digits'],
-    ROUNDUP: ['number', 'num_digits'],
-    ROUNDDOWN: ['number', 'num_digits'],
-    ABS: ['number'],
-    POWER: ['number', 'power'],
-    SQRT: ['number'],
-    SIN: ['number'],
-    COS: ['number'],
-    TAN: ['number'],
-    PLOT: ['y_values', '[x_values]'],
-    DATE: ['year', 'month', 'day'],
-    NOW: [],
-    TODAY: [],
+  // Cumulative left offsets: colLeft[c] = x of column c (1-based), [COLS+1] = total.
+  const colLeft = useMemo(() => {
+    const arr = new Array<number>(COLS + 2);
+    arr[1] = 0;
+    for (let c = 1; c <= COLS; c++) arr[c + 1] = arr[c] + colWidths[c - 1];
+    return arr;
+  }, [colWidths]);
+  const colLeftRef = useRef(colLeft);
+  colLeftRef.current = colLeft;
+
+  const computeWindow = useCallback((scrollTop: number, scrollLeft: number) => ({
+    startRow: Math.max(1, Math.floor(scrollTop / ROW_HEIGHT) + 1 - OVERSCAN_ROWS),
+    startCol: Math.max(1, colAtX(colLeftRef.current, scrollLeft) - OVERSCAN_COLS),
   }), []);
 
-  // Focus grid on mount for keyboard navigation
   useEffect(() => {
-    if (gridRef.current) {
-      gridRef.current.focus();
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (fillRangeRaf.current !== null) {
-        cancelAnimationFrame(fillRangeRaf.current);
-      }
-      if (scrollRaf.current !== null) {
-        cancelAnimationFrame(scrollRaf.current);
-      }
-    };
+    gridRef.current?.focus({ preventScroll: true });
   }, []);
 
   useLayoutEffect(() => {
-    if (!gridWrapperRef.current) return;
-
+    const wrapper = gridWrapperRef.current;
+    if (!wrapper) return;
     const measure = () => {
-      if (!gridWrapperRef.current) return;
-      setViewportHeight(gridWrapperRef.current.clientHeight || DEFAULT_VIEWPORT_HEIGHT);
-      setViewportWidth(gridWrapperRef.current.clientWidth || DEFAULT_VIEWPORT_WIDTH);
-      const scrollTop = gridWrapperRef.current.scrollTop;
-      const scrollLeft = gridWrapperRef.current.scrollLeft;
-      const nextStartRow = Math.max(1, Math.floor(scrollTop / ROW_HEIGHT) + 1 - OVERSCAN);
-      const nextStartCol = Math.max(1, firstColAt(colLeftRef.current, scrollLeft) - OVERSCAN);
-      setVirtualWindow((prev) => {
-        if (prev.startRow === nextStartRow && prev.startCol === nextStartCol) {
-          return prev;
-        }
-        return { startRow: nextStartRow, startCol: nextStartCol };
-      });
+      setViewportHeight(wrapper.clientHeight || DEFAULT_VIEWPORT_HEIGHT);
+      setViewportWidth(wrapper.clientWidth || DEFAULT_VIEWPORT_WIDTH);
+      const next = computeWindow(wrapper.scrollTop, wrapper.scrollLeft);
+      setVirtualWindow((prev) => (prev.startRow === next.startRow && prev.startCol === next.startCol ? prev : next));
     };
-
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(gridWrapperRef.current);
+    observer.observe(wrapper);
     return () => observer.disconnect();
+  }, [computeWindow]);
+
+  const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (scrollRaf.current !== null) return;
+    scrollRaf.current = requestAnimationFrame(() => {
+      scrollRaf.current = null;
+      const next = computeWindow(target.scrollTop, target.scrollLeft);
+      setVirtualWindow((prev) => (prev.startRow === next.startRow && prev.startCol === next.startCol ? prev : next));
+    });
+  }, [computeWindow]);
+
+  useEffect(() => () => {
+    if (scrollRaf.current !== null) cancelAnimationFrame(scrollRaf.current);
+    if (dragRef.current?.raf != null) cancelAnimationFrame(dragRef.current.raf);
   }, []);
 
-  const handleCellClick = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
-    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
-    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
-    if (row && col) {
-      selectCell(row, col);
-    }
-  }, [selectCell]);
+  // Dirty sets are no longer read by the grid (docVersion drives repaints);
+  // clear them so they don't grow without bound.
+  useEffect(() => {
+    clearDirty();
+  }, [docVersion, clearDirty]);
 
-  const startEditing = useCallback((row: number, col: number, initialValue: string = '') => {
-    setEditingCell({ row, col });
+  // ----- geometry ---------------------------------------------------------
+
+  const rectOf = useCallback((r1: number, c1: number, r2: number, c2: number): Rect => ({
+    left: ROW_HEADER_WIDTH + colLeft[c1],
+    top: HEADER_HEIGHT + (r1 - 1) * ROW_HEIGHT,
+    width: colLeft[c2 + 1] - colLeft[c1],
+    height: (r2 - r1 + 1) * ROW_HEIGHT,
+  }), [colLeft]);
+
+  /** Map viewport coordinates to the nearest cell (clamped to the sheet). */
+  const cellAtPoint = useCallback((clientX: number, clientY: number): CellPos | null => {
+    const wrapper = gridWrapperRef.current;
+    if (!wrapper) return null;
+    const box = wrapper.getBoundingClientRect();
+    const x = clientX - box.left + wrapper.scrollLeft - ROW_HEADER_WIDTH;
+    const y = clientY - box.top + wrapper.scrollTop - HEADER_HEIGHT;
+    const row = Math.min(ROWS, Math.max(1, Math.floor(y / ROW_HEIGHT) + 1));
+    const col = Math.min(COLS, Math.max(1, colAtX(colLeftRef.current, Math.max(0, x))));
+    return { row, col };
+  }, []);
+
+  /** Scroll the minimum amount so a cell is fully visible below/right of the sticky headers. */
+  const scrollCellIntoView = useCallback((row: number, col: number) => {
+    const wrapper = gridWrapperRef.current;
+    if (!wrapper) return;
+    const left = colLeftRef.current[col];
+    const right = colLeftRef.current[col + 1];
+    const top = (row - 1) * ROW_HEIGHT;
+    const bottom = row * ROW_HEIGHT;
+    const viewW = wrapper.clientWidth - ROW_HEADER_WIDTH;
+    const viewH = wrapper.clientHeight - HEADER_HEIGHT;
+    if (top < wrapper.scrollTop) wrapper.scrollTop = top;
+    else if (bottom > wrapper.scrollTop + viewH) wrapper.scrollTop = bottom - viewH;
+    if (left < wrapper.scrollLeft) wrapper.scrollLeft = left;
+    else if (right > wrapper.scrollLeft + viewW) wrapper.scrollLeft = right - viewW;
+  }, []);
+
+  // ----- editing ----------------------------------------------------------
+
+  const startEditing = useCallback((
+    row: number,
+    col: number,
+    initialValue: string | null,
+    opts: { mode: 'enter' | 'edit'; focus: 'cell' | 'bar' | 'none' } = { mode: 'edit', focus: 'cell' },
+  ) => {
+    if (isReadOnly) return;
+    // Editing targets the active cell; drop any range so the selection-change
+    // effect below doesn't read the range end as "user clicked elsewhere".
+    if (useAccelStore.getState().selectionRange) clearSelection();
     const cellObj = getCellObject(row, col);
-    const value = initialValue || cellObj?.formula || String(cellObj?.value ?? '');
-    setEditValue(value);
+    const existing = cellObj?.formula ?? (cellObj?.value != null ? formatCellValue(cellObj.value as CellValue) : '');
+    const value = initialValue ?? existing;
+    originalValueRef.current = existing;
+    editModeRef.current = opts.mode;
     lastInsertedRef.current = null;
     lastPointedKeyRef.current = null;
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-        const pos = inputRef.current.value.length;
-        inputRef.current.setSelectionRange(pos, pos);
-        caretPositionRef.current = { start: pos, end: pos };
-      }
-    }, 0);
-  }, [getCellObject]);
-
-  const handleCellDoubleClick = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
-    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
-    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
-    if (row && col) {
-      selectCell(row, col);
-      startEditing(row, col);
+    // Commit the editor to the DOM synchronously so the very next keystroke
+    // lands in it — deferring focus dropped fast-typed characters.
+    flushSync(() => {
+      setEditingCell({ row, col });
+      setEditValue(value);
+      setFormulaHint(computeFormulaHint(value, value.length));
+      setHintAnchor(opts.focus === 'bar' ? 'bar' : 'cell');
+    });
+    const target = opts.focus === 'cell' ? cellInputRef.current : opts.focus === 'bar' ? barInputRef.current : null;
+    if (target) {
+      activeEditorRef.current = target;
+      target.focus({ preventScroll: true });
+      const pos = value.length;
+      target.setSelectionRange(pos, pos);
+      caretPositionRef.current = { start: pos, end: pos };
     }
-  }, [selectCell, startEditing]);
+  }, [getCellObject, isReadOnly, clearSelection]);
 
-  const handleCellMouseDown = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
-    if (e.button !== 0) return; // Only left click
-    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
-    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
-
-    if (row && col) {
-      if (e.shiftKey && selectedCell) {
-        // Shift+click to extend selection
-        startSelection(selectedCell.row, selectedCell.col);
-        updateSelection(row, col);
-        endSelection();
-      } else {
-        // Start new selection
-        startSelection(row, col);
-      }
-    }
-  }, [selectedCell, startSelection, updateSelection, endSelection]);
-
-  // Global mouse up handler for selection
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      if (isSelecting) {
-        endSelection();
-      }
-    };
-
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, [isSelecting, endSelection]);
-
-  const handleCellSubmit = useCallback(() => {
-    if (editingCell) {
-      setCell(editingCell.row, editingCell.col, editValue);
-      setEditingCell(null);
-      setEditValue('');
-      lastInsertedRef.current = null;
-      lastPointedKeyRef.current = null;
-      gridRef.current?.focus();
-    }
-  }, [editingCell, editValue, setCell]);
-
-  const handleFormulaKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleCellSubmit();
-      if (selectedCell && selectedCell.row < ROWS) {
-        selectCell(selectedCell.row + 1, selectedCell.col);
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      setEditingCell(null);
-      setEditValue('');
-      gridRef.current?.focus();
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      handleCellSubmit();
-      if (selectedCell) {
-        const nextCol = e.shiftKey
-          ? (selectedCell.col > 1 ? selectedCell.col - 1 : COLS)
-          : (selectedCell.col < COLS ? selectedCell.col + 1 : 1);
-        selectCell(selectedCell.row, nextCol);
-      }
-    }
-  }, [handleCellSubmit, selectedCell, selectCell]);
-
-  // AutoFill drag handlers
-  const handleFillHandleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    pendingFillTarget.current = null;
-    setIsDraggingFill(true);
+  const stopEditing = useCallback(() => {
+    setEditingCell(null);
+    setEditValue('');
+    setFormulaHint(null);
+    lastInsertedRef.current = null;
+    lastPointedKeyRef.current = null;
+    activeEditorRef.current = null;
   }, []);
 
-  const handleCellMouseEnter = useCallback((e: React.MouseEvent<HTMLTableCellElement>) => {
-    const row = parseInt(e.currentTarget.dataset.row || '0', 10);
-    const col = parseInt(e.currentTarget.dataset.col || '0', 10);
+  const commitEdit = useCallback(() => {
+    if (!editingCell) return;
+    if (editValue !== originalValueRef.current) {
+      setCell(editingCell.row, editingCell.col, editValue);
+    }
+    stopEditing();
+    gridRef.current?.focus({ preventScroll: true });
+  }, [editingCell, editValue, setCell, stopEditing]);
+
+  const cancelEdit = useCallback(() => {
+    stopEditing();
+    gridRef.current?.focus({ preventScroll: true });
+  }, [stopEditing]);
+
+  const moveTo = useCallback((row: number, col: number) => {
+    const r = Math.min(ROWS, Math.max(1, row));
+    const c = Math.min(COLS, Math.max(1, col));
+    selectCell(r, c);
+    scrollCellIntoView(r, c);
+  }, [selectCell, scrollCellIntoView]);
+
+  const handleEditorChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const caretPos = e.target.selectionStart ?? value.length;
+    setEditValue(value);
+    caretPositionRef.current = { start: caretPos, end: e.target.selectionEnd ?? caretPos };
+    lastInsertedRef.current = null;
+    lastPointedKeyRef.current = null;
+    setFormulaHint(computeFormulaHint(value, caretPos));
+  }, []);
+
+  const handleEditorSelect = useCallback((e: React.SyntheticEvent<HTMLInputElement>) => {
+    caretPositionRef.current = {
+      start: e.currentTarget.selectionStart ?? 0,
+      end: e.currentTarget.selectionEnd ?? 0,
+    };
+  }, []);
+
+  const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!editingCell) return;
+    const { row, col } = editingCell;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitEdit();
+      moveTo(e.shiftKey ? row - 1 : row + 1, col);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      commitEdit();
+      moveTo(row, e.shiftKey ? col - 1 : col + 1);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+    } else if (
+      editModeRef.current === 'enter' &&
+      e.key.startsWith('Arrow') &&
+      !e.shiftKey &&
+      !(editValue.startsWith('=') && formulaExpectsReference(editValue, caretPositionRef.current.start))
+    ) {
+      e.preventDefault();
+      commitEdit();
+      const dr = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+      const dc = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      moveTo(row + dr, col + dc);
+    }
+  }, [editingCell, editValue, commitEdit, cancelEdit, moveTo]);
+
+  const applyReferenceToFormula = useCallback((row: number, col: number, replaceExisting: boolean, rangeStart?: CellPos) => {
+    if (!editingCell) return;
+    const refString = rangeStart && (rangeStart.row !== row || rangeStart.col !== col)
+      ? `${colToLetter(rangeStart.col)}${rangeStart.row}:${colToLetter(col)}${row}`
+      : `${colToLetter(col)}${row}`;
+    const selection = replaceExisting && lastInsertedRef.current ? lastInsertedRef.current : caretPositionRef.current;
+    const start = Math.max(0, selection.start ?? 0);
+    const end = Math.max(start, selection.end ?? start);
+
+    setEditValue((prev) => {
+      const nextValue = prev.slice(0, start) + refString + prev.slice(end);
+      const caretPos = start + refString.length;
+      caretPositionRef.current = { start: caretPos, end: caretPos };
+      lastInsertedRef.current = { start, end: caretPos };
+      requestAnimationFrame(() => {
+        const el = activeEditorRef.current ?? cellInputRef.current;
+        if (el) {
+          el.focus({ preventScroll: true });
+          el.setSelectionRange(caretPos, caretPos);
+        }
+      });
+      return nextValue;
+    });
+  }, [editingCell]);
+
+  // Selection changes while editing: either point mode (insert a reference)
+  // or "leave the cell" (commit).
+  useEffect(() => {
+    if (!editingCell || !selectedCell) return;
+    const targetRow = selectionRange ? selectionRange.end.row : selectedCell.row;
+    const targetCol = selectionRange ? selectionRange.end.col : selectedCell.col;
+    if (targetRow === editingCell.row && targetCol === editingCell.col && !lastInsertedRef.current) return;
+    if (!isSelecting && !selectionRange && !lastInsertedRef.current) return;
+
+    const inPointMode = lastInsertedRef.current !== null;
+    if (!editValue.startsWith('=') || (!inPointMode && !formulaExpectsReference(editValue, caretPositionRef.current.start))) {
+      commitEdit();
+      return;
+    }
+
+    const rangeStart = selectionRange ? selectionRange.start : undefined;
+    const pointKey = `${rangeStart ? `${rangeStart.col},${rangeStart.row}:` : ''}${targetCol},${targetRow}`;
+    if (lastPointedKeyRef.current === pointKey) return;
+    lastPointedKeyRef.current = pointKey;
+    applyReferenceToFormula(targetRow, targetCol, inPointMode || Boolean(selectionRange), rangeStart);
+  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting, editValue, commitEdit]);
+
+  // ----- pointer: selection + fill drags ----------------------------------
+
+  const applyDragTarget = useCallback((cell: CellPos) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (drag.last && drag.last.row === cell.row && drag.last.col === cell.col) return;
+    drag.last = cell;
+    if (drag.mode === 'select') {
+      updateSelection(cell.row, cell.col);
+      return;
+    }
+    // Fill: extend along whichever axis the pointer has moved further on,
+    // measured from the source block (the selection, or the active cell).
+    const state = useAccelStore.getState();
+    const anchor = state.selectedCell;
+    if (!anchor) return;
+    const src = state.selectionRange ? normRange(state.selectionRange.start, state.selectionRange.end) : { r1: anchor.row, r2: anchor.row, c1: anchor.col, c2: anchor.col };
+    const dRow = cell.row > src.r2 ? cell.row - src.r2 : cell.row < src.r1 ? cell.row - src.r1 : 0;
+    const dCol = cell.col > src.c2 ? cell.col - src.c2 : cell.col < src.c1 ? cell.col - src.c1 : 0;
+    if (dRow === 0 && dCol === 0) {
+      if (state.fillRange) clearFillRange();
+      return;
+    }
+    if (Math.abs(dRow) >= Math.abs(dCol)) setFillRange(cell.row, anchor.col);
+    else setFillRange(anchor.row, cell.col);
+  }, [updateSelection, setFillRange, clearFillRange]);
+
+  // One rAF loop per drag: hit-test the latest pointer position and auto-scroll
+  // when the pointer is near or past the viewport edge.
+  const dragTick = useCallback(() => {
+    const drag = dragRef.current;
+    const wrapper = gridWrapperRef.current;
+    if (!drag || !wrapper) return;
+    drag.raf = null;
+    const box = wrapper.getBoundingClientRect();
+    const top = box.top + HEADER_HEIGHT;
+    const left = box.left + ROW_HEADER_WIDTH;
+    let dy = 0;
+    let dx = 0;
+    if (drag.clientY < top + AUTOSCROLL_EDGE) dy = drag.clientY - (top + AUTOSCROLL_EDGE);
+    else if (drag.clientY > box.bottom - AUTOSCROLL_EDGE) dy = drag.clientY - (box.bottom - AUTOSCROLL_EDGE);
+    if (drag.clientX < left + AUTOSCROLL_EDGE) dx = drag.clientX - (left + AUTOSCROLL_EDGE);
+    else if (drag.clientX > box.right - AUTOSCROLL_EDGE) dx = drag.clientX - (box.right - AUTOSCROLL_EDGE);
+    const scrolling = dx !== 0 || dy !== 0;
+    if (scrolling) {
+      wrapper.scrollTop += Math.max(-40, Math.min(40, dy / 2));
+      wrapper.scrollLeft += Math.max(-40, Math.min(40, dx / 2));
+    }
+    const cell = cellAtPoint(drag.clientX, drag.clientY);
+    if (cell) applyDragTarget(cell);
+    if (scrolling) drag.raf = requestAnimationFrame(dragTick);
+  }, [cellAtPoint, applyDragTarget]);
+
+  const handleDocMouseMove = useCallback((ev: MouseEvent) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    drag.clientX = ev.clientX;
+    drag.clientY = ev.clientY;
+    if (drag.raf === null) drag.raf = requestAnimationFrame(dragTick);
+  }, [dragTick]);
+
+  const handleDocMouseUp = useCallback(() => {
+    const drag = dragRef.current;
+    document.removeEventListener('mousemove', handleDocMouseMove);
+    document.removeEventListener('mouseup', handleDocMouseUp);
+    if (!drag) return;
+    if (drag.raf !== null) cancelAnimationFrame(drag.raf);
+    // Apply the final pointer position synchronously so a fast release still lands.
+    const cell = cellAtPoint(drag.clientX, drag.clientY);
+    if (cell) applyDragTarget(cell);
+    dragRef.current = null;
+    if (drag.mode === 'select') {
+      endSelection();
+    } else if (useAccelStore.getState().fillRange) {
+      executeFill();
+      clearFillRange();
+    }
+  }, [handleDocMouseMove, cellAtPoint, applyDragTarget, endSelection, executeFill, clearFillRange]);
+
+  const beginDrag = useCallback((mode: 'select' | 'fill', ev: React.MouseEvent) => {
+    dragRef.current = { mode, clientX: ev.clientX, clientY: ev.clientY, last: null, raf: null };
+    document.addEventListener('mousemove', handleDocMouseMove);
+    document.addEventListener('mouseup', handleDocMouseUp);
+  }, [handleDocMouseMove, handleDocMouseUp]);
+
+  useEffect(() => () => {
+    document.removeEventListener('mousemove', handleDocMouseMove);
+    document.removeEventListener('mouseup', handleDocMouseUp);
+  }, [handleDocMouseMove, handleDocMouseUp]);
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('.col-resize-handle') || target.closest('.cell-editor')) return;
+
+    if (target.closest('.fill-handle')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (editingCell) commitEdit();
+      beginDrag('fill', e);
+      return;
+    }
+
+    // Header clicks select a whole column or row.
+    const colHeader = target.closest('th[data-col-header]') as HTMLElement | null;
+    const rowHeader = target.closest('td[data-row-header]') as HTMLElement | null;
+    if (colHeader || rowHeader) {
+      e.preventDefault();
+      if (editingCell) commitEdit();
+      if (colHeader) {
+        const col = Number(colHeader.dataset.colHeader);
+        startSelection(1, col);
+        updateSelection(ROWS, col);
+      } else if (rowHeader) {
+        const row = Number(rowHeader.dataset.rowHeader);
+        startSelection(row, 1);
+        updateSelection(row, COLS);
+      }
+      endSelection();
+      gridRef.current?.focus({ preventScroll: true });
+      return;
+    }
+
+    const td = target.closest('td[data-row]') as HTMLElement | null;
+    if (!td) return;
+    const row = Number(td.dataset.row);
+    const col = Number(td.dataset.col);
     if (!row || !col) return;
 
-    if (isDraggingFill && selectedCell) {
-      // Only allow filling in the same row or column as the source
-      if (row === selectedCell.row || col === selectedCell.col) {
-        const targetChanged = !pendingFillTarget.current || pendingFillTarget.current.row !== row || pendingFillTarget.current.col !== col;
-        if (targetChanged) {
-          pendingFillTarget.current = { row, col };
-          if (fillRangeRaf.current === null) {
-            fillRangeRaf.current = requestAnimationFrame(() => {
-              if (pendingFillTarget.current) {
-                setFillRange(pendingFillTarget.current.row, pendingFillTarget.current.col);
-              }
-              fillRangeRaf.current = null;
-            });
-          }
-        }
-      }
-    } else if (isSelecting) {
+    // Keep focus in the editor while pointing at references; otherwise the
+    // grid takes focus for keyboard navigation.
+    e.preventDefault();
+    const pointing = editingCell && editValue.startsWith('=');
+    if (!pointing) gridRef.current?.focus({ preventScroll: true });
+
+    const state = useAccelStore.getState();
+    if (e.shiftKey && state.selectedCell) {
+      const anchor = state.selectedCell;
+      startSelection(anchor.row, anchor.col);
       updateSelection(row, col);
+    } else {
+      startSelection(row, col);
     }
-  }, [isDraggingFill, selectedCell, setFillRange, isSelecting, updateSelection]);
+    beginDrag('select', e);
+  }, [editingCell, editValue, commitEdit, beginDrag, startSelection, updateSelection, endSelection]);
 
-  const handleMouseUp = useCallback(() => {
-    if (isDraggingFill) {
-      executeFill();
-      setIsDraggingFill(false);
-      clearFillRange();
-      pendingFillTarget.current = null;
-      if (fillRangeRaf.current !== null) {
-        cancelAnimationFrame(fillRangeRaf.current);
-        fillRangeRaf.current = null;
-      }
-    }
-  }, [isDraggingFill, executeFill, clearFillRange]);
+  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const td = (e.target as HTMLElement).closest('td[data-row]') as HTMLElement | null;
+    if (!td) return;
+    const row = Number(td.dataset.row);
+    const col = Number(td.dataset.col);
+    if (!row || !col || (editingCell && editingCell.row === row && editingCell.col === col)) return;
+    selectCell(row, col);
+    startEditing(row, col, null, { mode: 'edit', focus: 'cell' });
+  }, [editingCell, selectCell, startEditing]);
 
-  // Add global mouse up listener
-  useEffect(() => {
-    if (isDraggingFill) {
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => document.removeEventListener('mouseup', handleMouseUp);
-    }
-  }, [isDraggingFill, handleMouseUp]);
+  // ----- keyboard ---------------------------------------------------------
 
-  // Clear dirty tracking after render (Excel-grade optimization)
-  useLayoutEffect(() => {
-    if (dirtyValues.size > 0 || dirtyFormulas.size > 0) {
-      clearDirty();
-    }
-  }, [dirtyValues, dirtyFormulas, clearDirty]);
+  const extendSelection = useCallback((dr: number, dc: number) => {
+    const state = useAccelStore.getState();
+    const anchor = state.selectedCell;
+    if (!anchor) return;
+    const end = state.selectionRange ? state.selectionRange.end : anchor;
+    const nr = Math.min(ROWS, Math.max(1, end.row + dr));
+    const nc = Math.min(COLS, Math.max(1, end.col + dc));
+    startSelection(anchor.row, anchor.col);
+    updateSelection(nr, nc);
+    endSelection();
+    scrollCellIntoView(nr, nc);
+  }, [startSelection, updateSelection, endSelection, scrollCellIntoView]);
 
-  // Grid keyboard navigation
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Escape always cancels an in-progress edit, like Excel — even when the
-    // grid (not the formula input) has focus. Leaving the edit active meant
-    // the NEXT commit silently landed in the stale editing cell.
+    if (editingCell) return; // the editor input owns keys while editing
+    const mod = e.ctrlKey || e.metaKey;
+
     if (e.key === 'Escape') {
       e.preventDefault();
-      setEditingCell(null);
-      setEditValue('');
       clearSelection();
       return;
     }
-
-    // Undo / Redo. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z or Ctrl+Y redoes.
-    // Handled BEFORE the selected-cell guard: undo() clears the selection, so
-    // gating these on selectedCell would swallow every keystroke after the
-    // first undo. Skipped while editing, where the input owns its text history.
-    // Store actions are no-ops when there is nothing to undo/redo or the
-    // workbook is read-only, so we can call them unconditionally.
-    if (!editingCell && (e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    if (mod && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
-      if (e.shiftKey) {
-        redo();
-      } else {
-        undo();
-      }
+      if (e.shiftKey) redo();
+      else undo();
       return;
     }
-    if (!editingCell && (e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+    if (mod && (e.key === 'y' || e.key === 'Y')) {
       e.preventDefault();
       redo();
       return;
     }
+    if (mod && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault();
+      startSelection(1, 1);
+      updateSelection(ROWS, COLS);
+      endSelection();
+      return;
+    }
 
-    if (!selectedCell || editingCell) return;
-
+    if (!selectedCell) return;
     const { row, col } = selectedCell;
 
-    // Copy/Paste/Cut shortcuts
-    if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-      e.preventDefault();
-      copyCell(row, col);
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-      e.preventDefault();
-      pasteCell(row, col);
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
-      e.preventDefault();
-      cutCell(row, col);
-      return;
-    }
-    // Ctrl+Arrow: jump to the edge of the data region, like Excel
-    if ((e.ctrlKey || e.metaKey) && e.key.startsWith('Arrow')) {
+    if (mod && e.key === 'c') { e.preventDefault(); copyCell(row, col); return; }
+    if (mod && e.key === 'v') { e.preventDefault(); pasteCell(row, col); return; }
+    if (mod && e.key === 'x') { e.preventDefault(); cutCell(row, col); return; }
+
+    if (mod && e.key.startsWith('Arrow')) {
+      // Jump to the edge of the data region.
       e.preventDefault();
       const dr = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
       const dc = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
@@ -538,134 +802,63 @@ export const SpreadsheetGrid: React.FC = () => {
         const v = getCell(r, c);
         return v === null || v === undefined || v === '';
       };
+      const inBounds = (r: number, c: number) => r >= 1 && r <= ROWS && c >= 1 && c <= COLS;
       let r = row;
       let c = col;
-      const inBounds = (rr: number, cc: number) => rr >= 1 && rr <= ROWS && cc >= 1 && cc <= COLS;
       if (inBounds(r + dr, c + dc) && !isEmpty(r + dr, c + dc)) {
-        // Inside a data run: go to its far edge
         while (inBounds(r + dr, c + dc) && !isEmpty(r + dr, c + dc)) { r += dr; c += dc; }
       } else {
-        // In empty space: go to the next occupied cell, or the sheet edge
         while (inBounds(r + dr, c + dc) && isEmpty(r + dr, c + dc)) { r += dr; c += dc; }
-        if (!inBounds(r + dr, c + dc)) {
-          // hit the boundary
-        } else { r += dr; c += dc; }
+        if (inBounds(r + dr, c + dc)) { r += dr; c += dc; }
       }
-      selectCell(r, c);
+      moveTo(r, c);
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Home') {
+    if (mod && e.key === 'Home') { e.preventDefault(); moveTo(1, 1); return; }
+
+    if (e.shiftKey && e.key.startsWith('Arrow')) {
       e.preventDefault();
-      selectCell(1, 1);
-      return;
-    }
-    if (e.key === 'PageDown') {
-      e.preventDefault();
-      selectCell(Math.min(ROWS, row + 20), col);
-      return;
-    }
-    if (e.key === 'PageUp') {
-      e.preventDefault();
-      selectCell(Math.max(1, row - 20), col);
+      const dr = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+      const dc = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      extendSelection(dr, dc);
       return;
     }
 
-    // Arrow key navigation
-    if (e.key === 'ArrowUp' && row > 1) {
-      e.preventDefault();
-      selectCell(row - 1, col);
-    } else if (e.key === 'ArrowDown' && row < ROWS) {
-      e.preventDefault();
-      selectCell(row + 1, col);
-    } else if (e.key === 'ArrowLeft' && col > 1) {
-      e.preventDefault();
-      selectCell(row, col - 1);
-    } else if (e.key === 'ArrowRight' && col < COLS) {
-      e.preventDefault();
-      selectCell(row, col + 1);
-    }
-    // Enter key - start editing or move down
-    else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (e.shiftKey && row > 1) {
-        selectCell(row - 1, col);
-      } else if (!e.shiftKey && row < ROWS) {
-        selectCell(row + 1, col);
-      }
-    }
-    // Tab key - move right/left
-    else if (e.key === 'Tab') {
-      e.preventDefault();
-      if (e.shiftKey && col > 1) {
-        selectCell(row, col - 1);
-      } else if (!e.shiftKey && col < COLS) {
-        selectCell(row, col + 1);
-      }
-    }
-    // F2 key - start editing
-    else if (e.key === 'F2') {
-      e.preventDefault();
-      startEditing(row, col);
-    }
-    // Delete key - clear cell
-    else if (e.key === 'Delete' || e.key === 'Backspace') {
-      e.preventDefault();
-      setCell(row, col, '');
-    }
-    // Any other key - start typing
-    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault();
-      startEditing(row, col, e.key);
-    }
-  }, [selectedCell, editingCell, selectCell, copyCell, pasteCell, cutCell, setCell, startEditing, undo, redo, clearSelection, getCell]);
-
-  const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    if (scrollRaf.current !== null) {
-      cancelAnimationFrame(scrollRaf.current);
-    }
-    scrollRaf.current = requestAnimationFrame(() => {
-      const nextStartRow = Math.max(1, Math.floor(target.scrollTop / ROW_HEIGHT) + 1 - OVERSCAN);
-      const nextStartCol = Math.max(1, firstColAt(colLeftRef.current, target.scrollLeft) - OVERSCAN);
-      setVirtualWindow((prev) => {
-        if (prev.startRow === nextStartRow && prev.startCol === nextStartCol) {
-          return prev;
+    switch (e.key) {
+      case 'ArrowUp': e.preventDefault(); moveTo(row - 1, col); return;
+      case 'ArrowDown': e.preventDefault(); moveTo(row + 1, col); return;
+      case 'ArrowLeft': e.preventDefault(); moveTo(row, col - 1); return;
+      case 'ArrowRight': e.preventDefault(); moveTo(row, col + 1); return;
+      case 'PageDown': e.preventDefault(); moveTo(row + 20, col); return;
+      case 'PageUp': e.preventDefault(); moveTo(row - 20, col); return;
+      case 'Home': e.preventDefault(); moveTo(row, 1); return;
+      case 'Enter': e.preventDefault(); moveTo(e.shiftKey ? row - 1 : row + 1, col); return;
+      case 'Tab': e.preventDefault(); moveTo(row, e.shiftKey ? col - 1 : col + 1); return;
+      case 'F2': e.preventDefault(); startEditing(row, col, null, { mode: 'edit', focus: 'cell' }); return;
+      case 'Delete':
+      case 'Backspace': {
+        e.preventDefault();
+        const range = useAccelStore.getState().selectionRange;
+        if (range) {
+          const { r1, r2, c1, c2 } = normRange(range.start, range.end);
+          clearRange(r1, c1, r2, c2);
+        } else {
+          clearRange(row, col, row, col);
         }
-        return { startRow: nextStartRow, startCol: nextStartCol };
-      });
-      scrollRaf.current = null;
-    });
-  }, []);
-
-  const colToLetter = useCallback((col: number): string => {
-    let letter = '';
-    let c = col;
-    while (c > 0) {
-      const remainder = (c - 1) % 26;
-      letter = String.fromCharCode(65 + remainder) + letter;
-      c = Math.floor((c - 1) / 26);
+        return;
+      }
+      default:
+        break;
     }
-    return letter;
-  }, []);
 
-  const columnLabels = useMemo(
-    () => Array.from({ length: COLS }, (_, idx) => colToLetter(idx + 1)),
-    [colToLetter]
-  );
+    if (e.key.length === 1 && !mod && !e.altKey) {
+      e.preventDefault();
+      startEditing(row, col, e.key, { mode: 'enter', focus: 'cell' });
+    }
+  }, [editingCell, selectedCell, clearSelection, undo, redo, startSelection, updateSelection, endSelection, copyCell, pasteCell, cutCell, getCell, moveTo, extendSelection, startEditing, clearRange]);
 
-  // Cumulative left-edge offsets for the current column widths. Reduces to the
-  // uniform fixed-width table when no column has been resized. Assigned to the
-  // ref during render so the scroll/measure callbacks always read fresh values.
-  const colLeft = useMemo(() => {
-    const arr = new Array<number>(COLS + 2);
-    arr[1] = 0;
-    for (let c = 1; c <= COLS; c++) arr[c + 1] = arr[c] + colWidths[c - 1];
-    return arr;
-  }, [colWidths]);
-  colLeftRef.current = colLeft;
+  // ----- column resize ----------------------------------------------------
 
-  // Begin dragging a column border. Global listeners (installed by the effect
-  // below while resizingCol is set) do the actual width tracking.
   const handleResizeMouseDown = useCallback((e: React.MouseEvent, col: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -675,7 +868,6 @@ export const SpreadsheetGrid: React.FC = () => {
 
   useEffect(() => {
     if (resizingCol === null) return;
-
     const handleMove = (ev: MouseEvent) => {
       const state = colResizeRef.current;
       if (!state) return;
@@ -691,7 +883,6 @@ export const SpreadsheetGrid: React.FC = () => {
       colResizeRef.current = null;
       setResizingCol(null);
     };
-
     document.addEventListener('mousemove', handleMove);
     document.addEventListener('mouseup', handleEnd);
     return () => {
@@ -700,249 +891,85 @@ export const SpreadsheetGrid: React.FC = () => {
     };
   }, [resizingCol]);
 
-  const formatCellValue = useCallback((value: CellValue): string => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'number') {
-      // Fast number formatting - toLocaleString is VERY slow
-      // Only use it for numbers that need special formatting
-      if (Number.isInteger(value) && Math.abs(value) < 1000000) {
-        return String(value);
-      }
-      // For decimals, use toFixed for better performance
-      const str = value.toFixed(10);
-      return str.replace(/\.?0+$/, ''); // Remove trailing zeros
-    }
-    return String(value);
-  }, []);
+  // ----- virtual window ---------------------------------------------------
 
-  // Parse formula to detect function and current parameter for hints
-  const updateFormulaHint = useCallback((formula: string, caretPos: number) => {
-    if (!formula.startsWith('=')) {
-      setFormulaHint(null);
-      return;
-    }
-
-    // Find the function call that contains the caret
-    const beforeCaret = formula.substring(0, caretPos);
-
-    // Match function name and opening parenthesis
-    const funcMatch = beforeCaret.match(/([A-Z_]+)\(([^)]*)$/);
-    if (!funcMatch) {
-      setFormulaHint(null);
-      return;
-    }
-
-    const funcName = funcMatch[1];
-    const params = formulaSignatures[funcName];
-
-    if (!params) {
-      setFormulaHint(null);
-      return;
-    }
-
-    // Count commas to determine current parameter (ignoring commas in quotes)
-    const argsText = funcMatch[2];
-    let currentParam = 0;
-    let inQuotes = false;
-    let parenDepth = 0;
-
-    for (let i = 0; i < argsText.length; i++) {
-      const char = argsText[i];
-      if (char === '"' && (i === 0 || argsText[i - 1] !== '\\')) {
-        inQuotes = !inQuotes;
-      } else if (!inQuotes) {
-        if (char === '(') {
-          parenDepth++;
-        } else if (char === ')') {
-          parenDepth--;
-        } else if (char === ',' && parenDepth === 0) {
-          currentParam++;
-        }
-      }
-    }
-
-    setFormulaHint({ func: funcName, params, currentParam });
-  }, [formulaSignatures]);
-
-  const totalGridHeight = ROWS * ROW_HEIGHT;
   const totalGridWidth = colLeft[COLS + 1];
-
-  const estimatedVisibleRowCount = viewportHeight > 0
-    ? Math.ceil(viewportHeight / ROW_HEIGHT)
-    : ROWS;
+  const visibleRowCount = Math.ceil((viewportHeight || DEFAULT_VIEWPORT_HEIGHT) / ROW_HEIGHT);
   const startRow = Math.max(1, Math.min(ROWS, virtualWindow.startRow));
-  const endRow = Math.min(ROWS, startRow + estimatedVisibleRowCount + OVERSCAN * 2 - 1);
+  const endRow = Math.min(ROWS, startRow + visibleRowCount + OVERSCAN_ROWS * 2);
   const topSpacerHeight = (startRow - 1) * ROW_HEIGHT;
-  const bottomSpacerHeight = Math.max(totalGridHeight - endRow * ROW_HEIGHT, 0);
+  const bottomSpacerHeight = Math.max((ROWS - endRow) * ROW_HEIGHT, 0);
 
   const startCol = Math.max(1, Math.min(COLS, virtualWindow.startCol));
-  // startCol already sits OVERSCAN columns behind the true first visible column,
-  // so measure the viewport from that true first column, walk until it is fully
-  // covered, then pad another OVERSCAN so cells never blank out during scroll.
-  const firstVisibleCol = Math.min(COLS, startCol + OVERSCAN);
-  const rightBound = colLeft[firstVisibleCol] + (viewportWidth > 0 ? viewportWidth : DEFAULT_VIEWPORT_WIDTH);
+  const firstVisibleCol = Math.min(COLS, startCol + OVERSCAN_COLS);
+  const rightBound = colLeft[firstVisibleCol] + (viewportWidth || DEFAULT_VIEWPORT_WIDTH);
   let coverCol = firstVisibleCol;
   while (coverCol < COLS && colLeft[coverCol + 1] < rightBound) coverCol++;
-  const endCol = Math.min(COLS, coverCol + OVERSCAN);
+  const endCol = Math.min(COLS, coverCol + OVERSCAN_COLS);
   const leftSpacerWidth = colLeft[startCol];
   const rightSpacerWidth = Math.max(totalGridWidth - colLeft[endCol + 1], 0);
 
-  const visibleRows = useMemo(
-    () => Array.from({ length: endRow - startRow + 1 }, (_, i) => startRow + i),
-    [startRow, endRow]
-  );
   const visibleColumns = useMemo(
     () => Array.from({ length: endCol - startCol + 1 }, (_, i) => startCol + i),
     [startCol, endCol]
   );
 
-  // Fresh-sheet hint: a workbook with no populated cells. Empty cells are pruned
-  // from the engine's map, so size === 0 is an exact "nothing typed yet" signal.
-  // docVersion bumps on every mutation, keeping this in sync without polling.
-  // docVersion is an intentional trigger: it bumps on every mutation so the
-  // empty-state check re-runs when cells change (engine ref stays stable).
-  const isSheetEmpty = useMemo(
-    () => engine.getWorksheet().cells.size === 0,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [engine, docVersion]
-  );
+  const version = `${docVersion}|${activeSheet}`;
 
-  // Memoize selected cell data for formula bar to avoid duplicate getCellObject calls
+  // ----- selection-derived overlay state ------------------------------------
+
+  const range = selectionRange ? normRange(selectionRange.start, selectionRange.end) : null;
+  const hl = range ?? (selectedCell ? { r1: selectedCell.row, r2: selectedCell.row, c1: selectedCell.col, c2: selectedCell.col } : null);
+  const isMultiRange = range !== null && (range.r1 !== range.r2 || range.c1 !== range.c2);
+
+  const activeRect = selectedCell ? rectOf(selectedCell.row, selectedCell.col, selectedCell.row, selectedCell.col) : null;
+  const rangeRect = isMultiRange && range ? rectOf(range.r1, range.c1, range.r2, range.c2) : null;
+  const sourceBlock = isMultiRange && range ? range : hl;
+  const handleRect = sourceBlock ? rectOf(sourceBlock.r2, sourceBlock.c2, sourceBlock.r2, sourceBlock.c2) : null;
+
+  let fillRect: Rect | null = null;
+  if (fillRange && sourceBlock) {
+    fillRect = rectOf(
+      Math.min(sourceBlock.r1, fillRange.row),
+      Math.min(sourceBlock.c1, fillRange.col),
+      Math.max(sourceBlock.r2, fillRange.row),
+      Math.max(sourceBlock.c2, fillRange.col),
+    );
+  }
+
+  let editorRect: Rect | null = null;
+  if (editingCell) {
+    const base = rectOf(editingCell.row, editingCell.col, editingCell.row, editingCell.col);
+    const maxWidth = totalGridWidth + ROW_HEADER_WIDTH - base.left;
+    editorRect = { ...base, width: Math.min(maxWidth, Math.max(base.width, measureText(editValue) + 16)) };
+  }
+
+  const cellReference = range && isMultiRange
+    ? `${colToLetter(range.c1)}${range.r1}:${colToLetter(range.c2)}${range.r2}`
+    : selectedCell ? `${colToLetter(selectedCell.col)}${selectedCell.row}` : '';
+
   const selectedCellData = useMemo(() => {
     if (!selectedCell) return null;
     const cellObj = getCellObject(selectedCell.row, selectedCell.col);
-    return {
-      formula: cellObj?.formula,
-      value: cellObj?.value ?? '',
-    };
-  }, [selectedCell, getCellObject]);
-
-  const formulaBarValue = useMemo(() => {
-    if (editingCell) return editValue;
-    if (!selectedCellData) return '';
-    return selectedCellData.formula || String(selectedCellData.value);
-  }, [editingCell, editValue, selectedCellData]);
-
-  const applyReferenceToFormula = useCallback((row: number, col: number, replaceExisting: boolean, rangeStart?: { row: number; col: number }) => {
-    if (!editingCell) return;
-
-    // Create range reference if rangeStart is provided; a range that starts
-    // and ends on the same cell is a plain reference (C4, never C4:C4).
-    let refString: string;
-    if (rangeStart && (rangeStart.row !== row || rangeStart.col !== col)) {
-      const startRef = `${colToLetter(rangeStart.col)}${rangeStart.row}`;
-      const endRef = `${colToLetter(col)}${row}`;
-      refString = `${startRef}:${endRef}`;
-    } else {
-      refString = `${colToLetter(col)}${row}`;
-    }
-
-    const selection = replaceExisting && lastInsertedRef.current
-      ? lastInsertedRef.current
-      : caretPositionRef.current;
-
-    const start = Math.max(0, selection.start ?? 0);
-    const end = Math.max(start, selection.end ?? start);
-
-    setEditValue((prev) => {
-      const nextValue = prev.slice(0, start) + refString + prev.slice(end);
-      const caretPos = start + refString.length;
-      caretPositionRef.current = { start: caretPos, end: caretPos };
-      lastInsertedRef.current = { start, end: caretPos };
-
-      requestAnimationFrame(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-          inputRef.current.setSelectionRange(caretPos, caretPos);
-        }
-      });
-
-      return nextValue;
-    });
-  }, [colToLetter, editingCell]);
-
-  useEffect(() => {
-    if (!editingCell) {
-      lastInsertedRef.current = null;
-      lastPointedKeyRef.current = null;
-    }
-  }, [editingCell]);
-
-  useEffect(() => {
-    if (!editingCell || !selectedCell) return;
-
-    const targetRow = selectionRange ? selectionRange.end.row : selectedCell.row;
-    const targetCol = selectionRange ? selectionRange.end.col : selectedCell.col;
-
-    if (targetRow === editingCell.row && targetCol === editingCell.col) return;
-
-    // Only react to deliberate selection gestures, not passive scrolling.
-    if (!isSelecting && !selectionRange && !lastInsertedRef.current) return;
-
-    // Reference insertion is a FORMULA-building affordance. Without this
-    // guard, dragging a multi-cell selection while a non-formula edit was
-    // active spliced raw references into the value ("C4:C4B2:B2…").
-    if (!editValue.startsWith('=')) return;
-
-    // "Point mode" is active only while a reference is grammatically expected
-    // at the caret (after =, an operator, '(' or ',') OR we're already mid-point
-    // (lastInsertedRef set, so a follow-up click re-targets the same ref). If
-    // neither holds, the click means "leave this formula and go to that cell":
-    // commit the edit rather than appending a stray reference. This is what
-    // stops "=1+2" from becoming "=1+2D11" when you click around.
-    const inPointMode = lastInsertedRef.current !== null;
-    if (!inPointMode && !formulaExpectsReference(editValue, caretPositionRef.current.start)) {
-      handleCellSubmit();
-      return;
-    }
-
-    // A single click bumps selectedCell, selectionRange and isSelecting one
-    // after another, re-running this effect; dedupe so the same target isn't
-    // spliced in several times.
-    const rangeStart = selectionRange ? selectionRange.start : undefined;
-    const pointKey = `${rangeStart ? `${rangeStart.col},${rangeStart.row}:` : ''}${targetCol},${targetRow}`;
-    if (lastPointedKeyRef.current === pointKey) return;
-    lastPointedKeyRef.current = pointKey;
-
-    applyReferenceToFormula(targetRow, targetCol, inPointMode || Boolean(selectionRange), rangeStart);
-  }, [applyReferenceToFormula, editingCell, selectedCell, selectionRange, isSelecting, editValue, handleCellSubmit]);
-
-  // Helper function to get cell state (computed on-demand, not stored)
-  // Memoized with dirty tracking to only update when cells actually change
-  const getCellDisplayData = useCallback((row: number, col: number) => {
-    const cellObj = getCellObject(row, col);
-    const value = getCell(row, col);
-
-    return {
-      displayValue: formatCellValue(value),
-      isParameter: cellObj?.isParameter || false,
-      format: cellObj?.format,
-    };
-    // dirtyValues/dirtyFormulas are intentional triggers: they change identity
-    // when cells recalc, forcing affected cells to repaint.
+    return cellObj?.formula ?? (cellObj?.value != null ? formatCellValue(cellObj.value as CellValue) : '');
+    // docVersion: the cell object is mutated in place by the engine.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getCellObject, getCell, formatCellValue, dirtyValues, dirtyFormulas]);
+  }, [selectedCell, getCellObject, docVersion]);
 
-  // Helper function to get cell state (computed on-demand, not stored)
-  const getCellStateData = useCallback((row: number, col: number) => {
-    const isSelected = selectedCell?.row === row && selectedCell?.col === col;
-    const isEditing = editingCell?.row === row && editingCell?.col === col;
+  const formulaBarValue = editingCell ? editValue : selectedCellData ?? '';
 
-    // Check if cell is in selection range
-    const isInSelectionRange = selectionRange ? (
-      row >= Math.min(selectionRange.start.row, selectionRange.end.row) &&
-      row <= Math.max(selectionRange.start.row, selectionRange.end.row) &&
-      col >= Math.min(selectionRange.start.col, selectionRange.end.col) &&
-      col <= Math.max(selectionRange.start.col, selectionRange.end.col)
-    ) : false;
-
-    const isInFillRange = fillRange && selectedCell ? (
-      (selectedCell.row === row && col >= Math.min(selectedCell.col, fillRange.col) && col <= Math.max(selectedCell.col, fillRange.col)) ||
-      (selectedCell.col === col && row >= Math.min(selectedCell.row, fillRange.row) && row <= Math.max(selectedCell.row, fillRange.row))
-    ) : false;
-
-    return { isSelected, isEditing, isInSelectionRange, isInFillRange };
-  }, [selectedCell, editingCell, selectionRange, fillRange]);
+  const hintNode = formulaHint && (
+    <div className={`formula-hint${hintAnchor === 'cell' ? ' formula-hint--cell' : ''}`}>
+      <strong>{formulaHint.func}(</strong>
+      {formulaHint.params.map((param, idx) => (
+        <span key={idx} className={idx === formulaHint.currentParam ? 'current-param' : ''}>
+          {idx > 0 && ', '}
+          {param}
+        </span>
+      ))}
+      <strong>)</strong>
+    </div>
+  );
 
   return (
     <div
@@ -956,151 +983,130 @@ export const SpreadsheetGrid: React.FC = () => {
       onKeyDown={handleGridKeyDown}
     >
       <div className="formula-bar">
-        <div className="cell-reference">
-          {selectedCell && `${colToLetter(selectedCell.col)}${selectedCell.row}`}
-        </div>
+        <div className="cell-reference" aria-label="Selected range">{cellReference}</div>
+        <span className="formula-bar__fx" aria-hidden="true">fx</span>
         <input
-          ref={inputRef}
+          ref={barInputRef}
           type="text"
           className="formula-input"
           aria-label="Formula bar"
           value={formulaBarValue}
-          onChange={(e) => {
-            const value = e.target.value;
-            const caretPos = e.target.selectionStart ?? 0;
-            setEditValue(value);
-            caretPositionRef.current = {
-              start: caretPos,
-              end: e.target.selectionEnd ?? 0,
-            };
-            lastInsertedRef.current = null;
-            lastPointedKeyRef.current = null;
-            updateFormulaHint(value, caretPos);
-          }}
-          onSelect={(e) => {
-            caretPositionRef.current = {
-              start: e.currentTarget.selectionStart ?? 0,
-              end: e.currentTarget.selectionEnd ?? 0,
-            };
-          }}
-          onKeyDown={handleFormulaKeyDown}
-          onFocus={() => {
+          readOnly={isReadOnly}
+          onChange={handleEditorChange}
+          onSelect={handleEditorSelect}
+          onKeyDown={handleEditorKeyDown}
+          onFocus={(e) => {
+            activeEditorRef.current = e.currentTarget;
+            setHintAnchor('bar');
             if (selectedCell && !editingCell) {
-              startEditing(selectedCell.row, selectedCell.col);
+              startEditing(selectedCell.row, selectedCell.col, null, { mode: 'edit', focus: 'none' });
             }
           }}
-          placeholder="Enter formula or value"
         />
-        {formulaHint && (
-          <div className="formula-hint">
-            <strong>{formulaHint.func}(</strong>
-            {formulaHint.params.map((param, idx) => (
-              <span key={idx} className={idx === formulaHint.currentParam ? 'current-param' : ''}>
-                {idx > 0 && ', '}
-                {param}
-              </span>
-            ))}
-            <strong>)</strong>
-          </div>
-        )}
+        {hintAnchor === 'bar' && hintNode}
       </div>
 
-      <div
-        className="grid-wrapper"
-        ref={gridWrapperRef}
-        onScroll={handleGridScroll}
-      >
-        {isSheetEmpty && (
-          <div className="grid-empty-hint" aria-hidden="true">
-            <div className="grid-empty-title">This sheet is empty</div>
-            <div className="grid-empty-sub">
-              Click any cell and start typing. Begin a formula with <code>=</code>,
-              drag the fill handle to extend a series, and press <kbd>Ctrl</kbd>+<kbd>Z</kbd> to undo.
-            </div>
-          </div>
-        )}
-        <table className="spreadsheet-grid">
-          <thead>
-            <tr>
-              <th className="row-header"></th>
-              {leftSpacerWidth > 0 && (
-                <th style={{ width: leftSpacerWidth }} />
-              )}
+      <div className="grid-wrapper" ref={gridWrapperRef} onScroll={handleGridScroll}>
+        <div
+          className="grid-canvas"
+          style={{ width: ROW_HEADER_WIDTH + totalGridWidth, height: HEADER_HEIGHT + ROWS * ROW_HEIGHT }}
+          onMouseDown={handleCanvasMouseDown}
+          onDoubleClick={handleCanvasDoubleClick}
+        >
+          <table className="spreadsheet-grid" style={{ width: ROW_HEADER_WIDTH + totalGridWidth }}>
+            <colgroup>
+              <col style={{ width: ROW_HEADER_WIDTH }} />
+              {leftSpacerWidth > 0 && <col style={{ width: leftSpacerWidth }} />}
               {visibleColumns.map((col) => (
-                <th
-                  key={col}
-                  className={`col-header${resizingCol === col ? ' resizing' : ''}${col >= hlColMin && col <= hlColMax ? ' header--active' : ''}`}
-                  style={{ width: colWidths[col - 1] }}
-                >
-                  <span className="col-label">{columnLabels[col - 1] || colToLetter(col)}</span>
-                  <span
-                    className="col-resize-handle"
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label={`Resize column ${columnLabels[col - 1] || colToLetter(col)}`}
-                    onMouseDown={(e) => handleResizeMouseDown(e, col)}
-                    onClick={(e) => e.stopPropagation()}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  />
-                </th>
+                <col key={col} style={{ width: colWidths[col - 1] }} />
               ))}
-              {rightSpacerWidth > 0 && (
-                <th style={{ width: rightSpacerWidth }} />
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {topSpacerHeight > 0 && (
-              <tr className="spacer-row" style={{ height: topSpacerHeight }}>
-                <td colSpan={COLS + 1} />
-              </tr>
-            )}
-
-            {visibleRows.map((row) => (
-              <tr key={row}>
-                <td className={`row-header${row >= hlRowMin && row <= hlRowMax ? ' header--active' : ''}`}>{row}</td>
-                {leftSpacerWidth > 0 && (
-                  <td style={{ width: leftSpacerWidth }} />
-                )}
-                {visibleColumns.map((col) => {
-                  // Compute cell data on-demand to avoid storing massive Maps in memory
-                  const cellData = getCellDisplayData(row, col);
-                  const cellState = getCellStateData(row, col);
-
-                  return (
-                    <GridCell
-                      key={col}
-                      row={row}
-                      col={col}
-                      displayValue={cellData.displayValue}
-                      colWidth={colWidths[col - 1]}
-                      cellFormat={cellData.format}
-                      isSelected={cellState.isSelected}
-                      isEditing={cellState.isEditing}
-                      isParameter={cellData.isParameter}
-                      isInFillRange={cellState.isInFillRange}
-                      isInSelectionRange={cellState.isInSelectionRange}
-                      onClick={handleCellClick}
-                      onDoubleClick={handleCellDoubleClick}
-                      onMouseDown={handleCellMouseDown}
-                      onMouseEnter={handleCellMouseEnter}
-                      onFillHandleMouseDown={handleFillHandleMouseDown}
+              {rightSpacerWidth > 0 && <col style={{ width: rightSpacerWidth }} />}
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="corner-header" />
+                {leftSpacerWidth > 0 && <th className="spacer-cell" />}
+                {visibleColumns.map((col) => (
+                  <th
+                    key={col}
+                    data-col-header={col}
+                    className={`col-header${resizingCol === col ? ' resizing' : ''}${hl && col >= hl.c1 && col <= hl.c2 ? ' header--active' : ''}`}
+                  >
+                    <span className="col-label">{COLUMN_LABELS[col - 1]}</span>
+                    <span
+                      className="col-resize-handle"
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={`Resize column ${COLUMN_LABELS[col - 1]}`}
+                      onMouseDown={(e) => handleResizeMouseDown(e, col)}
                     />
-                  );
-                })}
-                {rightSpacerWidth > 0 && (
-                  <td style={{ width: rightSpacerWidth }} />
-                )}
+                  </th>
+                ))}
+                {rightSpacerWidth > 0 && <th className="spacer-cell" />}
               </tr>
-            ))}
+            </thead>
+            <tbody>
+              {topSpacerHeight > 0 && (
+                <tr className="spacer-row" style={{ height: topSpacerHeight }}>
+                  <td colSpan={visibleColumns.length + 3} />
+                </tr>
+              )}
+              {Array.from({ length: endRow - startRow + 1 }, (_, i) => {
+                const row = startRow + i;
+                return (
+                  <GridRow
+                    key={row}
+                    row={row}
+                    startCol={startCol}
+                    endCol={endCol}
+                    hasLeftSpacer={leftSpacerWidth > 0}
+                    hasRightSpacer={rightSpacerWidth > 0}
+                    engine={engine}
+                    version={version}
+                    headerActive={hl !== null && row >= hl.r1 && row <= hl.r2}
+                  />
+                );
+              })}
+              {bottomSpacerHeight > 0 && (
+                <tr className="spacer-row" style={{ height: bottomSpacerHeight }}>
+                  <td colSpan={visibleColumns.length + 3} />
+                </tr>
+              )}
+            </tbody>
+          </table>
 
-            {bottomSpacerHeight > 0 && (
-              <tr className="spacer-row" style={{ height: bottomSpacerHeight }}>
-                <td colSpan={COLS + 1} />
-              </tr>
-            )}
-          </tbody>
-        </table>
+          {/* Overlay layer */}
+          {rangeRect && <div className="sel-range" style={boxStyle(outset(rangeRect))} />}
+          {activeRect && !editingCell && <div className="sel-active" style={boxStyle(outset(activeRect))} />}
+          {fillRect && <div className="sel-fill-preview" style={boxStyle(outset(fillRect))} />}
+          {handleRect && !editingCell && !isReadOnly && !fillRange && (
+            <div
+              className="fill-handle"
+              title="Drag to fill"
+              style={{ transform: `translate(${handleRect.left + handleRect.width - 4}px, ${handleRect.top + handleRect.height - 4}px)` }}
+            />
+          )}
+          {editorRect && (
+            <div className="cell-editor" style={boxStyle(outset(editorRect))}>
+              <input
+                ref={cellInputRef}
+                className="cell-editor__input"
+                aria-label="Cell editor"
+                value={editValue}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={handleEditorChange}
+                onSelect={handleEditorSelect}
+                onKeyDown={handleEditorKeyDown}
+                onFocus={(e) => {
+                  activeEditorRef.current = e.currentTarget;
+                  setHintAnchor('cell');
+                }}
+              />
+              {hintAnchor === 'cell' && hintNode}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

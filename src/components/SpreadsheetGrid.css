@@ -1,7 +1,7 @@
 /**
  * SpreadsheetGrid.css
  * Co-located polish for the grid: trustworthy error cells, an empty-sheet hint,
- * column-resize affordances, and a clearer active-cell focus ring.
+ * and column-resize affordances.
  *
  * Owns only NEW rules. Never redefines the base .cell / .col-header / .grid-wrapper
  * geometry that lives in src/App.css (shell agent's file).
@@ -65,52 +65,3 @@
   user-select: none;
 }
 
-/* ===== Active-cell focus ring ===== */
-/* The container holds keyboard focus; surface that on the selected cell so a
- * keyboard user can always see where input will land. Additive box-shadow —
- * does not fight the existing .cell.selected outline in App.css. */
-.spreadsheet-container:focus-visible .cell.selected {
-  box-shadow: 0 0 0 2px var(--cell-selected), 0 0 0 4px var(--selection-fill, rgba(26, 115, 232, 0.2));
-}
-
-/* ===== Empty-sheet hint ===== */
-.grid-empty-hint {
-  position: absolute;
-  top: 96px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 420px;
-  padding: 18px 22px;
-  text-align: center;
-  border: 1px dashed var(--button-border);
-  border-radius: 10px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-  pointer-events: none;
-  z-index: 1;
-  opacity: 0.9;
-}
-
-.grid-empty-title {
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.grid-empty-sub {
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.grid-empty-sub code,
-.grid-empty-sub kbd {
-  font-family: 'Consolas', 'SFMono-Regular', ui-monospace, monospace;
-  font-size: 0.8rem;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--button-bg, rgba(0, 0, 0, 0.05));
-  border: 1px solid var(--button-border);
-  color: var(--text-primary);
-}

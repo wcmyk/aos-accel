@@ -9,6 +9,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { useShallow } from 'zustand/react/shallow';
 import { CellFormat } from '../engine/types';
 import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
@@ -61,7 +62,9 @@ export const Ribbon: React.FC = () => {
     canUndo,
     canRedo,
     isReadOnly,
-  } = useAccelStore();
+  } = useAccelStore(
+    useShallow((s) => ({ selectedCell: s.selectedCell, selectionRange: s.selectionRange, copyCell: s.copyCell, cutCell: s.cutCell, pasteCell: s.pasteCell, formatCell: s.formatCell, getCell: s.getCell, getCellObject: s.getCellObject, setCell: s.setCell, sortColumn: s.sortColumn, insertRow: s.insertRow, deleteRow: s.deleteRow, insertColumn: s.insertColumn, deleteColumn: s.deleteColumn, exportCSV: s.exportCSV, setParameter: s.setParameter, addGraph: s.addGraph, removeGraph: s.removeGraph, getGraphs: s.getGraphs, watchlist: s.watchlist, removeWatchedTicker: s.removeWatchedTicker, toggleWatchedTicker: s.toggleWatchedTicker, setStockPickerOpen: s.setStockPickerOpen, undo: s.undo, redo: s.redo, canUndo: s.canUndo, canRedo: s.canRedo, isReadOnly: s.isReadOnly }))
+  );
 
   // Theme is managed locally to avoid triggering re-renders across the whole app.
   const [localTheme, setLocalTheme] = useState<string>(() => {

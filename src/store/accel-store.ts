@@ -143,14 +143,14 @@ function calculateFillValue(sourceValue: CellValue, step: number, sourceFormula?
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const dayIndex = days.findIndex(d => d.toLowerCase() === sourceValue.toLowerCase());
     if (dayIndex !== -1) {
-      return days[(dayIndex + step) % 7];
+      return days[(((dayIndex + step) % 7) + 7) % 7];
     }
 
     // Check for short day names
     const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const shortDayIndex = shortDays.findIndex(d => d.toLowerCase() === sourceValue.toLowerCase());
     if (shortDayIndex !== -1) {
-      return shortDays[(shortDayIndex + step) % 7];
+      return shortDays[(((shortDayIndex + step) % 7) + 7) % 7];
     }
 
     // Check for month names
@@ -158,7 +158,7 @@ function calculateFillValue(sourceValue: CellValue, step: number, sourceFormula?
                    'July', 'August', 'September', 'October', 'November', 'December'];
     const monthIndex = months.findIndex(m => m.toLowerCase() === sourceValue.toLowerCase());
     if (monthIndex !== -1) {
-      return months[(monthIndex + step) % 12];
+      return months[(((monthIndex + step) % 12) + 12) % 12];
     }
 
     // Check for short month names
@@ -166,7 +166,7 @@ function calculateFillValue(sourceValue: CellValue, step: number, sourceFormula?
                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const shortMonthIndex = shortMonths.findIndex(m => m.toLowerCase() === sourceValue.toLowerCase());
     if (shortMonthIndex !== -1) {
-      return shortMonths[(shortMonthIndex + step) % 12];
+      return shortMonths[(((shortMonthIndex + step) % 12) + 12) % 12];
     }
 
     // Check for text ending with number (e.g., "Item1" → "Item2")
@@ -232,6 +232,7 @@ interface AccelState {
   copyCell: (row: number, col: number) => void;
   cutCell: (row: number, col: number) => void;
   pasteCell: (row: number, col: number) => void;
+  clearRange: (r1: number, c1: number, r2: number, c2: number) => void;
 
   // AutoFill operations
   setFillRange: (row: number, col: number) => void;
@@ -491,6 +492,10 @@ export const useAccelStore = create<AccelState>()(
     selectCell: (row, col) => {
       set((state) => {
         state.selectedCell = { row, col };
+        // A single-cell move ends any range selection (arrow keys, Enter,
+        // programmatic jumps); otherwise a stale range lingers on screen and
+        // range operations (Delete, fill) act on cells no longer selected.
+        state.selectionRange = null;
       });
     },
 
@@ -584,6 +589,26 @@ export const useAccelStore = create<AccelState>()(
       });
     },
 
+    clearRange: (r1, c1, r2, c2) => {
+      if (get().isReadOnly) return;
+      const { engine } = get();
+      const targets: Array<[number, number]> = [];
+      // Only touch populated cells: a whole-column clear walks 1000 rows but
+      // most are empty, and setCell('') on an empty cell is wasted work.
+      for (let r = r1; r <= r2; r++) {
+        for (let c = c1; c <= c2; c++) {
+          if (engine.getCellObject(r, c)) targets.push([r, c]);
+        }
+      }
+      if (targets.length === 0) return;
+      recordHistory();
+      for (const [r, c] of targets) engine.setCell(r, c, '');
+      get().invalidateGraphCache(targets.map(([r, c]) => `${c},${r}`));
+      set((state) => {
+        state.docVersion += 1;
+      });
+    },
+
     setFillRange: (row, col) => {
       set((state) => {
         state.fillRange = { row, col };
@@ -598,67 +623,90 @@ export const useAccelStore = create<AccelState>()(
 
     executeFill: () => {
       if (get().isReadOnly) return;
-      const { selectedCell, fillRange, engine } = get();
+      const { selectedCell, selectionRange, fillRange, engine } = get();
       if (!selectedCell || !fillRange) return;
 
-      recordHistory();
-      const startRow = selectedCell.row;
-      const startCol = selectedCell.col;
-      const endRow = fillRange.row;
-      const endCol = fillRange.col;
-
-      // Get the source cell value
-      const sourceCell = engine.getCellObject(startRow, startCol);
-      const sourceValue = sourceCell?.value ?? '';
-
-      // Determine fill direction
-      const isVertical = startCol === endCol;
-      const isHorizontal = startRow === endRow;
-
-      if (isVertical) {
-        // Fill vertically
-        const direction = endRow > startRow ? 1 : -1;
-        const steps = Math.abs(endRow - startRow);
-
-        for (let i = 1; i <= steps; i++) {
-          const targetRow = startRow + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i * direction, sourceCell?.formula, true);
-          engine.setCell(targetRow, startCol, fillValue);
-        }
-      } else if (isHorizontal) {
-        // Fill horizontally
-        const direction = endCol > startCol ? 1 : -1;
-        const steps = Math.abs(endCol - startCol);
-
-        for (let i = 1; i <= steps; i++) {
-          const targetCol = startCol + i * direction;
-          const fillValue = calculateFillValue(sourceValue, i * direction, sourceCell?.formula, false);
-          engine.setCell(startRow, targetCol, fillValue);
+      // Source block: the selected range when the active cell is inside it,
+      // otherwise just the active cell.
+      let r1 = selectedCell.row, r2 = selectedCell.row, c1 = selectedCell.col, c2 = selectedCell.col;
+      if (selectionRange) {
+        const sr1 = Math.min(selectionRange.start.row, selectionRange.end.row);
+        const sr2 = Math.max(selectionRange.start.row, selectionRange.end.row);
+        const sc1 = Math.min(selectionRange.start.col, selectionRange.end.col);
+        const sc2 = Math.max(selectionRange.start.col, selectionRange.end.col);
+        if (selectedCell.row >= sr1 && selectedCell.row <= sr2 && selectedCell.col >= sc1 && selectedCell.col <= sc2) {
+          r1 = sr1; r2 = sr2; c1 = sc1; c2 = sc2;
         }
       }
 
-      // Mark all filled cells as dirty
-      set((state) => {
-        state.fillRange = null;
+      // Fill direction: whichever axis the target lies outside the block on.
+      let isVertical: boolean;
+      let targets: number[];
+      if (fillRange.row > r2 || fillRange.row < r1) {
+        isVertical = true;
+        targets = [];
+        if (fillRange.row > r2) for (let r = r2 + 1; r <= fillRange.row; r++) targets.push(r);
+        else for (let r = r1 - 1; r >= fillRange.row; r--) targets.push(r);
+      } else if (fillRange.col > c2 || fillRange.col < c1) {
+        isVertical = false;
+        targets = [];
+        if (fillRange.col > c2) for (let c = c2 + 1; c <= fillRange.col; c++) targets.push(c);
+        else for (let c = c1 - 1; c >= fillRange.col; c--) targets.push(c);
+      } else {
+        return; // target inside the source block: nothing to fill
+      }
 
-        // Mark all cells in the fill range as dirty
-        if (isVertical) {
-          const direction = endRow > startRow ? 1 : -1;
-          const steps = Math.abs(endRow - startRow);
-          for (let i = 1; i <= steps; i++) {
-            const targetRow = startRow + i * direction;
-            const targetKey = `${startCol},${targetRow}`;
-            state.dirtyValues.add(targetKey);
+      recordHistory();
+      const written: string[] = [];
+      const lanes = isVertical ? [c1, c2] : [r1, r2];
+      const span = isVertical ? [r1, r2] : [c1, c2];
+      const n = span[1] - span[0] + 1;
+
+      for (let lane = lanes[0]; lane <= lanes[1]; lane++) {
+        const cellAt = (i: number) => (isVertical ? engine.getCellObject(i, lane) : engine.getCellObject(lane, i));
+        const sources = Array.from({ length: n }, (_, k) => cellAt(span[0] + k));
+        // Two or more plain numbers extend as a linear series (1,2 -> 3,4 …;
+        // 10,20 -> 30 …). Anything else repeats the block, shifting formulas.
+        const numeric = n >= 2 && sources.every((c) => c && !c.formula && typeof c.value === 'number');
+        const first = numeric ? (sources[0]!.value as number) : 0;
+        const stepSize = numeric ? ((sources[n - 1]!.value as number) - first) / (n - 1) : 0;
+
+        for (const t of targets) {
+          let value: string | number;
+          if (numeric) {
+            value = first + stepSize * (t - span[0]);
+          } else {
+            const k = (((t - span[0]) % n) + n) % n;
+            const srcIdx = span[0] + k;
+            const src = sources[k];
+            const offset = t - srcIdx;
+            const srcValue = src?.value ?? '';
+            value = n === 1
+              ? calculateFillValue(srcValue, offset, src?.formula, isVertical)
+              : src?.formula
+                ? calculateFillValue(srcValue, offset, src.formula, isVertical)
+                : (Array.isArray(srcValue) || srcValue === null ? '' : (srcValue as string | number));
           }
-        } else if (isHorizontal) {
-          const direction = endCol > startCol ? 1 : -1;
-          const steps = Math.abs(endCol - startCol);
-          for (let i = 1; i <= steps; i++) {
-            const targetCol = startCol + i * direction;
-            const targetKey = `${targetCol},${startRow}`;
-            state.dirtyValues.add(targetKey);
+          if (isVertical) {
+            engine.setCell(t, lane, value);
+            written.push(`${lane},${t}`);
+          } else {
+            engine.setCell(lane, t, value);
+            written.push(`${t},${lane}`);
           }
         }
+      }
+
+      get().invalidateGraphCache(written);
+      set((state) => {
+        state.fillRange = null;
+        // Select the filled block, like Sheets does after a fill.
+        const fr1 = isVertical ? Math.min(r1, ...targets) : r1;
+        const fr2 = isVertical ? Math.max(r2, ...targets) : r2;
+        const fc1 = isVertical ? c1 : Math.min(c1, ...targets);
+        const fc2 = isVertical ? c2 : Math.max(c2, ...targets);
+        state.selectionRange = { start: { row: fr1, col: fc1 }, end: { row: fr2, col: fc2 } };
+        state.selectedCell = { row: fr1, col: fc1 };
         state.docVersion += 1;
       });
     },

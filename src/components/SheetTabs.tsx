@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { useShallow } from 'zustand/react/shallow';
 import './Ribbon.css';
 
 export const SheetTabs: React.FC = React.memo(() => {
@@ -12,7 +13,9 @@ export const SheetTabs: React.FC = React.memo(() => {
     sheetNames,
     sheetKinds,
     isReadOnly,
-  } = useAccelStore();
+  } = useAccelStore(
+    useShallow((s) => ({ activeSheet: s.activeSheet, setActiveSheet: s.setActiveSheet, addSheet: s.addSheet, addGraphSheet: s.addGraphSheet, deleteSheet: s.deleteSheet, sheetNames: s.sheetNames, sheetKinds: s.sheetKinds, isReadOnly: s.isReadOnly }))
+  );
 
   const canDelete = sheetNames.length > 1 && !isReadOnly;
 

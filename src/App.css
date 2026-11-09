@@ -829,61 +829,6 @@ body {
   position: relative;
 }
 
-.cell.selected {
-  outline: 2px solid var(--cell-selected);
-  outline-offset: -2px;
-  background: var(--cell-bg);
-  /* Replaced expensive filter with opacity for better performance */
-  opacity: 0.95;
-}
-
-.cell.in-selection:not(.selected) {
-  background: var(--selection-fill, rgba(26, 115, 232, 0.1));
-  outline: 1px dashed var(--cell-selected);
-  outline-offset: -1px;
-}
-
-.cell.parameter {
-  background: var(--parameter-bg);
-  color: var(--parameter-text);
-}
-
-.cell-content {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.spacer-row td {
-  border: none;
-  padding: 0;
-  height: 0;
-}
-
-/* AutoFill handle - small square in bottom-right of selected cell */
-.fill-handle {
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 8px;
-  height: 8px;
-  background: var(--cell-selected);
-  border: 1px solid var(--cell-bg);
-  cursor: crosshair;
-  z-index: 10;
-}
-
-.fill-handle:hover {
-  filter: brightness(0.85);
-}
-
-/* Cells in the fill range during drag */
-.cell.fill-range {
-  background: var(--selection-fill, rgba(26, 115, 232, 0.1));
-  outline: 1px dashed var(--cell-selected);
-  outline-offset: -1px;
-}
-
 /* ===== Market panel (stock-app style chart) ===== */
 
 .stock-panel {

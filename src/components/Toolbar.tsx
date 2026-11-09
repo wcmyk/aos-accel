@@ -5,9 +5,12 @@
 
 import React, { useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { useShallow } from 'zustand/react/shallow';
 
 export const Toolbar: React.FC = () => {
-  const { selectedCell, setParameter, addGraph, getGraphs, removeGraph } = useAccelStore();
+  const { selectedCell, setParameter, addGraph, getGraphs, removeGraph } = useAccelStore(
+    useShallow((s) => ({ selectedCell: s.selectedCell, setParameter: s.setParameter, addGraph: s.addGraph, getGraphs: s.getGraphs, removeGraph: s.removeGraph }))
+  );
   const [showGraphDialog, setShowGraphDialog] = useState(false);
   const [showParamDialog, setShowParamDialog] = useState(false);
   const [graphFormula, setGraphFormula] = useState('');

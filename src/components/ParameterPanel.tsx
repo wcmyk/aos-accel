@@ -5,6 +5,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { useShallow } from 'zustand/react/shallow';
 import { Cell } from '../engine/types';
 import './ParameterPanel.css';
 
@@ -26,7 +27,10 @@ const fmtEdge = (n: number): string => {
 };
 
 export const ParameterPanel: React.FC = React.memo(() => {
-  const { engine, updateParameter, refresh } = useAccelStore();
+  const { engine, updateParameter, refresh , docVersion} = useAccelStore(
+    useShallow((s) => ({ engine: s.engine, updateParameter: s.updateParameter, refresh: s.refresh, docVersion: s.docVersion }))
+  );
+  void docVersion; // re-render when cells change (parameter values live in the engine)
 
   const worksheet = engine.getWorksheet();
   const parameters: Array<{ key: string; cell: Cell }> = [];

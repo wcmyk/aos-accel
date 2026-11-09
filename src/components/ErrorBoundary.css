@@ -89,19 +89,19 @@
 }
 
 .crash-btn:focus-visible {
-  outline: 2px solid var(--cell-selected, #217346);
+  outline: 2px solid var(--cell-selected, #1a73e8);
   outline-offset: 2px;
 }
 
 .crash-btn--primary {
-  background: var(--cell-selected, #217346);
-  border-color: var(--cell-selected, #217346);
+  background: var(--cell-selected, #1a73e8);
+  border-color: var(--cell-selected, #1a73e8);
   color: #fff;
 }
 
 .crash-btn--primary:hover {
   filter: brightness(1.06);
-  background: var(--cell-selected, #217346);
+  background: var(--cell-selected, #1a73e8);
 }
 
 .crash-card__note {

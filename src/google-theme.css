@@ -1,0 +1,458 @@
+/**
+ * google-theme.css
+ * Google Sheets-inspired chrome: Google Sans / Roboto type, a soft blue-gray
+ * shell, Sheets-style menu tabs, a rounded single-row toolbar, light grid
+ * lines with gray headers, and pill-shaped controls.
+ *
+ * Loaded after App.css. Colors come from theme variables, so the pastel and
+ * dark themes still apply; this file only changes shape, spacing and type.
+ */
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+
+.excel-shell {
+  background: var(--bg-primary);
+}
+
+/* ===== Title bar (Docs/Sheets header) ===== */
+.title-bar {
+  background: var(--bg-primary);
+  border-bottom: none;
+  box-shadow: none;
+  padding: 8px 16px 2px;
+}
+
+.brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  margin: 0 6px 0 0;
+}
+
+.title strong,
+.title-input {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.title-input {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  padding: 2px 6px;
+  margin-left: -6px;
+}
+
+.title-input:hover {
+  border-color: var(--border-color);
+}
+
+.title-input:focus {
+  outline: none;
+  border-color: var(--cell-selected);
+  box-shadow: 0 0 0 1px var(--cell-selected);
+}
+
+.title span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.title-bar__right {
+  gap: 10px;
+  font-size: 13px;
+}
+
+.status-dot {
+  background: #1e8e3e;
+}
+
+.status-dot--error {
+  background: #d93025;
+}
+
+/* ===== Menu tabs (File / Edit / View style) ===== */
+.ribbon-tabs {
+  background: var(--bg-primary);
+  border-bottom: none;
+  padding: 0 0 4px 62px;
+  gap: 0;
+}
+
+.tab {
+  font-weight: 400;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 0;
+  border: none;
+  color: var(--text-primary);
+}
+
+.tab:hover {
+  background: var(--button-hover);
+  border-radius: 4px;
+}
+
+.tab.active {
+  background: var(--accent-soft, var(--button-active));
+  color: var(--accent-text, var(--text-primary));
+  border: none;
+  border-radius: 4px;
+  margin-top: 0;
+}
+
+.ribbon-quick .ribbon-btn {
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  background: transparent;
+}
+
+.ribbon-quick .ribbon-btn:hover {
+  background: var(--button-hover);
+}
+
+/* ===== Toolbar: one rounded pill row ===== */
+.ribbon {
+  margin: 0 16px 8px;
+  padding: 4px 8px;
+  gap: 0;
+  border: none;
+  border-radius: 24px;
+  box-shadow: none;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.ribbon-group {
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-right: 1px solid var(--border-color);
+  height: 28px;
+}
+
+/* Group labels stay in the DOM for screen readers, like Sheets' toolbar. */
+.ribbon-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ribbon-controls {
+  gap: 2px;
+  flex-wrap: nowrap;
+}
+
+.button-group {
+  border: none;
+  border-radius: 4px;
+  gap: 2px;
+}
+
+.ribbon-btn {
+  background: transparent;
+  border: none;
+  border-right: none;
+  border-radius: 4px;
+  padding: 4px 6px;
+  min-width: 28px;
+  height: 28px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.ribbon-btn:hover {
+  background: var(--button-hover);
+}
+
+.ribbon-btn:active,
+.ribbon-btn.is-active,
+.btn.is-active {
+  background: var(--accent-soft, var(--button-active));
+  color: var(--accent-text, var(--text-primary));
+}
+
+.ribbon-color {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+}
+
+.ribbon-input,
+.ribbon select {
+  border-radius: 4px;
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+/* ===== Buttons: Material pills ===== */
+.btn {
+  border-radius: 18px;
+  padding: 6px 16px;
+  font-weight: 500;
+  font-size: 14px;
+  box-shadow: none;
+  color: var(--accent-text, var(--text-primary));
+  border-color: var(--border-color);
+}
+
+.btn:hover {
+  background: var(--button-hover);
+}
+
+.btn.primary,
+.plane-buttons .btn.active {
+  background: var(--cell-selected);
+  border-color: var(--cell-selected);
+  color: #fff;
+}
+
+.chip {
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.icon-btn {
+  border-radius: 16px;
+  padding: 2px 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.icon-btn:hover {
+  background: var(--button-hover);
+}
+
+/* ===== Workspace + cards ===== */
+.workspace {
+  padding: 0 16px 8px;
+  gap: 8px;
+}
+
+.sheet-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: none;
+  padding: 14px 16px;
+}
+
+.label {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+/* ===== Formula bar ===== */
+.formula-bar {
+  background: var(--cell-bg);
+  padding: 4px 8px;
+  gap: 0;
+}
+
+.cell-reference {
+  border: none;
+  border-right: 1px solid var(--border-color);
+  border-radius: 0;
+  font-weight: 400;
+  font-size: 14px;
+  min-width: 90px;
+  background: transparent;
+}
+
+.formula-input {
+  border: none;
+  border-radius: 0;
+  font-family: 'Roboto Mono', 'Consolas', ui-monospace, monospace;
+  font-size: 14px;
+  background: transparent;
+  padding-left: 32px;
+}
+
+.formula-bar::before {
+  content: 'fx';
+  position: absolute;
+  left: 112px;
+  font-style: italic;
+  font-family: 'Times New Roman', serif;
+  color: var(--text-secondary);
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.formula-input:focus,
+.cell-reference:focus {
+  outline: none;
+}
+
+/* ===== Grid ===== */
+.spreadsheet-grid {
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 13px;
+}
+
+.spreadsheet-grid th,
+.spreadsheet-grid td {
+  border: 1px solid var(--cell-border);
+  height: 21px;
+  padding: 0 4px;
+}
+
+.spreadsheet-grid .row-header,
+.spreadsheet-grid .col-header {
+  background: var(--bg-gradient-start);
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: 11px;
+  text-align: center;
+  border-color: var(--border-color);
+}
+
+.spreadsheet-grid .row-header {
+  width: 46px;
+}
+
+.spreadsheet-grid .row-header.header--active,
+.spreadsheet-grid .col-header.header--active {
+  background: var(--accent-soft, var(--button-active));
+  color: var(--accent-text, var(--text-primary));
+  font-weight: 500;
+}
+
+.cell.selected {
+  opacity: 1;
+  outline: 2px solid var(--cell-selected);
+  outline-offset: -1px;
+}
+
+.cell.in-selection:not(.selected) {
+  outline: none;
+}
+
+.fill-handle {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid #fff;
+}
+
+.grid-empty-hint {
+  border-style: solid;
+  border-color: var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15), 0 4px 8px rgba(60, 64, 67, 0.08);
+}
+
+/* ===== Sheet tabs (bottom bar) ===== */
+.sheet-tabs {
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  padding: 4px 16px;
+}
+
+.sheet-tabs__list {
+  gap: 2px;
+  align-items: center;
+}
+
+.sheet-tab {
+  background: transparent;
+  border: none;
+  border-radius: 4px 4px 4px 4px;
+  box-shadow: none;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.sheet-tab:hover {
+  background: var(--button-hover);
+}
+
+.sheet-tab.active {
+  background: var(--accent-soft, var(--button-active));
+  color: var(--accent-text, var(--text-primary));
+  border: none;
+}
+
+.sheet-tab.add-tab {
+  font-weight: 500;
+  border-radius: 16px;
+}
+
+/* ===== Status bar ===== */
+.status-bar {
+  justify-content: flex-end;
+  font-size: 12px;
+  padding: 4px 16px;
+}
+
+/* ===== Market panel ===== */
+.stock-tf {
+  border-radius: 16px;
+  font-weight: 500;
+}
+
+.stock-tf.active {
+  background: var(--accent-soft, var(--cell-selected));
+  color: var(--accent-text, #fff);
+}
+
+.stock-chip {
+  border-radius: 8px;
+}
+
+/* ===== Dialogs: Material surfaces ===== */
+.dialog-content {
+  border: none;
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+}
+
+.dialog input {
+  border-radius: 4px;
+}
+
+.dialog input:focus {
+  outline: none;
+  border-color: var(--cell-selected);
+  box-shadow: 0 0 0 1px var(--cell-selected);
+}
+
+/* Dark themes have no soft-accent tokens; fall back to the theme accent. */
+[data-theme^='dark'] {
+  --accent-soft: rgba(138, 180, 248, 0.24);
+  --accent-text: #a8c7fa;
+  --selection-fill: rgba(138, 180, 248, 0.16);
+}
+
+[data-theme^='pastel'] {
+  --accent-soft: var(--button-active);
+  --accent-text: var(--text-primary);
+}

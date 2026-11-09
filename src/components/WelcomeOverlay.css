@@ -60,7 +60,7 @@
 }
 
 .welcome-close:focus-visible {
-  outline: 2px solid var(--cell-selected, #217346);
+  outline: 2px solid var(--cell-selected, #1a73e8);
   outline-offset: 2px;
 }
 
@@ -77,7 +77,7 @@
   display: grid;
   place-items: center;
   border-radius: 12px;
-  background: var(--cell-selected, #217346);
+  background: var(--cell-selected, #1a73e8);
   color: #fff;
   font-weight: 800;
   font-size: 22px;
@@ -147,7 +147,7 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--cell-selected, #217346);
+  background: var(--cell-selected, #1a73e8);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -177,8 +177,8 @@
 }
 
 .welcome-btn--primary {
-  background: var(--cell-selected, #217346);
-  border-color: var(--cell-selected, #217346);
+  background: var(--cell-selected, #1a73e8);
+  border-color: var(--cell-selected, #1a73e8);
   color: #fff;
 }
 
@@ -187,6 +187,6 @@
 }
 
 .welcome-btn:focus-visible {
-  outline: 2px solid var(--cell-selected, #217346);
+  outline: 2px solid var(--cell-selected, #1a73e8);
   outline-offset: 2px;
 }

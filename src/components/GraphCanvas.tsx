@@ -5,6 +5,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { IconButton } from './Icons';
 import { useShallow } from 'zustand/react/shallow';
 import './GraphCanvas.css';
 export const GraphCanvas: React.FC = React.memo(() => {
@@ -407,69 +408,67 @@ export const GraphCanvas: React.FC = React.memo(() => {
 
   return (
     <div className="graph-container">
-      <div className="graph-controls">
-        <div className="control-stack">
-          <p className="graph-label">Viewport</p>
-          <div className="chip">{axisLabel(axisSelection.xIndex)}: [{viewport.xMin.toFixed(1)}, {viewport.xMax.toFixed(1)}]</div>
-          <div className="chip">{axisLabel(axisSelection.yIndex)}: [{viewport.yMin.toFixed(1)}, {viewport.yMax.toFixed(1)}]</div>
+      <div className="graph-toolbar">
+        <div className="segmented" role="group" aria-label="View plane">
+          <button
+            className={`segmented__btn${axisSelection.xIndex === 0 && axisSelection.yIndex === 1 ? ' is-active' : ''}`}
+            aria-pressed={axisSelection.xIndex === 0 && axisSelection.yIndex === 1}
+            onClick={() => setAxisSelection({ xIndex: 0, yIndex: 1 })}
+            title="View the X-Y plane"
+          >
+            X-Y
+          </button>
+          <button
+            className={`segmented__btn${axisSelection.xIndex === 0 && axisSelection.yIndex === 2 ? ' is-active' : ''}`}
+            aria-pressed={axisSelection.xIndex === 0 && axisSelection.yIndex === 2}
+            onClick={() => setAxisSelection({ xIndex: 0, yIndex: 2 })}
+            title="View the X-Z plane"
+          >
+            X-Z
+          </button>
+          <button
+            className={`segmented__btn${axisSelection.xIndex === 1 && axisSelection.yIndex === 2 ? ' is-active' : ''}`}
+            aria-pressed={axisSelection.xIndex === 1 && axisSelection.yIndex === 2}
+            onClick={() => setAxisSelection({ xIndex: 1, yIndex: 2 })}
+            title="View the Y-Z plane"
+          >
+            Y-Z
+          </button>
         </div>
-        <div className="axis-picker">
-          <p className="graph-label">View Plane</p>
-          <div className="plane-buttons">
-            <button
-              className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 1 ? 'active' : 'ghost'}`}
-              onClick={() => setAxisSelection({ xIndex: 0, yIndex: 1 })}
-              title="View X-Y plane"
-            >
-              X-Y
-            </button>
-            <button
-              className={`btn ${axisSelection.xIndex === 0 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
-              onClick={() => setAxisSelection({ xIndex: 0, yIndex: 2 })}
-              title="View X-Z plane"
-            >
-              X-Z
-            </button>
-            <button
-              className={`btn ${axisSelection.xIndex === 1 && axisSelection.yIndex === 2 ? 'active' : 'ghost'}`}
-              onClick={() => setAxisSelection({ xIndex: 1, yIndex: 2 })}
-              title="View Y-Z plane"
-            >
-              Y-Z
-            </button>
-          </div>
+        {maxDimensions > 3 && (
           <div className="axis-selectors">
-            <label>
-              Horizontal
-              <select
-                value={axisSelection.xIndex}
-                onChange={(e) => setAxisSelection({ ...axisSelection, xIndex: Number(e.target.value) })}
-              >
-                {Array.from({ length: maxDimensions }, (_, i) => (
-                  <option key={`x-${i}`} value={i}>{axisLabel(i)}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Vertical
-              <select
-                value={axisSelection.yIndex}
-                onChange={(e) => setAxisSelection({ ...axisSelection, yIndex: Number(e.target.value) })}
-              >
-                {Array.from({ length: maxDimensions }, (_, i) => (
-                  <option key={`y-${i}`} value={i}>{axisLabel(i)}</option>
-                ))}
-              </select>
-            </label>
+            <select
+              aria-label="Horizontal axis"
+              value={axisSelection.xIndex}
+              onChange={(e) => setAxisSelection({ ...axisSelection, xIndex: Number(e.target.value) })}
+            >
+              {Array.from({ length: maxDimensions }, (_, i) => (
+                <option key={`x-${i}`} value={i}>{axisLabel(i)}</option>
+              ))}
+            </select>
+            <select
+              aria-label="Vertical axis"
+              value={axisSelection.yIndex}
+              onChange={(e) => setAxisSelection({ ...axisSelection, yIndex: Number(e.target.value) })}
+            >
+              {Array.from({ length: maxDimensions }, (_, i) => (
+                <option key={`y-${i}`} value={i}>{axisLabel(i)}</option>
+              ))}
+            </select>
           </div>
-        </div>
-        <div className="control-actions">
-          <button className="btn" onClick={() => handleZoom(1)}>Zoom In</button>
-          <button className="btn ghost" onClick={() => handleZoom(-1)}>Zoom Out</button>
-          <button className="btn ghost" onClick={handleFitData} title="Fit the viewport to the plotted data">Fit Data</button>
-          <button className="btn ghost" onClick={handleReset}>Reset</button>
+        )}
+        <div className="graph-toolbar__actions">
+          <IconButton icon="add" className="icon-btn" tooltip="Zoom in" onClick={() => handleZoom(1)} />
+          <IconButton icon="remove" className="icon-btn" tooltip="Zoom out" onClick={() => handleZoom(-1)} />
+          <IconButton icon="fit_screen" className="icon-btn" tooltip="Fit to data" onClick={handleFitData} />
+          <IconButton icon="restart_alt" className="icon-btn" tooltip="Reset view" onClick={handleReset} />
         </div>
       </div>
+      <p className="graph-viewport" aria-label="Visible range">
+        {axisLabel(axisSelection.xIndex)} {viewport.xMin.toFixed(1)} to {viewport.xMax.toFixed(1)}
+        <span aria-hidden="true"> · </span>
+        {axisLabel(axisSelection.yIndex)} {viewport.yMin.toFixed(1)} to {viewport.yMax.toFixed(1)}
+      </p>
       {graphs.length > 0 && (
         <div className="graph-legend" role="group" aria-label="Graph series">
           {graphs.map((g) => {

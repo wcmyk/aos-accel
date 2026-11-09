@@ -111,8 +111,7 @@ export const StockPickerDialog: React.FC = () => {
         onClick={(e) => e.stopPropagation()}
       >
         <div>
-          <p className="eyebrow">Market Data</p>
-          <h3 id="stock-picker-title">Choose a stock &amp; date range</h3>
+          <h3 id="stock-picker-title">Add a stock</h3>
           <p className="dialog-subtitle">
             {getApiKey()
               ? 'Search any listed symbol, then optionally pick a start date and how many trading days to observe.'

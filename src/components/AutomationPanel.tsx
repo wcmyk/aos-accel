@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { useShallow } from 'zustand/react/shallow';
+import { IconButton } from './Icons';
 import { AutomationRunner, EXAMPLE_SCRIPTS, AutomationScript } from '../engine/automation';
 
 export const AutomationPanel: React.FC = () => {
@@ -35,25 +36,18 @@ export const AutomationPanel: React.FC = () => {
   };
 
   return (
-    <div className="automation-panel">
-      <div className="script-list">
-        {EXAMPLE_SCRIPTS.map((script, idx) => (
-          <div key={idx} className="script-item">
-            <div>
-              <p className="script-name">{script.name}</p>
-              {script.description && <p className="script-desc">{script.description}</p>}
-            </div>
-            <button className="btn ghost" onClick={() => handleRunScript(script)} disabled={running}>
-              Run
-            </button>
-          </div>
-        ))}
-      </div>
-      {running && (
-        <button className="btn danger" onClick={handleStop}>
-          Stop
-        </button>
-      )}
+    <div className="ribbon-controls">
+      {EXAMPLE_SCRIPTS.map((script) => (
+        <IconButton
+          key={script.name}
+          icon="play_arrow"
+          label={script.name}
+          tooltip={script.description ? `Run: ${script.description}` : `Run ${script.name}`}
+          onClick={() => handleRunScript(script)}
+          disabled={running}
+        />
+      ))}
+      {running && <IconButton icon="stop" label="Stop" tooltip="Stop the running script" onClick={handleStop} />}
     </div>
   );
 };

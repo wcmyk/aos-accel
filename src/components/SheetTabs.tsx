@@ -1,9 +1,11 @@
 import React, { useCallback } from 'react';
 import { useAccelStore } from '../store/accel-store';
 import { useShallow } from 'zustand/react/shallow';
+import { Icon, IconButton } from './Icons';
 import './Ribbon.css';
 
-export const SheetTabs: React.FC = React.memo(() => {
+/** Bottom sheet bar. `children` render on the right (selection summary). */
+export const SheetTabs: React.FC<{ children?: React.ReactNode }> = React.memo(({ children }) => {
   const {
     activeSheet,
     setActiveSheet,
@@ -28,6 +30,8 @@ export const SheetTabs: React.FC = React.memo(() => {
 
   return (
     <div className="sheet-tabs">
+      <IconButton icon="add" className="sheet-tabs__btn" tooltip="Add sheet" onClick={addSheet} disabled={isReadOnly} />
+      <IconButton icon="show_chart" className="sheet-tabs__btn" tooltip="Add graph sheet" onClick={() => addGraphSheet(false)} disabled={isReadOnly} />
       <div className="sheet-tabs__list" role="tablist" aria-label="Worksheets">
         {sheetNames.map((sheet) => {
           const isActive = sheet === activeSheet;
@@ -41,7 +45,7 @@ export const SheetTabs: React.FC = React.memo(() => {
               onClick={() => setActiveSheet(sheet)}
             >
               {(sheetKinds[sheet] ?? 'grid') === 'graph' && (
-                <span className="sheet-tab__kind" aria-hidden="true" title="Graph sheet">📈 </span>
+                <Icon name="show_chart" size={16} className="sheet-tab__kind" />
               )}
               {sheet}
               {canDelete && (
@@ -63,31 +67,15 @@ export const SheetTabs: React.FC = React.memo(() => {
                     }
                   }}
                 >
-                  ×
+                  <Icon name="close" size={14} />
                 </span>
               )}
             </button>
           );
         })}
-        <button
-          className="sheet-tab add-tab"
-          onClick={addSheet}
-          disabled={isReadOnly}
-          title="Add a new sheet"
-          aria-label="Add a new sheet"
-        >
-          ＋ Add Sheet
-        </button>
-        <button
-          className="sheet-tab add-tab"
-          onClick={() => addGraphSheet(false)}
-          disabled={isReadOnly}
-          title="Add a new graph sheet"
-          aria-label="Add a new graph sheet"
-        >
-          📈 Graph Sheet
-        </button>
+
       </div>
+      {children}
     </div>
   );
 });

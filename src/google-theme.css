@@ -565,13 +565,6 @@ textarea {
   border-radius: 16px;
 }
 
-/* ===== Status bar ===== */
-.status-bar {
-  justify-content: flex-end;
-  font-size: 12px;
-  padding: 4px 16px;
-}
-
 /* ===== Market panel ===== */
 .stock-tf {
   border-radius: 16px;
@@ -603,6 +596,396 @@ textarea {
   outline: none;
   border-color: var(--cell-selected);
   box-shadow: 0 0 0 1px var(--cell-selected);
+}
+
+/* ===== Icons (Material Symbols) ===== */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  /* Reserve the glyph box so a late font load never shifts layout. */
+  width: 1em;
+  overflow: hidden;
+  flex: none;
+}
+
+/* ===== Title bar ===== */
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ===== Toolbar controls ===== */
+.ribbon {
+  min-height: 40px;
+}
+
+.ribbon-group {
+  height: auto;
+  min-height: 28px;
+}
+
+.ribbon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.ribbon-btn:disabled {
+  opacity: 0.38;
+}
+
+.icon-btn__label {
+  margin-left: 0;
+  font-size: 14px;
+  font-weight: 400;
+  padding-right: 2px;
+}
+
+.ribbon-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-right: 6px;
+}
+
+.color-btn {
+  position: relative;
+  flex-direction: column;
+  gap: 0;
+  cursor: pointer;
+}
+
+.color-btn .icon {
+  font-size: 18px;
+  margin-top: -2px;
+}
+
+.color-btn__bar {
+  width: 18px;
+  height: 4px;
+  border-radius: 1px;
+  margin-top: -1px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.color-btn input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+}
+
+.color-btn.is-disabled {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.ribbon-watchlist {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  max-height: none;
+  overflow: visible;
+}
+
+.ribbon-watch-row {
+  gap: 2px;
+  font-size: 13px;
+  padding-left: 6px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+}
+
+.ribbon-graph-list {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.ribbon-graph-item {
+  padding: 0 0 0 8px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  max-width: 220px;
+}
+
+.ribbon .parameter-panel {
+  display: none;
+}
+
+.dim-note {
+  font-size: 13px;
+}
+
+/* ===== Card headers / icon buttons ===== */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.card__header {
+  margin: -4px -6px 6px 0;
+}
+
+.card .label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.graph-reopen {
+  width: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 500;
+  gap: 10px;
+}
+
+.graph-reopen:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+/* ===== Graph card ===== */
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.graph-toolbar__actions {
+  display: inline-flex;
+  margin-left: auto;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.segmented__btn {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: 500 13px 'Google Sans', 'Roboto', sans-serif;
+  height: 30px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.segmented__btn + .segmented__btn {
+  border-left: 1px solid var(--border-color);
+}
+
+.segmented__btn:hover {
+  background: var(--button-hover);
+}
+
+.segmented__btn.is-active {
+  background: var(--accent-soft, var(--button-active));
+  color: var(--accent-text, var(--text-primary));
+}
+
+.graph-toolbar .axis-selectors {
+  gap: 6px;
+}
+
+.graph-toolbar .axis-selectors select {
+  height: 30px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.graph-viewport {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Market card ===== */
+.stock-add input {
+  border-radius: 4px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.stock-add input::placeholder {
+  text-transform: none;
+}
+
+.stock-demo-note {
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+/* ===== Bottom bar: sheet tabs + selection summary ===== */
+.sheet-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  padding: 0 8px 0 12px;
+}
+
+.sheet-tabs__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sheet-tabs__btn:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+}
+
+.sheet-tabs__btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.sheet-tabs__list {
+  flex: 1;
+  width: auto;
+  margin-left: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.sheet-tab {
+  gap: 4px;
+}
+
+.sheet-tab__close {
+  display: inline-flex;
+  opacity: 0;
+  border-radius: 50%;
+  margin-right: -6px;
+}
+
+.sheet-tab:hover .sheet-tab__close,
+.sheet-tab.active .sheet-tab__close {
+  opacity: 0.7;
+}
+
+.sheet-tab__close:hover {
+  opacity: 1;
+  background: var(--button-hover);
+}
+
+.selection-summary {
+  display: inline-flex;
+  gap: 16px;
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.selection-summary strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ===== Dialogs ===== */
+.dialog h3 {
+  font: 400 22px/28px 'Google Sans', 'Roboto', sans-serif;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.dialog-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.dialog label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.dialog-buttons {
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.btn.text {
+  border: none;
+  background: transparent;
+  color: var(--accent-text, var(--cell-selected));
+}
+
+.btn.text:hover {
+  background: var(--accent-soft, var(--button-hover));
+}
+
+.btn.primary:hover {
+  filter: brightness(0.94);
+  background: var(--cell-selected);
 }
 
 /* Dark themes have no soft-accent tokens; fall back to the theme accent. */

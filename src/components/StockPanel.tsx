@@ -9,6 +9,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccelStore } from '../store/accel-store';
+import { IconButton } from './Icons';
 import { StockPickerDialog } from './StockPickerDialog';
 import {
   getStockBars,
@@ -401,14 +402,8 @@ export const StockPanel: React.FC = React.memo(() => {
             maxLength={10}
             aria-label="Add ticker to watchlist"
           />
-          <button className="btn ghost" onClick={handleAdd}>+</button>
-          <button
-            className="btn ghost"
-            onClick={() => setStockPickerOpen(true)}
-            title="Search stocks and pick a date range"
-          >
-            Browse…
-          </button>
+          <IconButton icon="add" className="icon-btn" tooltip="Add ticker" onClick={handleAdd} />
+          <IconButton icon="search" className="icon-btn" tooltip="Search stocks and pick a date range" onClick={() => setStockPickerOpen(true)} />
         </div>
       </div>
 
@@ -457,7 +452,7 @@ export const StockPanel: React.FC = React.memo(() => {
                 : 'No market API key configured — showing generated placeholder prices.'
             }
           >
-            demo data
+            Sample data
           </span>
         )}
       </div>

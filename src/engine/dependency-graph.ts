@@ -119,6 +119,10 @@ export class DependencyGraph {
       if (!cell) return;
 
       cell.dependents.forEach((depKey) => {
+        // Already queued: stop. Without this a cycle (including a cell that
+        // references itself) recursed until the stack overflowed, and shared
+        // dependents were re-walked once per path.
+        if (toVisit.has(depKey)) return;
         toVisit.add(depKey);
         addDependents(depKey);
       });

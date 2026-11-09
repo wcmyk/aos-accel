@@ -13,7 +13,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { CellFormat } from '../engine/types';
 import { ParameterPanel } from './ParameterPanel';
 import { AutomationPanel } from './AutomationPanel';
-import { IconButton } from './Icons';
+import { IconButton, ColorButton } from './Icons';
 import './Ribbon.css';
 
 type TabName = 'Home' | 'Insert' | 'Data' | 'Market' | 'Automation' | 'Graphing' | 'View';
@@ -238,62 +238,40 @@ export const Ribbon: React.FC = () => {
       <div className="ribbon-group">
         <p className="ribbon-title">Clipboard</p>
         <div className="ribbon-controls">
-          <div className="button-group">
-            <IconButton icon="Copy" tooltip="Copy (Ctrl+C)" disabled={!selectedCell}
-              onClick={() => selectedCell && copyCell(selectedCell.row, selectedCell.col)} />
-            <IconButton icon="Cut" tooltip="Cut (Ctrl+X)" disabled={cellDisabled}
-              onClick={() => selectedCell && cutCell(selectedCell.row, selectedCell.col)} />
-            <IconButton icon="Paste" tooltip="Paste (Ctrl+V)" disabled={cellDisabled}
-              onClick={() => selectedCell && pasteCell(selectedCell.row, selectedCell.col)} />
-          </div>
+          <IconButton icon="content_cut" tooltip="Cut (Ctrl+X)" disabled={cellDisabled}
+            onClick={() => selectedCell && cutCell(selectedCell.row, selectedCell.col)} />
+          <IconButton icon="content_copy" tooltip="Copy (Ctrl+C)" disabled={!selectedCell}
+            onClick={() => selectedCell && copyCell(selectedCell.row, selectedCell.col)} />
+          <IconButton icon="content_paste" tooltip="Paste (Ctrl+V)" disabled={cellDisabled}
+            onClick={() => selectedCell && pasteCell(selectedCell.row, selectedCell.col)} />
         </div>
       </div>
 
       <div className="ribbon-group">
-        <p className="ribbon-title">Font</p>
+        <p className="ribbon-title">Text</p>
         <div className="ribbon-controls">
-          <div className="button-group">
-            <IconButton icon="Bold" tooltip="Bold" disabled={cellDisabled}
-              active={!!activeFormat?.bold} onClick={() => toggleFormat('bold')} />
-            <IconButton icon="Italic" tooltip="Italic" disabled={cellDisabled}
-              active={!!activeFormat?.italic} onClick={() => toggleFormat('italic')} />
-            <IconButton icon="Underline" tooltip="Underline" disabled={cellDisabled}
-              active={!!activeFormat?.underline} onClick={() => toggleFormat('underline')} />
-          </div>
-          <input
-            type="color"
-            className="ribbon-color"
-            title="Font color"
-            aria-label="Font color"
-            disabled={cellDisabled}
+          <IconButton icon="format_bold" tooltip="Bold (Ctrl+B)" disabled={cellDisabled}
+            active={!!activeFormat?.bold} onClick={() => toggleFormat('bold')} />
+          <IconButton icon="format_italic" tooltip="Italic (Ctrl+I)" disabled={cellDisabled}
+            active={!!activeFormat?.italic} onClick={() => toggleFormat('italic')} />
+          <IconButton icon="format_underlined" tooltip="Underline (Ctrl+U)" disabled={cellDisabled}
+            active={!!activeFormat?.underline} onClick={() => toggleFormat('underline')} />
+          <ColorButton icon="format_color_text" tooltip="Text color" disabled={cellDisabled}
             value={activeFormat?.fontColor ?? '#000000'}
-            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { fontColor: e.target.value })}
-          />
-          <input
-            type="color"
-            className="ribbon-color"
-            title="Fill color"
-            aria-label="Fill color"
-            disabled={cellDisabled}
+            onChange={(v) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { fontColor: v })} />
+          <ColorButton icon="format_color_fill" tooltip="Fill color" disabled={cellDisabled}
             value={activeFormat?.backgroundColor ?? '#ffffff'}
-            onChange={(e) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { backgroundColor: e.target.value })}
-          />
+            onChange={(v) => selectedCell && formatCell(selectedCell.row, selectedCell.col, { backgroundColor: v })} />
         </div>
       </div>
 
       <div className="ribbon-group">
         <p className="ribbon-title">Editing</p>
         <div className="ribbon-controls">
-          <button className="btn" title="Sum the numeric cells above the selected cell"
-            disabled={cellDisabled} onClick={handleAutoSum}>AutoSum</button>
-          <button className="btn" title="Clear the contents of the selection"
-            disabled={!hasSelection || !canEdit} onClick={handleClear}>Clear</button>
-          <div className="button-group">
-            <IconButton icon="SortAsc" tooltip="Sort column A to Z" disabled={cellDisabled}
-              onClick={() => selectedCell && sortColumn(selectedCell.col, true)} />
-            <IconButton icon="SortDesc" tooltip="Sort column Z to A" disabled={cellDisabled}
-              onClick={() => selectedCell && sortColumn(selectedCell.col, false)} />
-          </div>
+          <IconButton icon="functions" tooltip="Sum the numbers above the selected cell" disabled={cellDisabled}
+            onClick={handleAutoSum} />
+          <IconButton icon="backspace" tooltip="Clear contents of the selection (Delete)"
+            disabled={!hasSelection || !canEdit} onClick={handleClear} />
         </div>
       </div>
     </>
@@ -304,24 +282,24 @@ export const Ribbon: React.FC = () => {
       <div className="ribbon-group">
         <p className="ribbon-title">Rows &amp; Columns</p>
         <div className="ribbon-controls">
-          <button className="btn" disabled={cellDisabled}
-            onClick={() => selectedCell && insertRow(selectedCell.row)}>Insert Row</button>
-          <button className="btn" disabled={cellDisabled}
-            onClick={() => selectedCell && deleteRow(selectedCell.row)}>Delete Row</button>
-          <button className="btn" disabled={cellDisabled}
-            onClick={() => selectedCell && insertColumn(selectedCell.col)}>Insert Column</button>
-          <button className="btn" disabled={cellDisabled}
-            onClick={() => selectedCell && deleteColumn(selectedCell.col)}>Delete Column</button>
+          <IconButton icon="table_rows" label="Insert row" tooltip="Insert a row above the selected cell" disabled={cellDisabled}
+            onClick={() => selectedCell && insertRow(selectedCell.row)} />
+          <IconButton icon="delete" label="Delete row" tooltip="Delete the selected row" disabled={cellDisabled}
+            onClick={() => selectedCell && deleteRow(selectedCell.row)} />
+          <IconButton icon="view_column" label="Insert column" tooltip="Insert a column left of the selected cell" disabled={cellDisabled}
+            onClick={() => selectedCell && insertColumn(selectedCell.col)} />
+          <IconButton icon="delete" label="Delete column" tooltip="Delete the selected column" disabled={cellDisabled}
+            onClick={() => selectedCell && deleteColumn(selectedCell.col)} />
         </div>
       </div>
 
       <div className="ribbon-group">
         <p className="ribbon-title">Charts</p>
         <div className="ribbon-controls">
-          <button className="btn" onClick={() => setShowGraphDialog(true)}
-            title="Add a graph bound to a formula">Add Graph</button>
-          <button className="btn" disabled={!hasSelection} onClick={handlePlotSelection}
-            title="Plot the selected cells as a live graph (two columns = x/y pairs)">Plot Selection</button>
+          <IconButton icon="show_chart" label="Graph a formula" tooltip="Add a graph bound to a formula"
+            onClick={() => setShowGraphDialog(true)} />
+          <IconButton icon="insert_chart" label="Plot selection" disabled={!hasSelection} onClick={handlePlotSelection}
+            tooltip="Plot the selected cells as a live graph (two columns = x/y pairs)" />
         </div>
       </div>
     </>
@@ -332,20 +310,18 @@ export const Ribbon: React.FC = () => {
       <div className="ribbon-group">
         <p className="ribbon-title">Export</p>
         <div className="ribbon-controls">
-          <button className="btn" onClick={exportCSV}
-            title="Download the active sheet as a CSV file">Export to CSV</button>
+          <IconButton icon="download" label="Download CSV" tooltip="Download the active sheet as a CSV file"
+            onClick={exportCSV} />
         </div>
       </div>
 
       <div className="ribbon-group">
         <p className="ribbon-title">Sort</p>
         <div className="ribbon-controls">
-          <button className="btn" disabled={cellDisabled}
-            title="Sort the selected column ascending"
-            onClick={() => selectedCell && sortColumn(selectedCell.col, true)}>Sort A to Z</button>
-          <button className="btn" disabled={cellDisabled}
-            title="Sort the selected column descending"
-            onClick={() => selectedCell && sortColumn(selectedCell.col, false)}>Sort Z to A</button>
+          <IconButton icon="arrow_upward" label="Sort A → Z" tooltip="Sort the selected column ascending" disabled={cellDisabled}
+            onClick={() => selectedCell && sortColumn(selectedCell.col, true)} />
+          <IconButton icon="arrow_downward" label="Sort Z → A" tooltip="Sort the selected column descending" disabled={cellDisabled}
+            onClick={() => selectedCell && sortColumn(selectedCell.col, false)} />
         </div>
       </div>
     </>
@@ -356,9 +332,8 @@ export const Ribbon: React.FC = () => {
       <div className="ribbon-group">
         <p className="ribbon-title">Stocks</p>
         <div className="ribbon-controls">
-          <button className="btn" onClick={() => setStockPickerOpen(true)}>
-            Choose Stock &amp; Date Range…
-          </button>
+          <IconButton icon="search" label="Add stock…" tooltip="Choose a ticker and date range"
+            onClick={() => setStockPickerOpen(true)} />
         </div>
       </div>
 
@@ -372,8 +347,9 @@ export const Ribbon: React.FC = () => {
               <button className="ribbon-watch-name" onClick={() => toggleWatchedTicker(w.symbol)} title={w.visible ? 'Click to hide from chart' : 'Click to show on chart'}>
                 {w.symbol}
               </button>
-              <button className="ribbon-btn" disabled={!canEdit} onClick={() => handleInsertTickerBlock(w.symbol)} title={`Insert a live ${w.symbol} stats block at the selected cell — it follows the chart's timeframe`}>→Sheet</button>
-              <button className="ribbon-btn" onClick={() => removeWatchedTicker(w.symbol)} title={`Remove ${w.symbol}`}>×</button>
+              <IconButton icon="table_rows" tooltip={`Insert a live ${w.symbol} stats block at the selected cell`} disabled={!canEdit}
+                onClick={() => handleInsertTickerBlock(w.symbol)} />
+              <IconButton icon="close" tooltip={`Remove ${w.symbol}`} onClick={() => removeWatchedTicker(w.symbol)} />
             </div>
           ))}
         </div>
@@ -382,14 +358,8 @@ export const Ribbon: React.FC = () => {
       <div className="ribbon-group">
         <p className="ribbon-title">Templates</p>
         <div className="ribbon-controls">
-          <button
-            className="btn"
-            disabled={!canEdit}
-            onClick={handleInsertStockTemplate}
-            title="Insert a ready-made live stock worksheet: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))"
-          >
-            Insert Stock Template
-          </button>
+          <IconButton icon="candlestick_chart" label="Stock template" disabled={!canEdit} onClick={handleInsertStockTemplate}
+            tooltip="Insert a live stock worksheet: ticker cell, timeframe slider, and a chart driven by =PLOT(STOCK(...))" />
         </div>
       </div>
     </>
@@ -410,28 +380,18 @@ export const Ribbon: React.FC = () => {
         <div className="ribbon-group">
           <p className="ribbon-title">Graph Settings</p>
           <div className="ribbon-controls">
-            <button className="btn" onClick={() => setShowGraphDialog(true)}>Add Graph</button>
-            <button
-              className="btn"
-              disabled={!hasSelection}
-              onClick={handlePlotSelection}
-              title="Plot the selected cells as a live graph (two columns = x/y pairs)"
-            >
-              Plot Selection
-            </button>
+            <IconButton icon="show_chart" label="Graph a formula" tooltip="Add a graph bound to a formula"
+              onClick={() => setShowGraphDialog(true)} />
+            <IconButton icon="insert_chart" label="Plot selection" disabled={!hasSelection} onClick={handlePlotSelection}
+              tooltip="Plot the selected cells as a live graph (two columns = x/y pairs)" />
           </div>
           {graphs.length > 0 && (
             <div className="ribbon-graph-list">
               {graphs.map((graph) => (
                 <div key={graph.id} className="ribbon-graph-item">
-                  <span className="ribbon-graph-dot" style={{ color: graph.color }}>●</span>
+                  <span className="stock-chip__dot" style={{ background: graph.color }} />
                   <span className="ribbon-graph-formula">{graph.formula}</span>
-                  <button
-                    className="ribbon-btn"
-                    onClick={() => removeGraph(graph.id)}
-                    title="Remove graph"
-                    aria-label="Remove graph"
-                  >×</button>
+                  <IconButton icon="close" tooltip="Remove graph" onClick={() => removeGraph(graph.id)} />
                 </div>
               ))}
             </div>
@@ -441,14 +401,8 @@ export const Ribbon: React.FC = () => {
         <div className="ribbon-group">
           <p className="ribbon-title">Parameters</p>
           <div className="ribbon-controls">
-            <button
-              className="btn"
-              disabled={cellDisabled}
-              onClick={() => setShowParamDialog(true)}
-              title="Turn the selected cell into a slider that drives recalculation"
-            >
-              Make Parameter from Selection
-            </button>
+            <IconButton icon="tune" label="Make slider" disabled={cellDisabled} onClick={() => setShowParamDialog(true)}
+              tooltip="Turn the selected cell into a slider that drives recalculation" />
           </div>
           <ParameterPanel />
         </div>
@@ -460,11 +414,11 @@ export const Ribbon: React.FC = () => {
     <div className="ribbon-group">
       <p className="ribbon-title">Theme</p>
       <div className="ribbon-controls">
+        <span className="ribbon-label">Theme</span>
         <select
           className="ribbon-input"
           value={localTheme}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleThemeChange(e.target.value)}
-          style={{ width: '180px' }}
           title="Change the workbook color theme"
           aria-label="Color theme"
         >
@@ -519,52 +473,50 @@ export const Ribbon: React.FC = () => {
             {tab}
           </button>
         ))}
-        <div className="ribbon-quick">
-          <IconButton icon="Undo" tooltip="Undo (Ctrl+Z)" disabled={!canUndo || isReadOnly} onClick={undo} />
-          <IconButton icon="Redo" tooltip="Redo (Ctrl+Y)" disabled={!canRedo || isReadOnly} onClick={redo} />
-        </div>
       </div>
 
-      <div className="ribbon">
+      <div className="ribbon" role="toolbar" aria-label={`${activeTab} tools`}>
+        <div className="ribbon-group">
+          <p className="ribbon-title">History</p>
+          <div className="ribbon-controls">
+            <IconButton icon="undo" tooltip="Undo (Ctrl+Z)" disabled={!canUndo || isReadOnly} onClick={undo} />
+            <IconButton icon="redo" tooltip="Redo (Ctrl+Y)" disabled={!canRedo || isReadOnly} onClick={redo} />
+          </div>
+        </div>
         {renderActiveTab()}
       </div>
 
       {showGraphDialog && (
-        <div className="dialog">
+        <div className="dialog" role="dialog" aria-modal="true" onKeyDown={(e) => e.key === 'Escape' && setShowGraphDialog(false)}>
           <div className="dialog-content">
-            <div>
-              <p className="eyebrow">Add Graph</p>
-              <h3>Bind a formula to the graph</h3>
-              <p className="dialog-subtitle">Reference grid cells directly to keep graphs and cells in sync.</p>
-            </div>
+            <h3>Graph a formula</h3>
+            <p className="dialog-subtitle">Use x as the variable. Reference cells to keep the graph in sync with the sheet.</p>
             <label>
-              Formula (e.g., A1 * x + B1):
+              Formula
               <input
                 type="text"
                 value={graphFormula}
                 onChange={(e) => setGraphFormula(e.target.value)}
-                placeholder="y = f(x)"
+                placeholder="A1 * x + B1"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddGraph()}
                 autoFocus
               />
             </label>
             <div className="dialog-buttons">
-              <button className="btn" onClick={handleAddGraph}>Add</button>
-              <button className="btn ghost" onClick={() => setShowGraphDialog(false)}>Cancel</button>
+              <button className="btn text" onClick={() => setShowGraphDialog(false)}>Cancel</button>
+              <button className="btn primary" onClick={handleAddGraph}>Add graph</button>
             </div>
           </div>
         </div>
       )}
 
       {showParamDialog && (
-        <div className="dialog">
+        <div className="dialog" role="dialog" aria-modal="true" onKeyDown={(e) => e.key === 'Escape' && setShowParamDialog(false)}>
           <div className="dialog-content">
-            <div>
-              <p className="eyebrow">Parameter</p>
-              <h3>Create a slider from the selected cell</h3>
-              <p className="dialog-subtitle">Min, max, and step will drive graph recalculation instantly.</p>
-            </div>
+            <h3>Make a slider</h3>
+            <p className="dialog-subtitle">The selected cell becomes a slider. Dragging it recalculates the sheet and graphs.</p>
             <label>
-              Min:
+              Minimum
               <input
                 type="number"
                 value={paramConfig.min}
@@ -572,7 +524,7 @@ export const Ribbon: React.FC = () => {
               />
             </label>
             <label>
-              Max:
+              Maximum
               <input
                 type="number"
                 value={paramConfig.max}
@@ -580,7 +532,7 @@ export const Ribbon: React.FC = () => {
               />
             </label>
             <label>
-              Step:
+              Step
               <input
                 type="number"
                 value={paramConfig.step}
@@ -589,8 +541,8 @@ export const Ribbon: React.FC = () => {
               />
             </label>
             <div className="dialog-buttons">
-              <button className="btn" onClick={handleAddParameter}>Create</button>
-              <button className="btn ghost" onClick={() => setShowParamDialog(false)}>Cancel</button>
+              <button className="btn text" onClick={() => setShowParamDialog(false)}>Cancel</button>
+              <button className="btn primary" onClick={handleAddParameter}>Create slider</button>
             </div>
           </div>
         </div>

@@ -8,23 +8,24 @@ import { ParameterPanel } from './ParameterPanel';
 import { SheetTabs } from './SheetTabs';
 import { GraphSheetView } from './GraphSheetView';
 import { ShareButton } from './ShareButton';
-import { WelcomeOverlay } from './WelcomeOverlay';
+import { Icon, IconButton } from './Icons';
+import type { IconName } from './Icons';
 import { useAccelStore } from '../store/accel-store';
 import { isCloudEnabled } from '../lib/supabase';
 import radixLogo from '../assets/radix-logo.png';
 
-function saveStatusLabel(status: 'idle' | 'saving' | 'saved' | 'error', isReadOnly: boolean): string {
-  if (isReadOnly) return 'Read-only (shared view)';
-  if (!isCloudEnabled) return 'Local only';
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+function saveStatusInfo(status: SaveStatus, isReadOnly: boolean): { icon: IconName; label: string; title: string } {
+  if (isReadOnly) return { icon: 'lock', label: 'View only', title: 'You are viewing a shared, read-only copy' };
+  if (!isCloudEnabled) return { icon: 'cloud_off', label: 'Not saved', title: 'Local mode: changes are not saved when you close the tab' };
   switch (status) {
     case 'saving':
-      return 'Saving…';
-    case 'saved':
-      return 'Saved';
+      return { icon: 'cloud_sync', label: 'Saving…', title: 'Saving changes' };
     case 'error':
-      return 'Save failed';
+      return { icon: 'error', label: 'Couldn’t save', title: 'Your latest changes could not be saved' };
     default:
-      return 'AutoSave Off';
+      return { icon: 'cloud_done', label: 'Saved', title: 'All changes saved' };
   }
 }
 
@@ -115,9 +116,10 @@ export function EditorShell() {
       ? n.toExponential(4)
       : Number(n.toFixed(6)).toLocaleString('en-US', { maximumFractionDigits: 6 });
 
+  const saveInfo = saveStatusInfo(saveStatus, isReadOnly);
+
   return (
     <div className="excel-shell">
-      {!isReadOnly && <WelcomeOverlay />}
       <div className="title-bar">
         <div className="title-bar__left">
           <img className="brand-logo" src={radixLogo} alt="Radix" />
@@ -129,9 +131,12 @@ export function EditorShell() {
                 onChange={(e) => setWorkbookTitle(e.target.value)}
               />
             ) : (
-              <strong>{workbookTitle || 'Radix.xlsx'}</strong>
+              <strong>{workbookTitle || 'Untitled workbook'}</strong>
             )}
-            <span>Spreadsheet · Graph · Market</span>
+            <span className="save-status" title={saveInfo.title}>
+              <Icon name={saveInfo.icon} size={18} />
+              <span>{saveInfo.label}</span>
+            </span>
           </div>
         </div>
         <div className="title-bar__right">
@@ -139,8 +144,6 @@ export function EditorShell() {
           {isCloudEnabled && (
             <button className="link-button" onClick={() => navigate('/')}>My workbooks</button>
           )}
-          <span className={`status-dot ${saveStatus === 'error' ? 'status-dot--error' : ''}`} />
-          {saveStatusLabel(saveStatus, isReadOnly)}
         </div>
       </div>
 
@@ -173,8 +176,8 @@ export function EditorShell() {
             }}
             title="Show side panel"
           >
-            <span className="graph-reopen__chevron">‹</span>
-            <span className="graph-reopen__text">Market & Graph</span>
+            <Icon name="show_chart" size={20} />
+            <span className="graph-reopen__text">Market & graph</span>
           </button>
         ) : (
           <>
@@ -190,13 +193,9 @@ export function EditorShell() {
                     <span className="label">Market</span>
                     <span className="card__actions">
                       {!showGraph && (
-                        <button className="icon-btn" onClick={() => setShowGraph(true)} title="Show graph view">
-                          + Graph
-                        </button>
+                        <IconButton icon="show_chart" className="icon-btn" tooltip="Show graph" onClick={() => setShowGraph(true)} />
                       )}
-                      <button className="icon-btn" onClick={() => setShowMarket(false)} title="Hide market view" aria-label="Hide market view">
-                        ✕
-                      </button>
+                      <IconButton icon="close" className="icon-btn" tooltip="Hide market" onClick={() => setShowMarket(false)} />
                     </span>
                   </div>
                   <StockPanel />
@@ -208,23 +207,12 @@ export function EditorShell() {
                     <span className="label">Graph</span>
                     <span className="card__actions">
                       {!isReadOnly && (
-                        <button
-                          className="icon-btn"
-                          onClick={() => addGraphSheet(true)}
-                          title="Open the graph as a full sheet"
-                          aria-label="Open the graph as a full sheet"
-                        >
-                          ⤢ Open as sheet
-                        </button>
+                        <IconButton icon="open_in_full" className="icon-btn" tooltip="Open the graph as a full sheet" onClick={() => addGraphSheet(true)} />
                       )}
                       {!showMarket && (
-                        <button className="icon-btn" onClick={() => setShowMarket(true)} title="Show market view">
-                          + Market
-                        </button>
+                        <IconButton icon="candlestick_chart" className="icon-btn" tooltip="Show market" onClick={() => setShowMarket(true)} />
                       )}
-                      <button className="icon-btn" onClick={() => setShowGraph(false)} title="Hide graph view" aria-label="Hide graph view">
-                        ✕
-                      </button>
+                      <IconButton icon="close" className="icon-btn" tooltip="Hide graph" onClick={() => setShowGraph(false)} />
                     </span>
                   </div>
                   <GraphCanvas />
@@ -239,17 +227,15 @@ export function EditorShell() {
       </div>
       )}
 
-      <SheetTabs />
-
-      <footer className="status-bar">
-        <span>Ready</span>
-        <span>{activeSheet}</span>
-        <span>
-          {selectionStats
-            ? `Average: ${selectionStats.average !== null ? fmt(selectionStats.average) : '-'} | Count: ${selectionStats.count} | Sum: ${fmt(selectionStats.sum)}`
-            : 'Average: - | Count: - | Sum: -'}
-        </span>
-      </footer>
+      <SheetTabs>
+        {selectionStats && selectionStats.average !== null && selectionStats.count > 1 && (
+          <div className="selection-summary" aria-live="polite">
+            <span>Sum: <strong>{fmt(selectionStats.sum)}</strong></span>
+            <span>Average: <strong>{fmt(selectionStats.average)}</strong></span>
+            <span>Count: <strong>{selectionStats.count}</strong></span>
+          </div>
+        )}
+      </SheetTabs>
     </div>
   );
 }

@@ -296,3 +296,14 @@ describe('Range References', () => {
     expect(engine.getCell(1, 2)).toBe(11);
   });
 });
+
+describe('self-referencing formulas', () => {
+  it('reports a circular reference instead of overflowing the stack', () => {
+    const engine = new AccelEngine();
+    engine.setCell(1, 1, 5);
+    expect(() => engine.setCell(1, 2, '=A1*2+B1')).not.toThrow();
+    expect(String(engine.getCell(1, 2))).toMatch(/circular/i);
+    // Editing the referenced cell must not throw either.
+    expect(() => engine.setCell(1, 1, 6)).not.toThrow();
+  });
+});
